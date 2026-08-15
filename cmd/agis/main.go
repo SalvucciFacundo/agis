@@ -1,16 +1,22 @@
 // Command agis is the Autonomous Go Intelligent System entrypoint.
 //
-// M1 skeleton (PR1): parse the -config flag, load configuration, and print a
-// diagnostic. Repository, LLM adapters, and the Bubbletea TUI are wired in
-// PRs 2-4.
+// It loads configuration, wires the SQLite repository, the LLM provider, the
+// Brain loop, and the Bubbletea TUI together, then runs the interactive loop.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/SalvucciFacundo/agis/internal/adapters/llm"
+	"github.com/SalvucciFacundo/agis/internal/adapters/tui"
 	"github.com/SalvucciFacundo/agis/internal/config"
+	"github.com/SalvucciFacundo/agis/internal/core"
+	"github.com/SalvucciFacundo/agis/internal/memory"
 )
 
 func main() {
@@ -30,6 +36,29 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Fprintf(os.Stderr, "agis: loaded config (provider=%s model=%s db=%s)\n",
-		cfg.LLM.Provider, cfg.LLM.Model, cfg.DB.Path)
+	ctx := context.Background()
+
+	repo, err := memory.NewRepository(ctx, cfg.DB.Path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "agis: %v\n", err)
+		os.Exit(1)
+	}
+	defer repo.Close()
+
+	provider := llm.NewProvider(cfg.LLM)
+
+	// The TUI owns the token stream: the brain's sink writes here and the
+	// model drains it to paint tokens in real time. Buffered so a slow update
+	// loop back-pressures the provider instead of dropping tokens.
+	stream := make(chan string, 64)
+	brain := core.NewBrain(repo, provider, core.WithSink(func(text string) {
+		stream <- text
+	}))
+
+	app := tui.New(brain, repo, stream)
+
+	if _, err := tea.NewProgram(app).Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "agis: %v\n", err)
+		os.Exit(1)
+	}
 }
