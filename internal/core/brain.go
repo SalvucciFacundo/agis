@@ -67,6 +67,12 @@ func (b *Brain) Step(ctx context.Context, input string) error {
 	var reply strings.Builder
 	for ev := range events {
 		if ev.Err != nil {
+			// Drain the channel to its close before returning: the provider
+			// goroutine may still be blocked sending on an unbuffered channel,
+			// and the port contract requires providers to close the channel
+			// after a terminal Err event.
+			for range events {
+			}
 			return fmt.Errorf("stream error: %w", ev.Err)
 		}
 		reply.WriteString(ev.Text)
