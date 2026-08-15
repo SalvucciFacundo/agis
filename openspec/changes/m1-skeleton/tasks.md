@@ -39,10 +39,10 @@ Chain strategy: stacked-to-main
 
 ### Phase 3 — LLM adapters
 
-- [ ] 3.1 internal/adapters/llm/client.go — shared OpenAI-compatible client (BaseURL) → reused by both. D: 1.6
-- [ ] 3.2 openai.go/ollama.go — Provider impls; NewProvider selects by llm.provider → LLM-001. D: 3.1
-- [ ] 3.3 Models() static from cfg → LLM-002. D: 3.2
-- [ ] 3.4 *_test.go — httptest SSE: token order, mid-stream Err, Models → LLM-001+goleak. D: 3.2
+- [x] 3.1 internal/adapters/llm/client.go — shared OpenAI-compatible client (BaseURL) → reused by both. D: 1.6
+- [x] 3.2 openai.go/ollama.go — Provider impls; NewProvider selects by llm.provider → LLM-001. D: 3.1
+- [x] 3.3 Models() static from cfg → LLM-002. D: 3.2
+- [x] 3.4 *_test.go — httptest SSE: token order, mid-stream Err, Models → LLM-001+goleak. D: 3.2
 
 ### Phase 4 — TUI + wiring
 
