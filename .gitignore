@@ -1,0 +1,26 @@
+# Build artifacts
+/bin/
+/agis
+*.exe
+*.test
+*.out
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Test coverage
+coverage.out
+coverage.html
+coverage.txt
+
+# Editor and OS files
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Local environment
+.env
+.env.*
+!.env.example

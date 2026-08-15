@@ -1,0 +1,21 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - gosimple
+    - unused
+    - ineffassign
+    - gofmt
+    - goimports
+    - misspell
+    - unconvert
+    - revive
+    - copyloopvar
+
+issues:
+  exclude-use-default: false
