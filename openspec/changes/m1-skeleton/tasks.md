@@ -31,11 +31,11 @@ Chain strategy: stacked-to-main
 
 ### Phase 2 — Memory
 
-- [ ] 2.1 migrations/0001_init.sql — 3 tables + memory_fts (unicode61 remove_diacritics 1), WAL, FK ON, role CHECK → REPO-002. D: 1.6
-- [ ] 2.2 internal/memory/migrations.go — //go:embed, PRAGMA user_version, transactional apply → REPO-004. D: 2.1
-- [ ] 2.3 internal/memory/sqlite.go — NewRepository, Create/LatestConversation, AppendMessage (tx+FTS+count), Messages, Search, Close → REPO-001. D: 2.2
-- [ ] 2.4 internal/memory/fts.go — FTS sync; Search matches message+observation, accent-insensitive → REPO-003. D: 2.3
-- [ ] 2.5 internal/memory/*_test.go — schema, CRUD order, cascade, count, FTS accent+doc_type → go test green. D: 2.3, 2.4
+- [x] 2.1 migrations/0001_init.sql — 3 tables + memory_fts (unicode61 remove_diacritics 1), WAL, FK ON, role CHECK → REPO-002. D: 1.6
+- [x] 2.2 internal/memory/migrations.go — //go:embed, PRAGMA user_version, transactional apply → REPO-004. D: 2.1
+- [x] 2.3 internal/memory/sqlite.go — NewRepository, Create/LatestConversation, AppendMessage (tx+FTS+count), Messages, Search, Close → REPO-001. D: 2.2
+- [x] 2.4 internal/memory/fts.go — FTS sync; Search matches message+observation, accent-insensitive → REPO-003. D: 2.3
+- [x] 2.5 internal/memory/*_test.go — schema, CRUD order, cascade, count, FTS accent+doc_type → go test green. D: 2.3, 2.4
 
 ### Phase 3 — LLM adapters
 
