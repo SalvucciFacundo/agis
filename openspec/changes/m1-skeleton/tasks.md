@@ -46,9 +46,9 @@ Chain strategy: stacked-to-main
 
 ### Phase 4 — TUI + wiring
 
-- [ ] 4.1 internal/adapters/tui/app.go — viewport+textinput+spinner, Enter→Step, stream to viewport, restore latest → TUI-001. D: 1.7, 2.3
-- [ ] 4.2 cmd/agis/main.go — -config, Load, repo, provider, brain, tui, tea.NewProgram → go build static. D: 4.1
-- [ ] 4.3 app_test.go — tea smoke w/ fake provider, goleak.VerifyTestMain → TUI-001 + go test ./... D: 4.2
+- [x] 4.1 internal/adapters/tui/app.go — viewport+textinput+spinner, Enter→Step, stream to viewport, restore latest → TUI-001. D: 1.7, 2.3
+- [x] 4.2 cmd/agis/main.go — -config, Load, repo, provider, brain, tui, tea.NewProgram → go build static. D: 4.1
+- [x] 4.3 app_test.go — tea smoke w/ fake provider, goleak.VerifyTestMain → TUI-001 + go test ./... D: 4.2
 
 ## Dependency graph
 
