@@ -1,0 +1,43 @@
+schema: spec-driven
+
+context: |
+  Project: AGIS — Autonomous Go Intelligent System
+  Stack: Go 1.26.x, hexagonal architecture (ports & adapters)
+  Persistence: SQLite via modernc.org/sqlite, FTS5 for search
+  Surface: TUI first (Bubbletea), gateway/cron later
+  Architecture: Hexagonal (core domain, ports, adapters)
+  Storage mode: hybrid (openspec files + Engram memory)
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Reference spec.md sections by name and milestone
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Scope each delta to a single milestone unless explicitly cross-cutting
+  design:
+    - Include sequence diagrams for complex flows (brain loop, tool execution, session lifecycle)
+    - Document architecture decisions with rationale
+    - Respect hexagonal boundaries: core never imports adapters
+  tasks:
+    - Group by milestone, use hierarchical numbering
+    - Keep tasks completable in one session
+    - Respect hexagonal dependency direction
+  apply:
+    guidelines:
+      - Follow hexagonal architecture: ports define interfaces, adapters implement
+      - Use modernc.org/sqlite for zero-cgo SQLite
+      - Use Bubbletea/Lipgloss for TUI components
+      - Tests live next to source: *_test.go
+      - Use table-driven tests for Go
+      - Use context.Context for cancellation and deadlines
+    tdd: false
+    test_command: "go test ./..."
+  verify:
+    test_command: "go test ./..."
+    build_command: "go build ./cmd/agis/..."
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
+    - Verify no orphaned references before archiving
