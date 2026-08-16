@@ -75,9 +75,16 @@ func (r *Repository) searchMatches(ctx context.Context, query string, limit int)
 	return results, nil
 }
 
-// ftsQuery wraps the user query as an FTS5 phrase so operator characters and
-// punctuation are matched literally rather than interpreted as FTS5 syntax.
-// A double quote inside the query is escaped as "" per the FTS5 phrase rules.
+// ftsQuery rewrites a free-text query as an FTS5 conjunction of quoted
+// phrases: every whitespace-separated token is wrapped in quotes (escaping any
+// embedded quote as "") and joined with AND. This makes multi-word search
+// require every term to match, which suits observation recall where several
+// distinct words commonly co-occur.
 func ftsQuery(query string) string {
-	return `"` + strings.ReplaceAll(query, `"`, `""`) + `"`
+	tokens := strings.Fields(query)
+	quoted := make([]string, len(tokens))
+	for i, t := range tokens {
+		quoted[i] = `"` + strings.ReplaceAll(t, `"`, `""`) + `"`
+	}
+	return strings.Join(quoted, " AND ")
 }
