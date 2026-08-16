@@ -130,6 +130,10 @@ func (r *fakeRepo) UpsertUserModel(_ context.Context, _ []UserModel) error {
 	return nil
 }
 
+func (r *fakeRepo) RecordSessionEvent(_ context.Context, _ string, _ string, _ string) error {
+	return nil
+}
+
 func (r *fakeRepo) Close() error {
 	return nil
 }

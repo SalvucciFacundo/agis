@@ -376,6 +376,29 @@ func (r *Repository) upsertUserModel(ctx context.Context, tx *sql.Tx, u core.Use
 	return nil
 }
 
+// sessionEventKinds are the allowed session_events.kind values, mirroring the
+// CHECK constraint in 0002_learning.sql.
+var sessionEventKinds = map[string]bool{
+	"nudge":   true,
+	"summary": true,
+	"skill":   true,
+}
+
+// RecordSessionEvent appends one observability row about learning-loop
+// activity (a nudge, a summary, or later a skill write).
+func (r *Repository) RecordSessionEvent(ctx context.Context, sessionID, kind, payload string) error {
+	if !sessionEventKinds[kind] {
+		return fmt.Errorf("invalid session event kind %q", kind)
+	}
+	if _, err := r.db.ExecContext(ctx,
+		`INSERT INTO session_events (session_id, kind, payload, created_at)
+		 VALUES (?, ?, ?, ?)`,
+		sessionID, kind, payload, formatTime(time.Now().UTC())); err != nil {
+		return fmt.Errorf("recording session event %q: %w", kind, err)
+	}
+	return nil
+}
+
 // scanConversation maps a single conversations row into a core.Conversation.
 func scanConversation(s rowScanner) (*core.Conversation, error) {
 	var (

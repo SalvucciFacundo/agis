@@ -211,6 +211,33 @@ func TestUpdateConversationSummary_DoesNotBumpUpdatedAt(t *testing.T) {
 	}
 }
 
+func TestRecordSessionEvent_PersistsAndValidates(t *testing.T) {
+	ctx := context.Background()
+	repo := openTestRepo(t)
+
+	if err := repo.RecordSessionEvent(ctx, "conv-1", "nudge", `{"count":10}`); err != nil {
+		t.Fatalf("RecordSessionEvent(nudge) error = %v", err)
+	}
+
+	var kind, payload string
+	if err := repo.db.QueryRowContext(ctx,
+		`SELECT kind, payload FROM session_events WHERE session_id = ?`, "conv-1").Scan(&kind, &payload); err != nil {
+		t.Fatalf("reading session event: %v", err)
+	}
+	if kind != "nudge" {
+		t.Errorf("kind = %q, want nudge", kind)
+	}
+	if payload != `{"count":10}` {
+		t.Errorf("payload = %q, want the recorded payload", payload)
+	}
+
+	// An unknown kind is rejected rather than violating the CHECK constraint
+	// with an opaque error.
+	if err := repo.RecordSessionEvent(ctx, "conv-1", "bogus", ""); err == nil {
+		t.Fatal("RecordSessionEvent(bogus) error = nil, want error")
+	}
+}
+
 func TestUpsertUserModel_Upserts(t *testing.T) {
 	ctx := context.Background()
 	repo := openTestRepo(t)

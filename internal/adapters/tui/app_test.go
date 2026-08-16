@@ -90,6 +90,8 @@ func (r *fakeRepo) UpdateConversationSummary(context.Context, string, string) er
 
 func (r *fakeRepo) UpsertUserModel(context.Context, []core.UserModel) error { return nil }
 
+func (r *fakeRepo) RecordSessionEvent(context.Context, string, string, string) error { return nil }
+
 func (r *fakeRepo) Close() error { return nil }
 
 // newTestModel wires a Model around a fake provider that streams the given

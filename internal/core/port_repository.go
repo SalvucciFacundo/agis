@@ -37,5 +37,10 @@ type Repository interface {
 	// bumping updated_at on re-save.
 	UpsertUserModel(ctx context.Context, rows []UserModel) error
 
+	// RecordSessionEvent appends one observability row about learning-loop
+	// activity. kind is one of "nudge", "summary", or "skill"; sessionID is the
+	// conversation UUID the event belongs to.
+	RecordSessionEvent(ctx context.Context, sessionID, kind, payload string) error
+
 	Close() error
 }
