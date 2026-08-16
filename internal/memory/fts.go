@@ -28,6 +28,20 @@ func insertFTSRow(ctx context.Context, tx *sql.Tx, docType, docID, content strin
 	return nil
 }
 
+// deleteFTSRow removes the memory_fts row for one base row. It MUST be called
+// inside the same transaction as the base-table write it mirrors (e.g. an
+// observation upsert that replaces content), so a replaced row's stale content
+// can never haunt search.
+func deleteFTSRow(ctx context.Context, tx *sql.Tx, docType, docID string) error {
+	_, err := tx.ExecContext(ctx,
+		`DELETE FROM memory_fts WHERE doc_type = ? AND doc_id = ?`,
+		docType, docID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // searchMatches runs a full-text query over memory_fts, returning up to limit
 // results across every doc_type (message and observation), best matches first.
 func (r *Repository) searchMatches(ctx context.Context, query string, limit int) ([]core.SearchResult, error) {

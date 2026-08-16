@@ -188,6 +188,194 @@ func (r *Repository) Close() error {
 	return r.db.Close()
 }
 
+// clampImportance normalizes an observation importance score to [1,5], with 0
+// (the "absent/unset" value from a curator) defaulting to 3.
+func clampImportance(v int) int {
+	switch {
+	case v == 0:
+		return 3
+	case v < 1:
+		return 1
+	case v > 5:
+		return 5
+	default:
+		return v
+	}
+}
+
+// SaveObservations persists a batch of observations, upserting on the unique
+// topic_key. A re-saved topic keeps its original id and created_at and only
+// bumps updated_at; a new topic gets a fresh UUID. Importance is clamped to
+// [1,5] with 0 defaulting to 3. Each upsert also deletes and re-inserts the
+// observation's FTS row in the same transaction, so replaced content can never
+// haunt search. The whole batch is atomic: one bad row rolls back everything.
+func (r *Repository) SaveObservations(ctx context.Context, convID string, obs []core.Observation) error {
+	if len(obs) == 0 {
+		return nil
+	}
+
+	now := time.Now().UTC()
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("beginning observation transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, o := range obs {
+		if err := r.upsertObservation(ctx, tx, convID, o, now); err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing observations: %w", err)
+	}
+	return nil
+}
+
+// upsertObservation writes one observation inside tx, upserting on topic_key.
+func (r *Repository) upsertObservation(ctx context.Context, tx *sql.Tx, convID string, o core.Observation, now time.Time) error {
+	if strings.TrimSpace(o.TopicKey) == "" {
+		return fmt.Errorf("observation has empty topic_key")
+	}
+
+	importance := clampImportance(o.Importance)
+	nowStr := formatTime(now)
+
+	var id string
+	err := tx.QueryRowContext(ctx,
+		`SELECT id FROM observations WHERE topic_key = ?`, o.TopicKey).Scan(&id)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		id = uuid.NewString()
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO observations (id, topic_key, type, content, importance, created_at, updated_at, source_ref)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			id, o.TopicKey, o.Type, o.Content, importance, nowStr, nowStr, convID); err != nil {
+			return fmt.Errorf("inserting observation %q: %w", o.TopicKey, err)
+		}
+	case err != nil:
+		return fmt.Errorf("looking up observation %q: %w", o.TopicKey, err)
+	default:
+		// Re-save: preserve id and created_at, bump updated_at.
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE observations
+			 SET type = ?, content = ?, importance = ?, source_ref = ?, updated_at = ?
+			 WHERE id = ?`,
+			o.Type, o.Content, importance, convID, nowStr, id); err != nil {
+			return fmt.Errorf("updating observation %q: %w", o.TopicKey, err)
+		}
+	}
+
+	// Replace the FTS row so stale content cannot survive an upsert.
+	if err := deleteFTSRow(ctx, tx, docTypeObservation, id); err != nil {
+		return fmt.Errorf("deleting observation FTS row: %w", err)
+	}
+	if err := insertFTSRow(ctx, tx, docTypeObservation, id, o.Content); err != nil {
+		return fmt.Errorf("indexing observation: %w", err)
+	}
+	return nil
+}
+
+// Observations returns the most recently updated observations, newest first. A
+// non-positive limit is unbounded. This is the recall read path.
+func (r *Repository) Observations(ctx context.Context, limit int) ([]core.Observation, error) {
+	query := `SELECT id, topic_key, type, content, importance, created_at, updated_at, source_ref
+	          FROM observations
+	          ORDER BY updated_at DESC, id DESC`
+	args := []any{}
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("loading observations: %w", err)
+	}
+	defer rows.Close()
+
+	obs := []core.Observation{}
+	for rows.Next() {
+		o, err := scanObservation(rows)
+		if err != nil {
+			return nil, err
+		}
+		obs = append(obs, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating observations: %w", err)
+	}
+	return obs, nil
+}
+
+// UpdateConversationSummary writes a conversation's summary WITHOUT touching
+// its updated_at, so a summary write never changes LatestConversation order.
+func (r *Repository) UpdateConversationSummary(ctx context.Context, convID, summary string) error {
+	if _, err := r.db.ExecContext(ctx,
+		`UPDATE conversations SET summary = ? WHERE id = ?`, summary, convID); err != nil {
+		return fmt.Errorf("updating conversation summary: %w", err)
+	}
+	return nil
+}
+
+// UpsertUserModel persists user-model rows, upserting on the unique key. A
+// re-seen key keeps its id and bumps updated_at; a new key gets a fresh UUID.
+func (r *Repository) UpsertUserModel(ctx context.Context, rows []core.UserModel) error {
+	if len(rows) == 0 {
+		return nil
+	}
+
+	now := time.Now().UTC()
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("beginning user model transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, u := range rows {
+		if err := r.upsertUserModel(ctx, tx, u, now); err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing user model: %w", err)
+	}
+	return nil
+}
+
+// upsertUserModel writes one user-model row inside tx, upserting on key.
+func (r *Repository) upsertUserModel(ctx context.Context, tx *sql.Tx, u core.UserModel, now time.Time) error {
+	if strings.TrimSpace(u.Key) == "" {
+		return fmt.Errorf("user model row has empty key")
+	}
+
+	nowStr := formatTime(now)
+
+	var id string
+	err := tx.QueryRowContext(ctx, `SELECT id FROM user_model WHERE key = ?`, u.Key).Scan(&id)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		id = uuid.NewString()
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO user_model (id, key, value, confidence, updated_at)
+			 VALUES (?, ?, ?, ?, ?)`,
+			id, u.Key, u.Value, u.Confidence, nowStr); err != nil {
+			return fmt.Errorf("inserting user model %q: %w", u.Key, err)
+		}
+	case err != nil:
+		return fmt.Errorf("looking up user model %q: %w", u.Key, err)
+	default:
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE user_model SET value = ?, confidence = ?, updated_at = ? WHERE id = ?`,
+			u.Value, u.Confidence, nowStr, id); err != nil {
+			return fmt.Errorf("updating user model %q: %w", u.Key, err)
+		}
+	}
+	return nil
+}
+
 // scanConversation maps a single conversations row into a core.Conversation.
 func scanConversation(s rowScanner) (*core.Conversation, error) {
 	var (
@@ -224,6 +412,25 @@ func scanMessage(s rowScanner) (core.Message, error) {
 	}
 	m.CreatedAt = t
 	return m, nil
+}
+
+// scanObservation maps a single observations row into a core.Observation.
+func scanObservation(s rowScanner) (core.Observation, error) {
+	var (
+		o                     core.Observation
+		createdAt, updatedAt  string
+	)
+	if err := s.Scan(&o.ID, &o.TopicKey, &o.Type, &o.Content, &o.Importance, &createdAt, &updatedAt, &o.SourceRef); err != nil {
+		return core.Observation{}, err
+	}
+	var err error
+	if o.CreatedAt, err = parseTime(createdAt); err != nil {
+		return core.Observation{}, err
+	}
+	if o.UpdatedAt, err = parseTime(updatedAt); err != nil {
+		return core.Observation{}, err
+	}
+	return o, nil
 }
 
 // formatTime serializes t as a fixed-width UTC timestamp.
