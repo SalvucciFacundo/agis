@@ -50,11 +50,12 @@ func (f *fakeProvider) Models() []ModelInfo {
 
 // fakeRepo is an in-memory test double for the Repository port.
 type fakeRepo struct {
-	mu           sync.Mutex
-	convs        map[string]*Conversation
-	messages     map[string][]Message
-	observations []Observation
-	latest       *Conversation
+	mu              sync.Mutex
+	convs           map[string]*Conversation
+	messages        map[string][]Message
+	observations    []Observation
+	lastRecallLimit int
+	latest          *Conversation
 }
 
 var _ Repository = (*fakeRepo)(nil)
@@ -114,9 +115,10 @@ func (r *fakeRepo) SaveObservations(_ context.Context, _ string, obs []Observati
 	return nil
 }
 
-func (r *fakeRepo) Observations(_ context.Context, _ int) ([]Observation, error) {
+func (r *fakeRepo) Observations(_ context.Context, limit int) ([]Observation, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.lastRecallLimit = limit
 	out := make([]Observation, len(r.observations))
 	copy(out, r.observations)
 	return out, nil

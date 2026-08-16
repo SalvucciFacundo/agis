@@ -137,7 +137,12 @@ func (b *Brain) Step(ctx context.Context, input string) error {
 		return fmt.Errorf("loading conversation tail: %w", err)
 	}
 
-	events, err := b.provider.Stream(ctx, ChatRequest{Messages: tail})
+	messages, err := b.withRecall(ctx, tail)
+	if err != nil {
+		return err
+	}
+
+	events, err := b.provider.Stream(ctx, ChatRequest{Messages: messages})
 	if err != nil {
 		return fmt.Errorf("streaming response: %w", err)
 	}
@@ -164,6 +169,35 @@ func (b *Brain) Step(ctx context.Context, input string) error {
 	}
 
 	return nil
+}
+
+// withRecall loads the top-N observations and, when any exist, prepends a
+// system message listing them to the conversation tail so the provider sees
+// them as memory context. An empty recall returns the tail unchanged.
+func (b *Brain) withRecall(ctx context.Context, tail []Message) ([]Message, error) {
+	obs, err := b.repo.Observations(ctx, b.recallLimit)
+	if err != nil {
+		return nil, fmt.Errorf("loading recall observations: %w", err)
+	}
+	if len(obs) == 0 {
+		return tail, nil
+	}
+	messages := make([]Message, 0, len(tail)+1)
+	messages = append(messages, recallSystemMessage(obs))
+	return append(messages, tail...), nil
+}
+
+// recallSystemMessage builds a system message listing the recalled
+// observations.
+func recallSystemMessage(obs []Observation) Message {
+	var b strings.Builder
+	b.WriteString("Relevant memories:\n")
+	for _, o := range obs {
+		b.WriteString("- ")
+		b.WriteString(o.Content)
+		b.WriteString("\n")
+	}
+	return Message{Role: RoleSystem, Content: b.String()}
 }
 
 // ensureConversation returns the latest conversation, creating one when none

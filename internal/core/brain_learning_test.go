@@ -2,7 +2,9 @@ package core
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"strings"
 	"testing"
 )
 
@@ -79,3 +81,84 @@ func (stubNudger) Nudge(context.Context, string, []Message) ([]Observation, erro
 type stubCloser struct{}
 
 func (stubCloser) Close(context.Context, string, []Message) error { return nil }
+
+// capturingProvider records the ChatRequest passed to Stream so recall tests
+// can assert what the provider saw.
+type capturingProvider struct {
+	events   []StreamEvent
+	requests []ChatRequest
+}
+
+var _ Provider = (*capturingProvider)(nil)
+
+func (c *capturingProvider) Chat(context.Context, ChatRequest) (ChatResponse, error) {
+	return ChatResponse{}, errors.New("Chat not used in brain tests")
+}
+
+func (c *capturingProvider) Stream(ctx context.Context, req ChatRequest) (<-chan StreamEvent, error) {
+	c.requests = append(c.requests, req)
+	ch := make(chan StreamEvent)
+	go func() {
+		defer close(ch)
+		for _, ev := range c.events {
+			select {
+			case ch <- ev:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return ch, nil
+}
+
+func (c *capturingProvider) Models() []ModelInfo { return nil }
+
+func TestBrainStep_InjectsRecall(t *testing.T) {
+	repo := newFakeRepo()
+	repo.observations = []Observation{
+		{TopicKey: "user/pref/coffee", Content: "dark roast", Importance: 4},
+	}
+	provider := &capturingProvider{events: []StreamEvent{{Text: "ok"}}}
+	brain := NewBrain(repo, provider)
+
+	if err := brain.Step(context.Background(), "hello"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	if len(provider.requests) != 1 {
+		t.Fatalf("Stream called %d times, want 1", len(provider.requests))
+	}
+	msgs := provider.requests[0].Messages
+	if len(msgs) == 0 || msgs[0].Role != RoleSystem {
+		t.Fatalf("first message = %+v, want the system recall message", msgs)
+	}
+	if !strings.Contains(msgs[0].Content, "Relevant memories:") {
+		t.Errorf("recall message = %q, want the recall header", msgs[0].Content)
+	}
+	if !strings.Contains(msgs[0].Content, "dark roast") {
+		t.Errorf("recall message = %q, want the observation content", msgs[0].Content)
+	}
+	// Default recall limit reaches the repository read.
+	if repo.lastRecallLimit != 10 {
+		t.Errorf("Observations called with limit %d, want 10", repo.lastRecallLimit)
+	}
+}
+
+func TestBrainStep_NoRecallWhenEmpty(t *testing.T) {
+	repo := newFakeRepo()
+	provider := &capturingProvider{events: []StreamEvent{{Text: "ok"}}}
+	brain := NewBrain(repo, provider)
+
+	if err := brain.Step(context.Background(), "hello"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	if len(provider.requests) != 1 {
+		t.Fatalf("Stream called %d times, want 1", len(provider.requests))
+	}
+	msgs := provider.requests[0].Messages
+	if len(msgs) != 1 || msgs[0].Role != RoleUser {
+		t.Errorf("messages = %+v, want just the user message (no recall)", msgs)
+	}
+}
+
