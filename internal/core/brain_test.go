@@ -56,6 +56,14 @@ type fakeRepo struct {
 	observations    []Observation
 	lastRecallLimit int
 	latest          *Conversation
+	sessionEvents   []sessionEventRecord
+}
+
+// sessionEventRecord captures one RecordSessionEvent call for assertion.
+type sessionEventRecord struct {
+	sessionID string
+	kind      string
+	payload   string
 }
 
 var _ Repository = (*fakeRepo)(nil)
@@ -132,7 +140,10 @@ func (r *fakeRepo) UpsertUserModel(_ context.Context, _ []UserModel) error {
 	return nil
 }
 
-func (r *fakeRepo) RecordSessionEvent(_ context.Context, _ string, _ string, _ string) error {
+func (r *fakeRepo) RecordSessionEvent(_ context.Context, sessionID, kind, payload string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sessionEvents = append(r.sessionEvents, sessionEventRecord{sessionID: sessionID, kind: kind, payload: payload})
 	return nil
 }
 

@@ -162,3 +162,96 @@ func TestBrainStep_NoRecallWhenEmpty(t *testing.T) {
 	}
 }
 
+// fakeNudger records Nudge invocations and returns a configurable error.
+type fakeNudger struct {
+	calls int
+	err   error
+}
+
+var _ Nudger = (*fakeNudger)(nil)
+
+func (f *fakeNudger) Nudge(context.Context, string, []Message) ([]Observation, error) {
+	f.calls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return nil, nil
+}
+
+func TestBrainStep_NudgesOnBoundary(t *testing.T) {
+	repo := newFakeRepo()
+	nudger := &fakeNudger{}
+	provider := &fakeProvider{events: []StreamEvent{{Text: "ok"}}}
+	brain := NewBrain(repo, provider, WithNudger(nudger), WithNudgeEvery(2))
+
+	for i := 0; i < 4; i++ {
+		if err := brain.Step(context.Background(), "hi"); err != nil {
+			t.Fatalf("Step(%d) error = %v", i, err)
+		}
+	}
+
+	// 4 assistant messages, nudgeEvery=2 → 2 nudges.
+	if nudger.calls != 2 {
+		t.Errorf("Nudge called %d times, want 2", nudger.calls)
+	}
+	if len(repo.sessionEvents) != 2 {
+		t.Fatalf("got %d session events, want 2", len(repo.sessionEvents))
+	}
+	for _, e := range repo.sessionEvents {
+		if e.kind != "nudge" {
+			t.Errorf("session event kind = %q, want nudge", e.kind)
+		}
+	}
+}
+
+func TestBrainStep_NudgeDisabledWhenNil(t *testing.T) {
+	repo := newFakeRepo()
+	provider := &fakeProvider{events: []StreamEvent{{Text: "ok"}}}
+	brain := NewBrain(repo, provider, WithNudgeEvery(1)) // no nudger wired
+
+	for i := 0; i < 3; i++ {
+		if err := brain.Step(context.Background(), "hi"); err != nil {
+			t.Fatalf("Step(%d) error = %v", i, err)
+		}
+	}
+	if len(repo.sessionEvents) != 0 {
+		t.Errorf("got %d session events, want 0 (nil curator disables nudge)", len(repo.sessionEvents))
+	}
+}
+
+func TestBrainStep_NudgeEveryZeroDisables(t *testing.T) {
+	repo := newFakeRepo()
+	nudger := &fakeNudger{}
+	provider := &fakeProvider{events: []StreamEvent{{Text: "ok"}}}
+	brain := NewBrain(repo, provider, WithNudger(nudger), WithNudgeEvery(0))
+
+	for i := 0; i < 5; i++ {
+		if err := brain.Step(context.Background(), "hi"); err != nil {
+			t.Fatalf("Step(%d) error = %v", i, err)
+		}
+	}
+	if nudger.calls != 0 {
+		t.Errorf("Nudge called %d times, want 0 (nudgeEvery=0 disables)", nudger.calls)
+	}
+}
+
+func TestBrainStep_NudgeErrorNonFatal(t *testing.T) {
+	repo := newFakeRepo()
+	nudger := &fakeNudger{err: errors.New("curator down")}
+	provider := &fakeProvider{events: []StreamEvent{{Text: "ok"}}}
+	brain := NewBrain(
+		repo,
+		provider,
+		WithNudger(nudger),
+		WithNudgeEvery(1),
+		WithLogger(slog.New(slog.DiscardHandler)),
+	)
+
+	if err := brain.Step(context.Background(), "hi"); err != nil {
+		t.Fatalf("Step() error = %v, want nil (nudge error is non-fatal)", err)
+	}
+	msgs, _ := repo.Messages(context.Background(), "conv-1", 0)
+	if len(msgs) != 2 {
+		t.Errorf("got %d messages, want 2 (turn completed despite nudge failure)", len(msgs))
+	}
+}

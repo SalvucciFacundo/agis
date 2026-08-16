@@ -168,7 +168,46 @@ func (b *Brain) Step(ctx context.Context, input string) error {
 		return fmt.Errorf("persisting assistant message: %w", err)
 	}
 
+	b.assistantCount++
+	if err := b.maybeNudge(ctx, conv.ID); err != nil {
+		// A failed nudge must never fail the turn: the reply is already
+		// persisted and delivered.
+		b.logger.Warn("nudge failed", "error", err)
+	}
+
 	return nil
+}
+
+// maybeNudge triggers the curator on the nudge cadence boundary (every
+// nudgeEvery assistant messages). A nil Nudger or a non-positive nudgeEvery
+// disables it. Errors are returned for the caller to log.
+func (b *Brain) maybeNudge(ctx context.Context, convID string) error {
+	if b.nudger == nil || b.nudgeEvery <= 0 {
+		return nil
+	}
+	if b.assistantCount%b.nudgeEvery != 0 {
+		return nil
+	}
+
+	msgs, err := b.repo.Messages(ctx, convID, tailLimit)
+	if err != nil {
+		return fmt.Errorf("loading messages for nudge: %w", err)
+	}
+
+	obs, err := b.nudger.Nudge(ctx, convID, msgs)
+	if err != nil {
+		return fmt.Errorf("curating observations: %w", err)
+	}
+
+	if err := b.repo.RecordSessionEvent(ctx, convID, "nudge", nudgePayload(b.assistantCount, len(obs))); err != nil {
+		return fmt.Errorf("recording nudge event: %w", err)
+	}
+	return nil
+}
+
+// nudgePayload serializes the nudge session-event payload.
+func nudgePayload(assistantCount, observationCount int) string {
+	return fmt.Sprintf(`{"assistant_messages":%d,"observations":%d}`, assistantCount, observationCount)
 }
 
 // withRecall loads the top-N observations and, when any exist, prepends a
