@@ -15,12 +15,12 @@ Chain strategy: pending
 
 ## Phase 1: Memory Substrate (PR1) — REPO-001..003
 
-- [ ] T1.1 Mig 0002 — `0002_learning.sql`: updated_at+backfill, UNIQUE topic_key, user_model, session_events CHECK. AC: v1→v2, v2 no-op.
-- [ ] T1.2 Types — `core/types.go`: `Observation`(+UpdatedAt), `UserModel`.
-- [ ] T1.3 Port — `core/port_repository.go`: SaveObservations, Observations, UpdateConversationSummary, UpsertUserModel, RecordSessionEvent (5th: CUR-002/BRN-002 need event rows). Deps: T1.2
-- [ ] T1.4 FTS — `memory/fts.go`: deleteFTSRow; AND-join ftsQuery. AC: `"coffee" AND "preference"` (fts_test.go). Deps: T1.3
-- [ ] T1.5 Repo — `memory/sqlite.go`: 5 port methods; upsert keeps created_at, bumps updated_at, clamp[1,5] dflt 3, FTS delete+insert same-tx, atomic batch. AC: REPO-001 scenarios (sqlite/migrations_test.go). Deps: T1.1,T1.3,T1.4
-- [ ] T1.6 Docs — `docs/memory.md`: AND-search note. Deps: T1.5
+- [x] T1.1 Mig 0002 — `0002_learning.sql`: updated_at+backfill, UNIQUE topic_key, user_model, session_events CHECK. AC: v1→v2, v2 no-op.
+- [x] T1.2 Types — `core/types.go`: `Observation`(+UpdatedAt), `UserModel`.
+- [x] T1.3 Port — `core/port_repository.go`: SaveObservations, Observations, UpdateConversationSummary, UpsertUserModel, RecordSessionEvent (5th: CUR-002/BRN-002 need event rows). Deps: T1.2
+- [x] T1.4 FTS — `memory/fts.go`: deleteFTSRow; AND-join ftsQuery. AC: `"coffee" AND "preference"` (fts_test.go). Deps: T1.3
+- [x] T1.5 Repo — `memory/sqlite.go`: 5 port methods; upsert keeps created_at, bumps updated_at, clamp[1,5] dflt 3, FTS delete+insert same-tx, atomic batch. AC: REPO-001 scenarios (sqlite/migrations_test.go). Deps: T1.1,T1.3,T1.4
+- [x] T1.6 Docs — `docs/memory.md`: AND-search note. Deps: T1.5
 
 ## Phase 2: Learning Loop (PR2) — CUR-001..003, SUM-001..002, USR-001, BRN-001..002
 

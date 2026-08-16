@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 )
 
@@ -32,22 +33,31 @@ func TestMigrations(t *testing.T) {
 		t.Fatalf("applyMigrations() error = %v", err)
 	}
 
-	// user_version advanced to 1.
+	// user_version advanced to 2.
 	var v int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
 		t.Fatalf("reading user_version: %v", err)
 	}
-	if v != 1 {
-		t.Errorf("user_version = %d, want 1", v)
+	if v != 2 {
+		t.Errorf("user_version = %d, want 2", v)
 	}
 
-	// The three base tables plus the FTS table exist.
-	for _, table := range []string{"conversations", "messages", "observations", "memory_fts"} {
+	// The three base tables, the FTS table, and the two M2 tables exist.
+	for _, table := range []string{
+		"conversations", "messages", "observations", "memory_fts", "user_model", "session_events",
+	} {
 		var name string
 		err := db.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE name = ?`, table).Scan(&name)
 		if err != nil {
 			t.Errorf("table %q missing: %v", table, err)
 		}
+	}
+
+	// observations gained the updated_at column.
+	var updatedAt string
+	if err := db.QueryRowContext(ctx, `SELECT updated_at FROM observations LIMIT 1`).Scan(&updatedAt); err != nil &&
+		!errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("observations.updated_at missing: %v", err)
 	}
 }
 
@@ -67,8 +77,64 @@ func TestMigrations_Idempotent(t *testing.T) {
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
 		t.Fatalf("reading user_version: %v", err)
 	}
-	if v != 1 {
-		t.Errorf("user_version = %d, want 1", v)
+	if v != 2 {
+		t.Errorf("user_version = %d, want 2", v)
+	}
+}
+
+// TestMigration_V1ToV2 proves 0002 upgrades a real v1 database: it backfills
+// observations.updated_at from created_at and enforces the unique topic_key
+// index, ending at user_version 2.
+func TestMigration_V1ToV2(t *testing.T) {
+	ctx := context.Background()
+	db := openTestDB(t)
+
+	// Apply only 0001 to simulate a v1 database with data.
+	migs, err := loadMigrations()
+	if err != nil {
+		t.Fatalf("loadMigrations() error = %v", err)
+	}
+	for _, m := range migs {
+		if m.version == 1 {
+			if err := applyMigration(ctx, db, m); err != nil {
+				t.Fatalf("applying 0001: %v", err)
+			}
+		}
+	}
+
+	// A pre-0002 observation has no updated_at column.
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO observations (id, topic_key, type, content, importance, created_at, source_ref)
+		 VALUES ('obs-1', 'coffee', 'preference', 'dark roast', 4, '2026-01-01T00:00:00.000000000Z', 'conv-1')`); err != nil {
+		t.Fatalf("inserting v1 observation: %v", err)
+	}
+
+	if err := applyMigrations(ctx, db); err != nil {
+		t.Fatalf("applyMigrations() error = %v", err)
+	}
+
+	var v int
+	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
+		t.Fatalf("reading user_version: %v", err)
+	}
+	if v != 2 {
+		t.Errorf("user_version = %d, want 2", v)
+	}
+
+	// updated_at backfilled from created_at.
+	var updatedAt string
+	if err := db.QueryRowContext(ctx, `SELECT updated_at FROM observations WHERE id = 'obs-1'`).Scan(&updatedAt); err != nil {
+		t.Fatalf("reading updated_at: %v", err)
+	}
+	if updatedAt != "2026-01-01T00:00:00.000000000Z" {
+		t.Errorf("updated_at = %q, want backfilled created_at", updatedAt)
+	}
+
+	// The unique topic_key index rejects a duplicate topic.
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO observations (id, topic_key, type, content, importance, created_at, updated_at, source_ref)
+		 VALUES ('obs-2', 'coffee', 'note', 'dup', 1, '2026-01-01T00:00:00.000000000Z', '2026-01-01T00:00:00.000000000Z', '')`); err == nil {
+		t.Fatal("inserting duplicate topic_key succeeded, want unique violation")
 	}
 }
 

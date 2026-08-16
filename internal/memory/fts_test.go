@@ -159,3 +159,110 @@ func TestSearch_ImmediatelyVisibleAfterAppend(t *testing.T) {
 		t.Errorf("got %d results, want 1 (searchable immediately after append)", len(results))
 	}
 }
+
+func TestFTSQuery_ANDJoin(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		want  string
+	}{
+		{"single token", "coffee", `"coffee"`},
+		{"two tokens AND-joined", "coffee preference", `"coffee" AND "preference"`},
+		{"collapsed whitespace", "  coffee   preference  ", `"coffee" AND "preference"`},
+		{"embedded quote escaped", `say "hi" now`, `"say" AND """hi""" AND "now"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ftsQuery(tt.query); got != tt.want {
+				t.Errorf("ftsQuery(%q) = %q, want %q", tt.query, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSearch_ANDJoin proves multi-word queries require every term to match:
+// two separate docs each holding one term must NOT match, while a doc holding
+// both must.
+func TestSearch_ANDJoin(t *testing.T) {
+	ctx := context.Background()
+	repo := openTestRepo(t)
+
+	conv, err := repo.CreateConversation(ctx, "")
+	if err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+	if err := repo.AppendMessage(ctx, conv.ID, core.Message{Role: core.RoleUser, Content: "coffee"}); err != nil {
+		t.Fatalf("AppendMessage(coffee) error = %v", err)
+	}
+	if err := repo.AppendMessage(ctx, conv.ID, core.Message{Role: core.RoleUser, Content: "preference"}); err != nil {
+		t.Fatalf("AppendMessage(preference) error = %v", err)
+	}
+
+	// Neither message contains both terms, so the AND query must return zero.
+	results, err := repo.Search(ctx, "coffee preference", 10)
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("got %d results, want 0 (no doc contains both terms)", len(results))
+	}
+
+	// A doc holding both terms now matches.
+	if err := repo.AppendMessage(ctx, conv.ID, core.Message{Role: core.RoleUser, Content: "coffee preference noted"}); err != nil {
+		t.Fatalf("AppendMessage(both) error = %v", err)
+	}
+	results, err = repo.Search(ctx, "coffee preference", 10)
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if results[0].Content != "coffee preference noted" {
+		t.Errorf("content = %q, want %q", results[0].Content, "coffee preference noted")
+	}
+}
+
+// TestSaveObservations_FTSDeleteSync proves an upsert replaces the FTS row:
+// after re-saving a topic with different content, the old content no longer
+// matches search.
+func TestSaveObservations_FTSDeleteSync(t *testing.T) {
+	ctx := context.Background()
+	repo := openTestRepo(t)
+
+	if err := repo.SaveObservations(ctx, "conv-1", []core.Observation{
+		{TopicKey: "user/prefs/coffee", Type: "preference", Content: "coffee beans", Importance: 4},
+	}); err != nil {
+		t.Fatalf("SaveObservations(first) error = %v", err)
+	}
+
+	results, err := repo.Search(ctx, "coffee", 10)
+	if err != nil {
+		t.Fatalf("Search(coffee) error = %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("got %d results for coffee, want 1", len(results))
+	}
+
+	if err := repo.SaveObservations(ctx, "conv-1", []core.Observation{
+		{TopicKey: "user/prefs/coffee", Type: "preference", Content: "tea leaves", Importance: 4},
+	}); err != nil {
+		t.Fatalf("SaveObservations(second) error = %v", err)
+	}
+
+	results, err = repo.Search(ctx, "coffee", 10)
+	if err != nil {
+		t.Fatalf("Search(coffee, after upsert) error = %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("got %d results for coffee after upsert, want 0 (stale FTS row)", len(results))
+	}
+
+	results, err = repo.Search(ctx, "tea", 10)
+	if err != nil {
+		t.Fatalf("Search(tea) error = %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("got %d results for tea, want 1", len(results))
+	}
+}

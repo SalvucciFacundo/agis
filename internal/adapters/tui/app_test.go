@@ -82,6 +82,16 @@ func (r *fakeRepo) Search(context.Context, string, int) ([]core.SearchResult, er
 	return nil, nil
 }
 
+func (r *fakeRepo) SaveObservations(context.Context, string, []core.Observation) error { return nil }
+
+func (r *fakeRepo) Observations(context.Context, int) ([]core.Observation, error) { return nil, nil }
+
+func (r *fakeRepo) UpdateConversationSummary(context.Context, string, string) error { return nil }
+
+func (r *fakeRepo) UpsertUserModel(context.Context, []core.UserModel) error { return nil }
+
+func (r *fakeRepo) RecordSessionEvent(context.Context, string, string, string) error { return nil }
+
 func (r *fakeRepo) Close() error { return nil }
 
 // newTestModel wires a Model around a fake provider that streams the given

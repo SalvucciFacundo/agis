@@ -28,6 +28,20 @@ func insertFTSRow(ctx context.Context, tx *sql.Tx, docType, docID, content strin
 	return nil
 }
 
+// deleteFTSRow removes the memory_fts row for one base row. It MUST be called
+// inside the same transaction as the base-table write it mirrors (e.g. an
+// observation upsert that replaces content), so a replaced row's stale content
+// can never haunt search.
+func deleteFTSRow(ctx context.Context, tx *sql.Tx, docType, docID string) error {
+	_, err := tx.ExecContext(ctx,
+		`DELETE FROM memory_fts WHERE doc_type = ? AND doc_id = ?`,
+		docType, docID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // searchMatches runs a full-text query over memory_fts, returning up to limit
 // results across every doc_type (message and observation), best matches first.
 func (r *Repository) searchMatches(ctx context.Context, query string, limit int) ([]core.SearchResult, error) {
@@ -61,9 +75,16 @@ func (r *Repository) searchMatches(ctx context.Context, query string, limit int)
 	return results, nil
 }
 
-// ftsQuery wraps the user query as an FTS5 phrase so operator characters and
-// punctuation are matched literally rather than interpreted as FTS5 syntax.
-// A double quote inside the query is escaped as "" per the FTS5 phrase rules.
+// ftsQuery rewrites a free-text query as an FTS5 conjunction of quoted
+// phrases: every whitespace-separated token is wrapped in quotes (escaping any
+// embedded quote as "") and joined with AND. This makes multi-word search
+// require every term to match, which suits observation recall where several
+// distinct words commonly co-occur.
 func ftsQuery(query string) string {
-	return `"` + strings.ReplaceAll(query, `"`, `""`) + `"`
+	tokens := strings.Fields(query)
+	quoted := make([]string, len(tokens))
+	for i, t := range tokens {
+		quoted[i] = `"` + strings.ReplaceAll(t, `"`, `""`) + `"`
+	}
+	return strings.Join(quoted, " AND ")
 }

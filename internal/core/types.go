@@ -60,3 +60,27 @@ type SearchResult struct {
 	DocID   string
 	Content string
 }
+
+// Observation is a single long-term memory fact. It is keyed by TopicKey:
+// re-saving an observation with the same TopicKey updates the existing row
+// instead of duplicating it. SourceRef records which conversation produced it.
+type Observation struct {
+	ID         string
+	TopicKey   string
+	Type       string
+	Content    string
+	Importance int
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	SourceRef  string
+}
+
+// UserModel is one aggregated fact about the user, keyed by Key (the source
+// observation's full topic_key). Confidence is a float in [0,1].
+type UserModel struct {
+	ID         string
+	Key        string
+	Value      string
+	Confidence float64
+	UpdatedAt  time.Time
+}
