@@ -65,7 +65,7 @@ func TestAggregateUserModel_NonUserExcluded(t *testing.T) {
 
 func TestAggregateUserModel_ConfidenceClamped(t *testing.T) {
 	obs := []core.Observation{
-		{TopicKey: "user/too-low", Content: "a", Importance: -10}, // -2 → clamp 0
+		{TopicKey: "user/too-low", Content: "a", Importance: -10},  // -2 → clamp 0
 		{TopicKey: "user/too-high", Content: "b", Importance: 100}, // 20 → clamp 1
 	}
 	got := AggregateUserModel(nil, obs)
