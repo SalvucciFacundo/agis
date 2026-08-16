@@ -440,8 +440,8 @@ func scanMessage(s rowScanner) (core.Message, error) {
 // scanObservation maps a single observations row into a core.Observation.
 func scanObservation(s rowScanner) (core.Observation, error) {
 	var (
-		o                     core.Observation
-		createdAt, updatedAt  string
+		o                    core.Observation
+		createdAt, updatedAt string
 	)
 	if err := s.Scan(&o.ID, &o.TopicKey, &o.Type, &o.Content, &o.Importance, &createdAt, &updatedAt, &o.SourceRef); err != nil {
 		return core.Observation{}, err
