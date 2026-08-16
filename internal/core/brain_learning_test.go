@@ -255,3 +255,99 @@ func TestBrainStep_NudgeErrorNonFatal(t *testing.T) {
 		t.Errorf("got %d messages, want 2 (turn completed despite nudge failure)", len(msgs))
 	}
 }
+
+// fakeCloser records Close invocations and returns a configurable error.
+type fakeCloser struct {
+	calls    int
+	err      error
+	convID   string
+	msgCount int
+}
+
+var _ SessionCloser = (*fakeCloser)(nil)
+
+func (f *fakeCloser) Close(_ context.Context, convID string, msgs []Message) error {
+	f.calls++
+	f.convID = convID
+	f.msgCount = len(msgs)
+	return f.err
+}
+
+func TestBrainCloseSession_Orchestrates(t *testing.T) {
+	repo := newFakeRepo()
+	closer := &fakeCloser{}
+	brain := NewBrain(repo, &fakeProvider{}, WithSessionCloser(closer))
+
+	// Seed a conversation with a message.
+	if _, err := repo.CreateConversation(context.Background(), ""); err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+	if err := repo.AppendMessage(context.Background(), "conv-1", Message{Role: RoleUser, Content: "hi"}); err != nil {
+		t.Fatalf("AppendMessage() error = %v", err)
+	}
+
+	if err := brain.CloseSession(context.Background()); err != nil {
+		t.Fatalf("CloseSession() error = %v", err)
+	}
+
+	if closer.calls != 1 {
+		t.Fatalf("Close called %d times, want 1", closer.calls)
+	}
+	if closer.convID != "conv-1" {
+		t.Errorf("Close convID = %q, want conv-1", closer.convID)
+	}
+	if closer.msgCount != 1 {
+		t.Errorf("Close got %d messages, want 1", closer.msgCount)
+	}
+	if len(repo.sessionEvents) != 1 || repo.sessionEvents[0].kind != "summary" {
+		t.Errorf("session events = %+v, want one summary event", repo.sessionEvents)
+	}
+}
+
+func TestBrainCloseSession_NilCloserNoop(t *testing.T) {
+	repo := newFakeRepo()
+	brain := NewBrain(repo, &fakeProvider{}) // no closer wired
+
+	if err := brain.CloseSession(context.Background()); err != nil {
+		t.Fatalf("CloseSession() error = %v, want nil", err)
+	}
+	if len(repo.sessionEvents) != 0 {
+		t.Errorf("session events = %v, want none (nil closer is a no-op)", repo.sessionEvents)
+	}
+}
+
+func TestBrainCloseSession_NoConversationNoop(t *testing.T) {
+	repo := newFakeRepo()
+	closer := &fakeCloser{}
+	brain := NewBrain(repo, &fakeProvider{}, WithSessionCloser(closer))
+
+	if err := brain.CloseSession(context.Background()); err != nil {
+		t.Fatalf("CloseSession() error = %v", err)
+	}
+	if closer.calls != 0 {
+		t.Errorf("Close called %d times, want 0 (no conversation to close)", closer.calls)
+	}
+}
+
+func TestBrainCloseSession_ErrorNonFatal(t *testing.T) {
+	repo := newFakeRepo()
+	closer := &fakeCloser{err: errors.New("summarizer down")}
+	brain := NewBrain(
+		repo,
+		&fakeProvider{},
+		WithSessionCloser(closer),
+		WithLogger(slog.New(slog.DiscardHandler)),
+	)
+
+	if _, err := repo.CreateConversation(context.Background(), ""); err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+
+	if err := brain.CloseSession(context.Background()); err != nil {
+		t.Fatalf("CloseSession() error = %v, want nil (non-fatal)", err)
+	}
+	// No summary event because Close failed before producing a summary.
+	if len(repo.sessionEvents) != 0 {
+		t.Errorf("session events = %v, want none after a failed close", repo.sessionEvents)
+	}
+}

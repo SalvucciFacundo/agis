@@ -210,6 +210,46 @@ func nudgePayload(assistantCount, observationCount int) string {
 	return fmt.Sprintf(`{"assistant_messages":%d,"observations":%d}`, assistantCount, observationCount)
 }
 
+// CloseSession orchestrates end-of-session learning: it resolves the current
+// conversation, loads its recent messages, hands them to the SessionCloser
+// (which summarizes, saves observations, and aggregates the user model), and
+// records a summary session event.
+//
+// It is non-fatal: every learning error is logged and swallowed so shutdown
+// always proceeds. With a nil SessionCloser, or with no conversation yet, it
+// is a no-op. The caller bounds the work via the ctx deadline.
+func (b *Brain) CloseSession(ctx context.Context) error {
+	if b.closer == nil {
+		return nil
+	}
+
+	conv, err := b.repo.LatestConversation(ctx)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		b.logger.Warn("close session: resolving conversation", "error", err)
+		return nil
+	}
+
+	msgs, err := b.repo.Messages(ctx, conv.ID, closeMessageLimit)
+	if err != nil {
+		b.logger.Warn("close session: loading messages", "error", err)
+		return nil
+	}
+
+	if err := b.closer.Close(ctx, conv.ID, msgs); err != nil {
+		b.logger.Warn("close session: summarizer", "error", err)
+		return nil
+	}
+
+	if err := b.repo.RecordSessionEvent(ctx, conv.ID, "summary", ""); err != nil {
+		b.logger.Warn("close session: recording event", "error", err)
+		return nil
+	}
+	return nil
+}
+
 // withRecall loads the top-N observations and, when any exist, prepends a
 // system message listing them to the conversation tail so the provider sees
 // them as memory context. An empty recall returns the tail unchanged.
