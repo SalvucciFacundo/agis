@@ -91,12 +91,17 @@ The central loop of the agent, modeled after Hermes/GAIA:
 ```
 type Provider interface {
     Chat(ctx context.Context, req ChatRequest) (ChatResponse, error)
-    Stream(ctx context.Context, req ChatRequest) (<-chan Token, error)
+    Stream(ctx context.Context, req ChatRequest) (<-chan StreamEvent, error)
     Models() []ModelInfo
+}
+
+type StreamEvent struct {
+    Text string
+    Err  error
 }
 ```
 
-Adapters: OpenAI-compatible (OpenAI, OpenRouter), Anthropic, Ollama (local). Provider and model selected via `agis model` / config; no code changes to switch.
+`Stream` returns a `StreamEvent` channel (amended from a bare `<-chan Token` in M1) so mid-stream failures surface on the channel instead of requiring a second error path. The shared OpenAI-compatible client serves both the OpenAI and Ollama adapters in M1; Anthropic and OpenRouter adapters follow later. Provider and model selected via `agis model` / config; no code changes to switch.
 
 ### 3. Memory system
 
@@ -107,6 +112,7 @@ The full learning loop in v1, following the GAIA pattern with a generalized sche
 - SQLite via `modernc.org/sqlite` (pure Go, no cgo, single file).
 - FTS5 for full-text search over conversations and observations.
 - A single `Repository` port; the schema is generic, not coding-oriented.
+- Migrations are embedded in the binary (`//go:embed migrations/*.sql`) and applied via `PRAGMA user_version` — the single-static-binary, zero-external-services goal keeps the schema self-contained (deviation from an external migration tool, deliberate for a single-writer embedded DB).
 
 #### Schema
 
@@ -114,11 +120,13 @@ The full learning loop in v1, following the GAIA pattern with a generalized sche
 conversations        — id, title, created_at, updated_at, summary, message_count
 messages             — id, conversation_id, role, content, created_at
 observations         — id, topic_key, type, content, importance, created_at, source_ref
-observation_fts      — FTS5 virtual table over observations + messages
+memory_fts           — standalone FTS5 table (doc_type, doc_id, content) over messages + observations; tokenizer unicode61 remove_diacritics 1
 skills               — id, name, description, trigger, content, source, usage_count, last_used
 user_model           — id, key, value, confidence, updated_at
 session_events       — id, session_id, kind, payload, created_at   (nudges, summaries, skill creations)
 ```
+
+`memory_fts` is a standalone FTS5 table with a `doc_type` discriminator (`message` | `observation`) rather than FTS5 external-content mode, which binds to a single base table. Full-text rows are synced in the same transaction as the base write (no hidden triggers).
 
 #### The loop
 
@@ -320,7 +328,7 @@ A general-purpose agent that executes tools on the host is a high-value target: 
 
 ## Milestones
 
-- **M1 — Thinking agent with memory**: Go skeleton, hexagonal layout, Brain loop, multi-provider LLM port (OpenAI + Ollama first), SQLite + FTS5 storage, session persist/restore, minimal TUI.
+- **M1 — Thinking agent with memory**: ~~Go skeleton, hexagonal layout, Brain loop, multi-provider LLM port (OpenAI + Ollama first), SQLite + FTS5 storage, session persist/restore, minimal TUI.~~ **DONE** — M1 shipped (change `m1-skeleton`, archived `2026-08-15`): hexagonal skeleton, `Brain.Step` loop, OpenAI + Ollama `Provider` adapters over a shared OpenAI-compatible client, SQLite + FTS5 `memory_fts` Repository with embedded migrations, config loader, minimal Bubbletea TUI. Verified 9/9 requirements, 11/11 scenarios, 47 tests green; delivered as 4 stacked PRs. Follow-ups deferred to M2: FTS delete sync, stream cancel/abandon leak, multi-word phrase search, UUID tie-break, hand-rolled client vs pinned SDK, `tui.New` signature drift.
 - **M2 — Learning loop**: curator + nudges, session summarization, topic-key observations, user model.
 - **M3 — Skills & persona**: skill hub, agentskills.io loading, skill creation from experience, registry; SOUL.md loader, persona overlays (`/personality`), seed + evolution.
 - **M4 — Tools, backends & permissions**: local tools with Policy Guard, Docker backend, SSH backend, `agis policy` CLI, `/permisos` TUI panel, interactive approval in TUI.
