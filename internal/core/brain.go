@@ -137,7 +137,12 @@ func (b *Brain) Step(ctx context.Context, input string) error {
 		return fmt.Errorf("loading conversation tail: %w", err)
 	}
 
-	events, err := b.provider.Stream(ctx, ChatRequest{Messages: tail})
+	messages, err := b.withRecall(ctx, tail)
+	if err != nil {
+		return err
+	}
+
+	events, err := b.provider.Stream(ctx, ChatRequest{Messages: messages})
 	if err != nil {
 		return fmt.Errorf("streaming response: %w", err)
 	}
@@ -163,7 +168,115 @@ func (b *Brain) Step(ctx context.Context, input string) error {
 		return fmt.Errorf("persisting assistant message: %w", err)
 	}
 
+	b.assistantCount++
+	if err := b.maybeNudge(ctx, conv.ID); err != nil {
+		// A failed nudge must never fail the turn: the reply is already
+		// persisted and delivered.
+		b.logger.Warn("nudge failed", "error", err)
+	}
+
 	return nil
+}
+
+// maybeNudge triggers the curator on the nudge cadence boundary (every
+// nudgeEvery assistant messages). A nil Nudger or a non-positive nudgeEvery
+// disables it. Errors are returned for the caller to log.
+func (b *Brain) maybeNudge(ctx context.Context, convID string) error {
+	if b.nudger == nil || b.nudgeEvery <= 0 {
+		return nil
+	}
+	if b.assistantCount%b.nudgeEvery != 0 {
+		return nil
+	}
+
+	msgs, err := b.repo.Messages(ctx, convID, tailLimit)
+	if err != nil {
+		return fmt.Errorf("loading messages for nudge: %w", err)
+	}
+
+	obs, err := b.nudger.Nudge(ctx, convID, msgs)
+	if err != nil {
+		return fmt.Errorf("curating observations: %w", err)
+	}
+
+	if err := b.repo.RecordSessionEvent(ctx, convID, "nudge", nudgePayload(b.assistantCount, len(obs))); err != nil {
+		return fmt.Errorf("recording nudge event: %w", err)
+	}
+	return nil
+}
+
+// nudgePayload serializes the nudge session-event payload.
+func nudgePayload(assistantCount, observationCount int) string {
+	return fmt.Sprintf(`{"assistant_messages":%d,"observations":%d}`, assistantCount, observationCount)
+}
+
+// CloseSession orchestrates end-of-session learning: it resolves the current
+// conversation, loads its recent messages, hands them to the SessionCloser
+// (which summarizes, saves observations, and aggregates the user model), and
+// records a summary session event.
+//
+// It is non-fatal: every learning error is logged and swallowed so shutdown
+// always proceeds. With a nil SessionCloser, or with no conversation yet, it
+// is a no-op. The caller bounds the work via the ctx deadline.
+func (b *Brain) CloseSession(ctx context.Context) error {
+	if b.closer == nil {
+		return nil
+	}
+
+	conv, err := b.repo.LatestConversation(ctx)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		b.logger.Warn("close session: resolving conversation", "error", err)
+		return nil
+	}
+
+	msgs, err := b.repo.Messages(ctx, conv.ID, closeMessageLimit)
+	if err != nil {
+		b.logger.Warn("close session: loading messages", "error", err)
+		return nil
+	}
+
+	if err := b.closer.Close(ctx, conv.ID, msgs); err != nil {
+		b.logger.Warn("close session: summarizer", "error", err)
+		return nil
+	}
+
+	if err := b.repo.RecordSessionEvent(ctx, conv.ID, "summary", ""); err != nil {
+		b.logger.Warn("close session: recording event", "error", err)
+		return nil
+	}
+	return nil
+}
+
+// withRecall loads the top-N observations and, when any exist, prepends a
+// system message listing them to the conversation tail so the provider sees
+// them as memory context. An empty recall returns the tail unchanged.
+func (b *Brain) withRecall(ctx context.Context, tail []Message) ([]Message, error) {
+	obs, err := b.repo.Observations(ctx, b.recallLimit)
+	if err != nil {
+		return nil, fmt.Errorf("loading recall observations: %w", err)
+	}
+	if len(obs) == 0 {
+		return tail, nil
+	}
+	messages := make([]Message, 0, len(tail)+1)
+	messages = append(messages, recallSystemMessage(obs))
+	return append(messages, tail...), nil
+}
+
+// recallSystemMessage builds a system message listing the recalled
+// observations.
+func recallSystemMessage(obs []Observation) Message {
+	var b strings.Builder
+	b.WriteString("Relevant memories:\n")
+	for _, o := range obs {
+		b.WriteString("- ")
+		b.WriteString(o.Content)
+		b.WriteString("\n")
+	}
+	return Message{Role: RoleSystem, Content: b.String()}
 }
 
 // ensureConversation returns the latest conversation, creating one when none

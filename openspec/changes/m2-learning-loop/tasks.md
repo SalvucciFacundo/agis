@@ -4,7 +4,7 @@
 
 Decision needed before apply: Yes
 Chained PRs recommended: Yes
-Chain strategy: pending
+Chain strategy: stacked-to-main
 400-line budget risk: Medium
 
 | Unit (PR) | Focused test | Runtime harness | Rollback boundary |
@@ -24,13 +24,13 @@ Chain strategy: pending
 
 ## Phase 2: Learning Loop (PR2) — CUR-001..003, SUM-001..002, USR-001, BRN-001..002
 
-- [ ] T2.1 Ports — `core/brain.go`: `Nudger`, `SessionCloser` (import-cycle fix). Deps: T1.2
-- [ ] T2.2 Curator — `memory/curator.go`: 1 Chat → fence-strip JSON, importance dflt 3, fail→log+skip. AC: CUR-001. Deps: T2.1
-- [ ] T2.3 Summarizer — `memory/summarizer.go`: 1 Chat → {summary, obs[]} → Update+Save; non-fatal. AC: SUM-001. Deps: T2.1
-- [ ] T2.4 Usermodel — `memory/usermodel.go`: pure AggregateUserModel — `user/` only, key=full topic_key, clamp(imp/5) first, 0.7/0.3 update. AC: USR-001. Deps: T1.2
-- [ ] T2.5 Recall — Step: Observations(recallLimit=10) → system prompt. AC: BRN-001 — fake provider sees obs. Deps: T2.1
-- [ ] T2.6 Nudge — Step: count%nudgeEvery==0 → Nudge+event('nudge'); nil curator → skip. AC: CUR-002/003. Deps: T2.2,T2.5
-- [ ] T2.7 CloseSession — ensure→msgs 200→Close→Aggregate→Upsert→event('summary'); deadline, non-fatal, nil→no-op. AC: BRN-002 order; drain+goleak. Deps: T2.3,T2.4,T2.6
+- [x] T2.1 Ports — `core/brain.go`: `Nudger`, `SessionCloser` (import-cycle fix). Deps: T1.2
+- [x] T2.2 Curator — `memory/curator.go`: 1 Chat → fence-strip JSON, importance dflt 3, fail→log+skip. AC: CUR-001. Deps: T2.1
+- [x] T2.3 Summarizer — `memory/summarizer.go`: 1 Chat → {summary, obs[]} → Update+Save; non-fatal. AC: SUM-001. Deps: T2.1
+- [x] T2.4 Usermodel — `memory/usermodel.go`: pure AggregateUserModel — `user/` only, key=full topic_key, clamp(imp/5) first, 0.7/0.3 update. AC: USR-001. Deps: T1.2
+- [x] T2.5 Recall — Step: Observations(recallLimit=10) → system prompt. AC: BRN-001 — fake provider sees obs. Deps: T2.1
+- [x] T2.6 Nudge — Step: count%nudgeEvery==0 → Nudge+event('nudge'); nil curator → skip. AC: CUR-002/003. Deps: T2.2,T2.5
+- [x] T2.7 CloseSession — ensure→msgs 200→Close→Aggregate→Upsert→event('summary'); deadline, non-fatal, nil→no-op. AC: BRN-002 order; drain+goleak. Deps: T2.3,T2.4,T2.6
 
 ## Phase 3: TUI + Config + Wiring (PR3) — TUI-001
 

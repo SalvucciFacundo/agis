@@ -50,11 +50,20 @@ func (f *fakeProvider) Models() []ModelInfo {
 
 // fakeRepo is an in-memory test double for the Repository port.
 type fakeRepo struct {
-	mu           sync.Mutex
-	convs        map[string]*Conversation
-	messages     map[string][]Message
-	observations []Observation
-	latest       *Conversation
+	mu              sync.Mutex
+	convs           map[string]*Conversation
+	messages        map[string][]Message
+	observations    []Observation
+	lastRecallLimit int
+	latest          *Conversation
+	sessionEvents   []sessionEventRecord
+}
+
+// sessionEventRecord captures one RecordSessionEvent call for assertion.
+type sessionEventRecord struct {
+	sessionID string
+	kind      string
+	payload   string
 }
 
 var _ Repository = (*fakeRepo)(nil)
@@ -114,9 +123,10 @@ func (r *fakeRepo) SaveObservations(_ context.Context, _ string, obs []Observati
 	return nil
 }
 
-func (r *fakeRepo) Observations(_ context.Context, _ int) ([]Observation, error) {
+func (r *fakeRepo) Observations(_ context.Context, limit int) ([]Observation, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.lastRecallLimit = limit
 	out := make([]Observation, len(r.observations))
 	copy(out, r.observations)
 	return out, nil
@@ -130,7 +140,10 @@ func (r *fakeRepo) UpsertUserModel(_ context.Context, _ []UserModel) error {
 	return nil
 }
 
-func (r *fakeRepo) RecordSessionEvent(_ context.Context, _ string, _ string, _ string) error {
+func (r *fakeRepo) RecordSessionEvent(_ context.Context, sessionID, kind, payload string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sessionEvents = append(r.sessionEvents, sessionEventRecord{sessionID: sessionID, kind: kind, payload: payload})
 	return nil
 }
 
