@@ -39,3 +39,40 @@ Migrations MUST be embedded with `//go:embed migrations/*.sql`. The applier MUST
 - GIVEN a database at version 0
 - WHEN the repository opens
 - THEN `0001_init.sql` applies and `PRAGMA user_version` becomes 1.
+
+
+repository-memory (MODIFIED)
+
+### Requirement: Extended port
+MUST add `SaveObservations`, `Observations`, `UpdateConversationSummary`, `UpsertUserModel`. Upsert on UNIQUE `topic_key`, preserve `created_at`, bump `updated_at`. FTS delete+insert same-tx.
+(Previously: 5 methods, no observation writes.)
+
+#### Scenario: Upsert
+- GIVEN topic_key=X, created_at=T1 → re-save: created_at=T1, updated_at>T1
+
+#### Scenario: FTS delete-sync
+- GIVEN "coffee" indexed → upsert "tea" → "coffee" returns nothing
+
+#### Scenario: Batch atomicity
+- GIVEN 3 obs, 2nd invalid → zero persisted
+
+### Requirement: Multi-word AND search
+`Search` MUST split on whitespace, quote each term, join AND.
+(Previously: M1 exact-phrase wrap — behavior change.)
+
+#### Scenario: AND semantics
+- GIVEN msg1="coffee", msg2="preference" → Search("coffee preference") returns zero
+
+#### Scenario: Both terms match
+- GIVEN msg="coffee preference noted" → returned
+
+### Requirement: Migration 0002
+MUST: (1) ADD updated_at+backfill, (2) UNIQUE topic_key index, (3) CREATE user_model, (4) CREATE session_events CHECK kind IN('nudge','summary','skill'). Idempotent via user_version.
+
+#### Scenario: v1→v2
+- GIVEN user_version=1 → 0002 applies, version=2
+
+#### Scenario: Idempotent
+- GIVEN user_version=2 → no SQL, version=2
+
+---

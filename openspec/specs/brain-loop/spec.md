@@ -18,3 +18,24 @@ Drive the central agent loop: persist input, load context tail, stream an LLM re
 - GIVEN `Stream` returns an error
 - WHEN `Step` is called
 - THEN the error is returned, the user message is persisted, and no assistant message is written.
+
+
+brain-loop (MODIFIED)
+
+### Requirement: Recall injection
+`Step` MUST load top-N observations (`recall_limit`, default 10) into system prompt.
+(Previously: no recall — write-only memory.)
+
+#### Scenario: Observations prepended
+- GIVEN 5 obs → Step includes them in provider request
+
+### Requirement: CloseSession
+MUST: (1) load msgs, (2) Chat→summary+obs, (3) UpdateConversationSummary, (4) SaveObservations, (5) UpsertUserModel. Respects ctx deadline.
+
+#### Scenario: Order
+- GIVEN fakes → calls: summary→obs→user_model
+
+#### Scenario: Stream cancel
+- GIVEN streaming Step, ctx canceled → stream drains, CloseSession runs
+
+---

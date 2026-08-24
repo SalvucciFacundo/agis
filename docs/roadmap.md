@@ -1,6 +1,6 @@
 # Roadmap
 
-Milestone scopes come from `spec.md` §Milestones. M1 is shipped; M2–M6 are planned. The archived M1 requirements live as synced OpenSpec capability specs under `openspec/specs/` (`config-loader`, `repository-memory`, `llm-provider-port`, `brain-loop`, `minimal-tui`).
+Milestone scopes come from `spec.md` §Milestones. M1 and M2 are shipped; M3–M6 are planned. The archived M1 requirements live as synced OpenSpec capability specs under `openspec/specs/` (`config-loader`, `repository-memory`, `llm-provider-port`, `brain-loop`, `minimal-tui`), joined by the M2 capabilities (`memory-curator`, `session-summarizer`, `user-model`).
 
 ## M1 — Thinking agent with memory ✅ DONE
 
@@ -17,14 +17,21 @@ Change `m1-skeleton`, archived **2026-08-15**, delivered as 4 stacked PRs merged
 
 **Verification:** 9/9 requirements, 11/11 scenarios, all tests green (50 test cases across 6 packages, measured 2026-08-15: 44 top-level + 6 subtests, 0 failures). `go vet`, `golangci-lint`, and the go-arch architecture checks pass.
 
-## M2 — Learning loop
+## M2 — Learning loop ✅ DONE
 
-- Curator + nudges: the agent decides what to persist as observations.
-- Session summarization: LLM compresses the session into `conversations.summary`.
-- Topic-key observations with upsert (stable `topic_key`, importance score).
-- User model: dialectic modeling aggregating observations with confidence.
+Change `m2-learning-loop`, archived **2026-08-24**, delivered as 4 stacked PRs merged to main (PR #5 memory substrate → #6 curator/summarizer/user-model → #7 recall/nudge/CloseSession → #8 TUI close hook + config + wiring).
 
-The M1 Repository already carries the substrate (`observations` table, FTS5, `summary` column). "Done" for M2 means observations are actually written by the curator, `summary` is populated at close, and `user_model` rows exist with confidence. Until then the relevant tables are schema-only.
+**Shipped:**
+
+- Curator: one LLM call per nudge extracts durable observations as JSON; fence-stripping parse; malformed responses log-and-skip; fires every N assistant messages with session-event records.
+- Session summarizer: single combined close call returns `{summary, observations[]}` and persists all three write products (summary, observations, user model).
+- Topic-key observations with upsert (stable `topic_key`, importance clamped 1–5, default 3) over migration 0002 (`user_model`, `session_events`, UNIQUE `topic_key`).
+- User model: pure aggregation of `user/*` observations with 0.7/0.3 confidence blending.
+- Recall injection: top-N observations enter every turn as a system message.
+- `Brain.CloseSession` + TUI close hook: bounded, non-fatal close on quit; streaming quit cancels and drains the partial reply; second press force-quits. Suite runs under goleak.
+- Config `memory` block: `learning_enabled`, `recall_limit`, `nudge_every`, `close_timeout`.
+
+**Verification:** independent bounded reviews approved per slice (PR3 with zero findings after one abandoned iteration was fixed); `go build ./...`, `go vet ./...`, `go test ./...` green. "Done" criteria met: the curator writes observations, `summary` is populated at close, and `user_model` rows exist with confidence.
 
 ## M3 — Skills & persona
 
