@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // writeConfig writes cfg content to dir/config.yaml and returns the path.
@@ -155,5 +156,100 @@ func TestResolvePath_Precedence(t *testing.T) {
 	t.Setenv("AGIS_HOME", "")
 	if got := resolvePath(""); !strings.HasSuffix(got, filepath.Join(dotAgisDir, configFileName)) {
 		t.Errorf("resolvePath(default) = %q, want suffix %q", got, filepath.Join(dotAgisDir, configFileName))
+	}
+}
+
+func TestLoad_MemoryDefaults(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("AGIS_HOME", home)
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if !cfg.Memory.LearningEnabled {
+		t.Error("Memory.LearningEnabled = false, want default true")
+	}
+	if cfg.Memory.RecallLimit != 10 {
+		t.Errorf("Memory.RecallLimit = %d, want 10", cfg.Memory.RecallLimit)
+	}
+	if cfg.Memory.NudgeEvery != 10 {
+		t.Errorf("Memory.NudgeEvery = %d, want 10", cfg.Memory.NudgeEvery)
+	}
+	if cfg.Memory.CloseTimeout != 30*time.Second {
+		t.Errorf("Memory.CloseTimeout = %v, want 30s", cfg.Memory.CloseTimeout)
+	}
+}
+
+func TestLoad_MemoryPartialOverlay(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("AGIS_HOME", home)
+	writeConfig(t, home, "memory:\n  recall_limit: 5\n", 0o600)
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	// Only the present key is overlaid; the rest keep their defaults.
+	if cfg.Memory.RecallLimit != 5 {
+		t.Errorf("Memory.RecallLimit = %d, want 5", cfg.Memory.RecallLimit)
+	}
+	if !cfg.Memory.LearningEnabled {
+		t.Error("Memory.LearningEnabled = false, want default true for a partial block")
+	}
+	if cfg.Memory.NudgeEvery != 10 {
+		t.Errorf("Memory.NudgeEvery = %d, want default 10", cfg.Memory.NudgeEvery)
+	}
+}
+
+func TestLoad_MemoryExplicitOffValuesSurvive(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("AGIS_HOME", home)
+	writeConfig(t, home, "memory:\n  learning_enabled: false\n  nudge_every: 0\n", 0o600)
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Memory.LearningEnabled {
+		t.Error("Memory.LearningEnabled = true, want the explicit false to survive")
+	}
+	if cfg.Memory.NudgeEvery != 0 {
+		t.Errorf("Memory.NudgeEvery = %d, want the explicit 0 (nudging disabled)", cfg.Memory.NudgeEvery)
+	}
+}
+
+func TestLoad_MemoryCloseTimeoutDurationString(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("AGIS_HOME", home)
+	writeConfig(t, home, "memory:\n  close_timeout: 45s\n", 0o600)
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() error = %v (want yaml.v3 to decode a duration string)", err)
+	}
+	if cfg.Memory.CloseTimeout != 45*time.Second {
+		t.Errorf("Memory.CloseTimeout = %v, want 45s", cfg.Memory.CloseTimeout)
+	}
+}
+
+func TestLoad_MemoryEmptyValuesRestoreDefaults(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("AGIS_HOME", home)
+	writeConfig(t, home, "memory:\n  recall_limit: 0\n  close_timeout: 0s\n", 0o600)
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Memory.RecallLimit != 10 {
+		t.Errorf("Memory.RecallLimit = %d, want restored default 10", cfg.Memory.RecallLimit)
+	}
+	if cfg.Memory.CloseTimeout != 30*time.Second {
+		t.Errorf("Memory.CloseTimeout = %v, want restored default 30s", cfg.Memory.CloseTimeout)
 	}
 }
