@@ -184,7 +184,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m.handleQuit()
 		case tea.KeyEnter:
-			if m.streaming {
+			if m.streaming || m.closing {
 				return m, nil
 			}
 			return m.submit()

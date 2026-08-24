@@ -435,3 +435,26 @@ func TestQuit_DuringStreamTwiceForceQuits(t *testing.T) {
 	_ = cmd
 	_ = m
 }
+
+func TestQuit_ClosingBlocksSubmit(t *testing.T) {
+	repo := &fakeRepo{conv: &core.Conversation{ID: "conv-1"}}
+	closer := &stubCloser{}
+	stream := make(chan string, 8)
+	brain := core.NewBrain(repo, &fakeProvider{}, core.WithSessionCloser(closer))
+	m := New(brain, repo, stream)
+	m.input.SetValue("late message")
+
+	// Start the quit sequence; a submit must be rejected while closing.
+	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m = model.(*Model)
+
+	model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = model.(*Model)
+
+	if cmd != nil {
+		t.Error("cmd = non-nil, want submit blocked while closing")
+	}
+	if m.streaming {
+		t.Error("streaming = true, want no new turn during the quit sequence")
+	}
+}
