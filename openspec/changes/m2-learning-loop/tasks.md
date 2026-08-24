@@ -34,11 +34,11 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: TUI + Config + Wiring (PR3) — TUI-001
 
-- [ ] T3.1 Config — `config/config.go`: MemoryConfig defaults true/10/10/30s.
-- [ ] T3.2 Wiring — `cmd/agis/main.go`: nil curator/summarizer when !LearningEnabled; Brain opts; tui.New(+timeout). Deps: T2.7,T3.1
-- [ ] T3.3 TUI close — `tui/app.go`: cancel+closing; idle → close→quit; streaming → cancel→drain→close→quit; 2nd CtrlC force. AC: TUI-001 tests + goleak. Deps: T2.7
-- [ ] T3.4 Docs — `docs/configuration.md` memory block. Deps: T3.1
-- [ ] T3.5 Full suite — `go test ./...`, `go build ./cmd/agis/...`; 47 M1 + new green. Deps: all
+- [x] T3.1 Config — `config/config.go`: MemoryConfig defaults true/10/10/30s.
+- [x] T3.2 Wiring — `cmd/agis/main.go`: nil curator/summarizer when !LearningEnabled; Brain opts; tui.New(+timeout). Deps: T2.7,T3.1
+- [x] T3.3 TUI close — `tui/app.go`: cancel+closing; idle → close→quit; streaming → cancel→drain→close→quit; 2nd CtrlC force. AC: TUI-001 tests + goleak. Deps: T2.7
+- [x] T3.4 Docs — `docs/configuration.md` memory block. Deps: T3.1
+- [x] T3.5 Full suite — `go test ./...`, `go build ./cmd/agis/...`; 47 M1 + new green. Deps: all
 
 ## Work-Unit Commit Plan (code+tests+docs; each PR green)
 
