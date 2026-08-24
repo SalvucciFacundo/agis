@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -35,7 +36,27 @@ const (
 	// reserveHeight is the number of rows below the viewport: one for the
 	// status/spinner line and one for the input.
 	reserveHeight = 2
+
+	// defaultCloseTimeout bounds the synchronous CloseSession call on quit.
+	defaultCloseTimeout = 30 * time.Second
+
+	// Status-line texts for the quit paths.
+	cancellingStatus = "cancelling..."
+	closingStatus    = "closing..."
 )
+
+// Option configures a Model.
+type Option func(*Model)
+
+// WithCloseTimeout sets how long CtrlC waits for CloseSession before giving
+// up. A non-positive value keeps the default of 30s.
+func WithCloseTimeout(d time.Duration) Option {
+	return func(m *Model) {
+		if d > 0 {
+			m.closeTimeout = d
+		}
+	}
+}
 
 // Model is the Bubbletea TUI. It owns a Brain and a Repository; the stream
 // channel carries assistant tokens from the Brain's sink into the viewport.
@@ -64,6 +85,19 @@ type Model struct {
 
 	width  int
 	height int
+
+	// cancel aborts the in-flight Step; it is set by submit and nil between
+	// turns. cancelled records that a streaming quit was requested, so the
+	// next quit press force-quits instead of waiting for the drain.
+	cancel    context.CancelFunc
+	cancelled bool
+
+	// closeTimeout bounds the synchronous CloseSession call on quit;
+	// closing marks a graceful close as scheduled so a second quit press
+	// force-quits, and status overrides the spinner line (closing/cancelling).
+	closeTimeout time.Duration
+	closing      bool
+	status       string
 }
 
 // tokenMsg carries one streamed assistant token into the update loop.
@@ -73,6 +107,9 @@ type tokenMsg string
 type streamDoneMsg struct {
 	err error
 }
+
+// closedMsg signals that CloseSession finished and the program may quit.
+type closedMsg struct{}
 
 // historyMsg carries the restored conversation (or a load error) from Init.
 type historyMsg struct {
@@ -85,7 +122,7 @@ var _ tea.Model = (*Model)(nil)
 // New returns a Bubbletea Model wired to brain and repo. stream is the channel
 // the Brain's sink writes tokens into (see core.WithSink); the model drains it
 // to paint tokens in real time and closes it when a step finishes.
-func New(brain *core.Brain, repo core.Repository, stream chan string) *Model {
+func New(brain *core.Brain, repo core.Repository, stream chan string, opts ...Option) *Model {
 	input := textinput.New()
 	input.Placeholder = "Type a message and press Enter"
 	input.Width = defaultWidth
@@ -98,18 +135,23 @@ func New(brain *core.Brain, repo core.Repository, stream chan string) *Model {
 		spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("5"))),
 	)
 
-	return &Model{
-		brain:    brain,
-		repo:     repo,
-		ctx:      context.Background(),
-		stream:   stream,
-		errCh:    make(chan error, 1),
-		viewport: viewport.New(defaultWidth, defaultHeight-reserveHeight),
-		input:    input,
-		spinner:  sp,
-		width:    defaultWidth,
-		height:   defaultHeight,
+	m := &Model{
+		brain:        brain,
+		repo:         repo,
+		ctx:          context.Background(),
+		stream:       stream,
+		errCh:        make(chan error, 1),
+		viewport:     viewport.New(defaultWidth, defaultHeight-reserveHeight),
+		input:        input,
+		spinner:      sp,
+		width:        defaultWidth,
+		height:       defaultHeight,
+		closeTimeout: defaultCloseTimeout,
 	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
 }
 
 // Init restores the latest conversation and starts the spinner animation.
@@ -140,7 +182,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
-			return m, tea.Quit
+			return m.handleQuit()
 		case tea.KeyEnter:
 			if m.streaming {
 				return m, nil
@@ -155,6 +197,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case streamDoneMsg:
 		return m.finishStream(msg)
+
+	case closedMsg:
+		return m, tea.Quit
 	}
 
 	// Delegate everything else to the input and spinner widgets.
@@ -174,11 +219,45 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the conversation viewport, the spinner/status line, and the
 // text input.
 func (m Model) View() string {
-	status := ""
-	if m.streaming {
+	status := m.status
+	if status == "" && m.streaming {
 		status = m.spinner.View() + " thinking..."
 	}
 	return strings.Join([]string{m.viewport.View(), status, m.input.View()}, "\n")
+}
+
+// handleQuit implements the TUI-001 quit contract. While streaming, the first
+// press cancels the stream so the partial reply drains; the second force-quits.
+// When idle, the first press runs a bounded CloseSession and then quits; the
+// second force-quits without waiting for the close to finish.
+func (m *Model) handleQuit() (tea.Model, tea.Cmd) {
+	if m.streaming {
+		if !m.cancelled && m.cancel != nil {
+			m.cancelled = true
+			m.cancel()
+			m.status = cancellingStatus
+			return m, nil
+		}
+		return m, tea.Quit
+	}
+	if m.closing {
+		return m, tea.Quit
+	}
+	m.closing = true
+	m.status = closingStatus
+	return m, m.closeSession()
+}
+
+// closeSession runs Brain.CloseSession bounded by the close timeout on its own
+// context. CloseSession is non-fatal by contract: it logs its own failures and
+// always returns nil, so the program quits either way.
+func (m *Model) closeSession() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), m.closeTimeout)
+		defer cancel()
+		_ = m.brain.CloseSession(ctx)
+		return closedMsg{}
+	}
 }
 
 // submit echoes the user's message, marks the model as streaming, and starts a
@@ -200,8 +279,12 @@ func (m *Model) submit() (tea.Model, tea.Cmd) {
 	m.history.WriteString("\n")
 	m.refresh()
 
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.cancel = cancel
+	m.cancelled = false
+
 	go func() {
-		m.errCh <- m.brain.Step(m.ctx, input)
+		m.errCh <- m.brain.Step(ctx, input)
 		close(m.stream)
 	}()
 
@@ -221,9 +304,14 @@ func (m *Model) waitToken() tea.Cmd {
 }
 
 // finishStream commits the in-flight assistant reply (full or partial) and
-// reports a step error, if any.
+// reports a step error, if any. It also clears the cancelling state left by a
+// streaming quit request.
 func (m *Model) finishStream(msg streamDoneMsg) (tea.Model, tea.Cmd) {
 	m.streaming = false
+	if m.cancelled {
+		m.cancelled = false
+		m.status = ""
+	}
 	if m.current.Len() > len(assistantPrefix) {
 		m.history.WriteString(m.current.String())
 		m.history.WriteString("\n")

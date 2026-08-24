@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"go.uber.org/goleak"
@@ -216,4 +217,221 @@ func drive(t *testing.T, m *Model, cmd tea.Cmd) *Model {
 	}
 	t.Fatal("command chain ended before streamDoneMsg")
 	return nil
+}
+
+// stubCloser is a SessionCloser double that counts Close invocations.
+type stubCloser struct {
+	calls int
+}
+
+func (s *stubCloser) Close(context.Context, string, []core.Message) error {
+	s.calls++
+	return nil
+}
+
+func TestWithCloseTimeout(t *testing.T) {
+	repo := &fakeRepo{}
+	m := newTestModel(t, repo, nil)
+	if m.closeTimeout != 30*time.Second {
+		t.Errorf("default closeTimeout = %v, want 30s", m.closeTimeout)
+	}
+
+	stream := make(chan string, 8)
+	brain := core.NewBrain(repo, &fakeProvider{}, core.WithSink(func(string) {}))
+	m = New(brain, repo, stream, WithCloseTimeout(5*time.Second))
+	if m.closeTimeout != 5*time.Second {
+		t.Errorf("closeTimeout = %v, want 5s", m.closeTimeout)
+	}
+
+	m = New(brain, repo, stream, WithCloseTimeout(0))
+	if m.closeTimeout != 30*time.Second {
+		t.Errorf("closeTimeout(0) = %v, want default 30s", m.closeTimeout)
+	}
+}
+
+// runQuitKey presses quit on an idle model and drives the close sequence to
+// the actual tea.QuitMsg, asserting the closer ran exactly once.
+func runQuitKey(t *testing.T, key tea.KeyType) {
+	t.Helper()
+	repo := &fakeRepo{conv: &core.Conversation{ID: "conv-1"}}
+	closer := &stubCloser{}
+	stream := make(chan string, 8)
+	brain := core.NewBrain(repo, &fakeProvider{}, core.WithSessionCloser(closer))
+	m := New(brain, repo, stream)
+
+	model, cmd := m.Update(tea.KeyMsg{Type: key})
+	m = model.(*Model)
+
+	if !m.closing {
+		t.Fatal("closing = false after first quit press")
+	}
+	if !strings.Contains(m.View(), "closing") {
+		t.Errorf("View() = %q, want a closing status line", m.View())
+	}
+	if cmd == nil {
+		t.Fatal("cmd = nil, want the close-session command")
+	}
+	if closer.calls != 0 {
+		t.Fatalf("Close called %d times before the command ran", closer.calls)
+	}
+
+	msg := cmd()
+	if _, ok := msg.(closedMsg); !ok {
+		t.Fatalf("close cmd msg = %T, want closedMsg", msg)
+	}
+	model, cmd = m.Update(msg)
+	m = model.(*Model)
+	if cmd == nil {
+		t.Fatal("cmd = nil after closedMsg, want tea.Quit")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatalf("final cmd msg = %T, want tea.QuitMsg", msg)
+	}
+	if closer.calls != 1 {
+		t.Errorf("Close called %d times, want 1", closer.calls)
+	}
+}
+
+func TestQuit_IdleRunsCloseSessionThenQuits(t *testing.T) {
+	runQuitKey(t, tea.KeyCtrlC)
+	runQuitKey(t, tea.KeyEsc)
+}
+
+func TestQuit_IdleTwiceForceQuits(t *testing.T) {
+	repo := &fakeRepo{}
+	closer := &stubCloser{}
+	stream := make(chan string, 8)
+	brain := core.NewBrain(repo, &fakeProvider{}, core.WithSessionCloser(closer))
+	m := New(brain, repo, stream)
+
+	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m = model.(*Model)
+
+	// Second press while the close is still scheduled: force quit.
+	model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m = model.(*Model)
+
+	if cmd == nil {
+		t.Fatal("cmd = nil, want an immediate quit command")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("second press did not produce tea.QuitMsg")
+	}
+	_ = m
+}
+
+// driveUntilStreamDone runs the token chain until Step finishes.
+func driveUntilStreamDone(t *testing.T, m *Model, cmd tea.Cmd) *Model {
+	t.Helper()
+	for i := 0; cmd != nil && i < 32; i++ {
+		msg := cmd()
+		if _, done := msg.(streamDoneMsg); done {
+			model, _ := m.Update(msg)
+			return model.(*Model)
+		}
+		model, next := m.Update(msg)
+		m = model.(*Model)
+		cmd = next
+	}
+	t.Fatal("token chain never produced streamDoneMsg")
+	return nil
+}
+
+func TestQuit_DuringStreamCancelsDrainsThenCloses(t *testing.T) {
+	repo := &fakeRepo{conv: &core.Conversation{ID: "conv-1"}}
+	closer := &stubCloser{}
+	stream := make(chan string, 8)
+	brain := core.NewBrain(
+		repo,
+		&fakeProvider{events: []core.StreamEvent{{Text: "par"}, {Text: "tial"}}},
+		core.WithSink(func(text string) { stream <- text }),
+		core.WithSessionCloser(closer),
+	)
+	m := New(brain, repo, stream)
+	m.input.SetValue("Hi")
+
+	model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = model.(*Model)
+
+	// First token arrives; the reply is now streaming.
+	msg := cmd()
+	if _, ok := msg.(tokenMsg); !ok {
+		t.Fatalf("first stream msg = %T, want tokenMsg", msg)
+	}
+	model, cmd = m.Update(msg)
+	m = model.(*Model)
+
+	// First CtrlC cancels the stream and shows the cancelling status.
+	model, cancelCmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m = model.(*Model)
+	if !m.cancelled {
+		t.Error("cancelled = false after first streaming CtrlC")
+	}
+	if !strings.Contains(m.View(), "cancelling") {
+		t.Errorf("View() = %q, want a cancelling status line", m.View())
+	}
+	if cancelCmd != nil {
+		t.Error("cancelCmd = non-nil, want nil (drain continues via waitToken)")
+	}
+
+	// The drain completes and commits the partial reply.
+	m = driveUntilStreamDone(t, m, cmd)
+	if m.streaming {
+		t.Error("streaming = true after drain")
+	}
+	if !strings.Contains(m.history.String(), "assistant: partial") {
+		t.Errorf("history = %q, want the committed partial reply", m.history.String())
+	}
+
+	// Now idle, the next CtrlC runs the bounded close and quits.
+	model, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m = model.(*Model)
+	if !m.closing {
+		t.Fatal("closing = false for the post-drain quit")
+	}
+	closedMsgVal := cmd()
+	model, cmd = m.Update(closedMsgVal)
+	m = model.(*Model)
+	if cmd == nil {
+		t.Fatal("cmd = nil after closedMsg, want tea.Quit")
+	}
+	if closer.calls != 1 {
+		t.Errorf("Close called %d times, want 1", closer.calls)
+	}
+}
+
+func TestQuit_DuringStreamTwiceForceQuits(t *testing.T) {
+	repo := &fakeRepo{}
+	closer := &stubCloser{}
+	stream := make(chan string, 8)
+	brain := core.NewBrain(
+		repo,
+		&fakeProvider{events: []core.StreamEvent{{Text: "x"}}},
+		core.WithSink(func(text string) { stream <- text }),
+		core.WithSessionCloser(closer),
+	)
+	m := New(brain, repo, stream)
+	m.input.SetValue("Hi")
+
+	model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = model.(*Model)
+
+	// First press cancels; second press force-quits without closing.
+	model, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m = model.(*Model)
+
+	model, quitCmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m = model.(*Model)
+
+	if quitCmd == nil {
+		t.Fatal("cmd = nil, want an immediate quit command")
+	}
+	if _, ok := quitCmd().(tea.QuitMsg); !ok {
+		t.Fatal("second streaming press did not force-quit with tea.QuitMsg")
+	}
+	if closer.calls != 0 {
+		t.Errorf("Close called %d times, want 0 on force quit", closer.calls)
+	}
+	_ = cmd
+	_ = m
 }
