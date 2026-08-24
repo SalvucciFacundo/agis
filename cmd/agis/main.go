@@ -51,11 +51,23 @@ func main() {
 	// model drains it to paint tokens in real time. Buffered so a slow update
 	// loop back-pressures the provider instead of dropping tokens.
 	stream := make(chan string, 64)
-	brain := core.NewBrain(repo, provider, core.WithSink(func(text string) {
-		stream <- text
-	}))
 
-	app := tui.New(brain, repo, stream)
+	brainOpts := []core.Option{core.WithSink(func(text string) {
+		stream <- text
+	})}
+	if cfg.Memory.LearningEnabled {
+		curator := memory.NewCurator(provider, repo, nil)
+		summarizer := memory.NewSummarizer(provider, repo, nil)
+		brainOpts = append(brainOpts,
+			core.WithNudger(curator),
+			core.WithSessionCloser(summarizer),
+			core.WithRecallLimit(cfg.Memory.RecallLimit),
+			core.WithNudgeEvery(cfg.Memory.NudgeEvery),
+		)
+	}
+	brain := core.NewBrain(repo, provider, brainOpts...)
+
+	app := tui.New(brain, repo, stream, tui.WithCloseTimeout(cfg.Memory.CloseTimeout))
 
 	if _, err := tea.NewProgram(app).Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "agis: %v\n", err)

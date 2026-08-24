@@ -11,9 +11,16 @@ llm:
   api_key: ""           # API key (openai); empty is valid for local ollama
 db:
   path: /home/you/.agis/agis.db   # SQLite database file
+memory:
+  learning_enabled: true          # master switch for the learning loop
+  recall_limit: 10                # top-N observations injected per turn
+  nudge_every: 10                 # curator runs every N assistant messages
+  close_timeout: 30s              # bounded wait for session close on quit
 ```
 
-Only these four fields exist in M1. `provider` selects the adapter at startup: `ollama` picks the local Ollama adapter, and any other value (including `openai`) picks the OpenAI-compatible client (`internal/adapters/llm/provider.go:14`).
+The `llm` and `db` blocks are the M1 core. The `memory` block tunes the learning loop (curator, summarizer, user model, recall).
+
+`provider` selects the adapter at startup: `ollama` picks the local Ollama adapter, and any other value (including `openai`) picks the OpenAI-compatible client (`internal/adapters/llm/provider.go:14`).
 
 `api_key` is intentionally untouched by defaulting: an empty key is a valid value for local backends (`internal/config/config.go:101`).
 
@@ -36,8 +43,27 @@ A missing file is **not an error**: the loader falls back to built-in defaults. 
 | `llm.provider` | `ollama` |
 | `llm.model` | `llama3.2` |
 | `db.path` | `$AGIS_HOME/agis.db` or `~/.agis/agis.db` |
+| `memory.learning_enabled` | `true` |
+| `memory.recall_limit` | `10` |
+| `memory.nudge_every` | `10` |
+| `memory.close_timeout` | `30s` |
 
 Defaults apply per-field: a config file that sets only `llm.model` keeps the default provider and database path (`applyDefaults`, `internal/config/config.go:102`).
+
+## Memory block
+
+The learning loop runs by default. When `learning_enabled: false`, the brain is built without curator and summarizer: no recall injection, no periodic curation, no close-time summarization (`cmd/agis/main.go`). The TUI still closes sessions, but with no closer wired it is a fast no-op.
+
+| Field | Semantics |
+|---|---|
+| `learning_enabled` | Master switch for the whole loop |
+| `recall_limit` | Top-N observations prepended as a system message each turn; zero or negative restores the default |
+| `nudge_every` | Curator fires every N assistant messages; an explicit `0` disables nudging and survives defaulting on purpose |
+| `close_timeout` | How long quitting waits for the summarizer before giving up (Go duration string, e.g. `30s`, `1m`) |
+
+Two values are intentionally exempt from defaulting because their zero/false forms are meaningful — `learning_enabled: false` and `nudge_every: 0`. Keys absent from the file always keep their defaults, so a partial block such as `memory: {recall_limit: 5}` leaves learning enabled.
+
+On quit (CtrlC/Esc) the TUI shows a `closing...` status and waits up to `close_timeout` for the session summary to finish before exiting. While streaming, the first press cancels the stream and commits the partial reply; the second force-quits without closing.
 
 ## Security: 0600
 

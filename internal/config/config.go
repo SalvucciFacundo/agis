@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,12 +24,27 @@ const (
 	dotAgisDir      = ".agis"
 	// expectedPerm is the required config file mode.
 	expectedPerm = 0o600
+
+	// Learning-loop defaults for the memory block.
+	defaultRecallLimit  = 10
+	defaultNudgeEvery   = 10
+	defaultCloseTimeout = 30 * time.Second
 )
 
 // Config is the root AGIS configuration.
 type Config struct {
-	LLM LLMConfig `yaml:"llm"`
-	DB  DBConfig  `yaml:"db"`
+	LLM    LLMConfig    `yaml:"llm"`
+	DB     DBConfig     `yaml:"db"`
+	Memory MemoryConfig `yaml:"memory"`
+}
+
+// MemoryConfig tunes the M2 learning loop: whether curation runs at all, the
+// top-N recall bound, the nudge cadence, and how long a session close may take.
+type MemoryConfig struct {
+	LearningEnabled bool          `yaml:"learning_enabled"`
+	RecallLimit     int           `yaml:"recall_limit"`
+	NudgeEvery      int           `yaml:"nudge_every"`
+	CloseTimeout    time.Duration `yaml:"close_timeout"`
 }
 
 // LLMConfig selects the provider and model.
@@ -94,11 +110,21 @@ func defaults() *Config {
 		DB: DBConfig{
 			Path: defaultDBPath(),
 		},
+		Memory: MemoryConfig{
+			LearningEnabled: true,
+			RecallLimit:     defaultRecallLimit,
+			NudgeEvery:      defaultNudgeEvery,
+			CloseTimeout:    defaultCloseTimeout,
+		},
 	}
 }
 
 // applyDefaults restores defaults for fields left empty by the config file.
 // APIKey is intentionally untouched: an empty key is a valid value.
+// LearningEnabled and NudgeEvery are intentionally untouched too: an explicit
+// false (learning off) and an explicit zero (nudging off) are valid values,
+// and yaml.Unmarshal only overlays keys present in the file, so absent keys
+// keep their defaults.
 func applyDefaults(cfg *Config) {
 	if cfg.LLM.Provider == "" {
 		cfg.LLM.Provider = defaultProvider
@@ -108,6 +134,12 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.DB.Path == "" {
 		cfg.DB.Path = defaultDBPath()
+	}
+	if cfg.Memory.RecallLimit <= 0 {
+		cfg.Memory.RecallLimit = defaultRecallLimit
+	}
+	if cfg.Memory.CloseTimeout <= 0 {
+		cfg.Memory.CloseTimeout = defaultCloseTimeout
 	}
 }
 
