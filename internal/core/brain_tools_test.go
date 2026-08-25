@@ -40,17 +40,23 @@ func (p *scriptedToolProvider) Stream(_ context.Context, req ChatRequest) (<-cha
 
 func toolCallEvents(id string) []StreamEvent {
 	return []StreamEvent{
-		{ToolCall: &ToolCall{ID: id, Name: "shell", Arguments: `{"command":"git status"}`}},
+		{ToolCall: &ToolCall{ID: id, Name: "shell-local", Arguments: `{"command":"git status"}`}},
 	}
 }
 
 // fakeRunner records executed commands.
 type fakeRunner struct {
+	backend  string // defaults to "local"
 	commands []string
 	err      error
 }
 
-func (f *fakeRunner) Backend() string { return "local" }
+func (f *fakeRunner) Backend() string {
+	if f.backend == "" {
+		return "local"
+	}
+	return f.backend
+}
 func (f *fakeRunner) Run(_ context.Context, command string) (string, error) {
 	f.commands = append(f.commands, command)
 	return "on branch main", f.err
@@ -96,7 +102,7 @@ func TestBrainLoop_AllowedToolFeedsResultBack(t *testing.T) {
 	guard := &mapGuard{verdicts: map[string]Decision{"git status": DecisionAllow}}
 	brain := NewBrain(repo, provider,
 		WithSink(func(string) {}),
-		WithTools(runner, guard, nil),
+		WithTools([]ToolRunner{runner}, guard, nil),
 	)
 
 	if err := brain.Step(context.Background(), "check repo"); err != nil {
@@ -131,7 +137,7 @@ func TestBrainLoop_DeniedToolInformsModel(t *testing.T) {
 	repo := newFakeRepo()
 	brain := NewBrain(repo, provider,
 		WithSink(func(string) {}),
-		WithTools(&fakeRunner{}, &mapGuard{verdicts: map[string]Decision{}}, nil),
+		WithTools([]ToolRunner{&fakeRunner{}}, &mapGuard{verdicts: map[string]Decision{}}, nil),
 	)
 
 	if err := brain.Step(context.Background(), "do it"); err != nil {
@@ -158,7 +164,7 @@ func TestBrainLoop_AskApprovedOnceRuns(t *testing.T) {
 	approver := &scriptedApprover{scopes: []Scope{ScopeOnce}}
 	brain := NewBrain(newFakeRepo(), provider,
 		WithSink(func(string) {}),
-		WithTools(&fakeRunner{}, &mapGuard{verdicts: map[string]Decision{"git status": DecisionAsk}}, approver.Approve),
+		WithTools([]ToolRunner{&fakeRunner{}}, &mapGuard{verdicts: map[string]Decision{"git status": DecisionAsk}}, approver.Approve),
 	)
 
 	if err := brain.Step(context.Background(), "go"); err != nil {
@@ -180,7 +186,7 @@ func TestBrainLoop_CapStopsRunaway(t *testing.T) {
 	runner := &fakeRunner{}
 	brain := NewBrain(repo, provider,
 		WithSink(func(string) {}),
-		WithTools(runner, &mapGuard{verdicts: map[string]Decision{"git status": DecisionAllow}}, nil),
+		WithTools([]ToolRunner{runner}, &mapGuard{verdicts: map[string]Decision{"git status": DecisionAllow}}, nil),
 	)
 
 	if err := brain.Step(context.Background(), "loop"); err != nil {
@@ -226,7 +232,7 @@ func TestBrainLoop_ToolsDisabledStreamsUnchanged(t *testing.T) {
 	if len(provider.requests) != 1 {
 		t.Errorf("requests = %d, want 1 (no tool round entered)", len(provider.requests))
 	}
-	if brain.runner != nil || brain.guard != nil {
+	if len(brain.runners) != 0 || brain.guard != nil {
 		t.Error("tools wired without WithTools")
 	}
 }
@@ -256,7 +262,7 @@ func TestBrainLoop_CapFinalAnswerStillStreams(t *testing.T) {
 	var streamed strings.Builder
 	brain := NewBrain(newFakeRepo(), provider,
 		WithSink(func(s string) { streamed.WriteString(s) }),
-		WithTools(&fakeRunner{}, &mapGuard{verdicts: map[string]Decision{"git status": DecisionAllow}}, nil),
+		WithTools([]ToolRunner{&fakeRunner{}}, &mapGuard{verdicts: map[string]Decision{"git status": DecisionAllow}}, nil),
 	)
 
 	if err := brain.Step(context.Background(), "loop"); err != nil {
@@ -264,5 +270,32 @@ func TestBrainLoop_CapFinalAnswerStillStreams(t *testing.T) {
 	}
 	if !strings.Contains(streamed.String(), "final visible answer") {
 		t.Errorf("sink = %q, want the forced final answer streamed live", streamed.String())
+	}
+}
+
+func TestBrainLoop_RoutesByBackendToolName(t *testing.T) {
+	local := &fakeRunner{}
+	docker := &fakeRunner{backend: "docker"}
+	provider := &scriptedToolProvider{rounds: [][]StreamEvent{
+		{
+			{ToolCall: &ToolCall{ID: "c1", Name: "shell-docker", Arguments: `{"command":"echo in container"}`}},
+		},
+		{{Text: "done"}},
+	}}
+	guard := &mapGuard{verdicts: map[string]Decision{"echo in container": DecisionAllow}}
+	brain := NewBrain(newFakeRepo(), provider,
+		WithSink(func(string) {}),
+		WithTools([]ToolRunner{local, docker}, guard, nil),
+	)
+
+	if err := brain.Step(context.Background(), "run it"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	if len(local.commands) != 0 {
+		t.Errorf("local executed %v, want untouched", local.commands)
+	}
+	if len(docker.commands) != 1 || docker.commands[0] != "echo in container" {
+		t.Errorf("docker executed = %v, want the call routed to shell-docker", docker.commands)
 	}
 }

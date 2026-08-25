@@ -51,9 +51,9 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: Remote backends (PR4)
 
-- [ ] T4.1 Create internal/tools/docker.go: ephemeral docker run --rm image sh -c cmd; binary detection skip-with-warning; teardown on failure. Tests with fake runner asserting --rm and cleanup call. AC: TLS-003
-- [ ] T4.2 Create internal/tools/ssh.go: ssh -i key user@host -- cmd; connection errors surface as tool errors. Tests with fake runner. AC: TLS-004
-- [ ] T4.3 Registry registration order + graceful degradation tests (enabled-but-missing binaries warn and skip). AC: TLS-001
+- [x] T4.1 Create internal/tools/docker.go: ephemeral docker run --rm image sh -c cmd; binary detection skip-with-warning; teardown on failure. Tests with fake runner asserting --rm and cleanup call. AC: TLS-003
+- [x] T4.2 Create internal/tools/ssh.go: ssh -i key user@host -- cmd; connection errors surface as tool errors. Tests with fake runner. AC: TLS-004
+- [x] T4.3 Registry registration order + graceful degradation tests (enabled-but-missing binaries warn and skip). AC: TLS-001
 
 ## Phase 5: Panel + docs (PR5)
 

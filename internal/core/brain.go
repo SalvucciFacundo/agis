@@ -67,9 +67,9 @@ type Brain struct {
 	hub     SkillHub
 	creator SkillCreator
 
-	runner   ToolRunner  // executes approved commands; nil disables tools
-	guard    PolicyGuard // evaluates every tool request
-	approver Approver    // resolves ask decisions interactively
+	runners  []ToolRunner // one per enabled backend; empty disables tools
+	guard    PolicyGuard  // evaluates every tool request
+	approver Approver     // resolves ask decisions interactively
 
 	// recallLimit bounds how many observations Step injects into the system
 	// prompt (default 10).
@@ -146,14 +146,15 @@ func WithEvolution(e EvolutionLayer) Option {
 // It takes effect from the next turn on.
 func (b *Brain) SetOverlay(text string) { b.overlay = text }
 
-// WithTools wires the bounded tool loop: runner executes, guard evaluates,
-// approver resolves ask decisions. Any nil component leaves tools disabled.
-func WithTools(runner ToolRunner, guard PolicyGuard, approver Approver) Option {
+// WithTools wires the bounded tool loop across the given backends: guard
+// evaluates every request, approver resolves ask decisions, runners execute.
+// Empty runners or a nil guard leave tools disabled.
+func WithTools(runners []ToolRunner, guard PolicyGuard, approver Approver) Option {
 	return func(b *Brain) {
-		if runner == nil || guard == nil {
+		if len(runners) == 0 || guard == nil {
 			return
 		}
-		b.runner = runner
+		b.runners = runners
 		b.guard = guard
 		b.approver = approver
 	}
@@ -226,13 +227,13 @@ func (b *Brain) Step(ctx context.Context, input string) error {
 // the final round runs unadvertised. The conversation message slice is
 // mutated in place so subsequent rounds see the full exchange.
 func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message) (string, error) {
-	toolsEnabled := b.runner != nil && b.guard != nil
+	toolsEnabled := len(b.runners) > 0 && b.guard != nil
 
 	for round := 0; ; round++ {
 		req := ChatRequest{Messages: *messages}
 		capReached := toolsEnabled && round >= maxToolRounds
 		if toolsEnabled && !capReached {
-			req.Tools = []ToolDef{shellToolDef()}
+			req.Tools = toolDefs(b.runners)
 		}
 
 		events, err := b.provider.Stream(ctx, req)
@@ -296,18 +297,35 @@ func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message
 				ToolCallID: c.ID,
 			})
 		}
+		_ = convID
 	}
 }
 
-// executeTool evaluates one tool call through the guard and, when permitted,
-// runs it. Its return value always becomes the RoleTool feedback text.
+// runnerFor routes a tool name (shell-<backend>) to its runner.
+func (b *Brain) runnerFor(name string) ToolRunner {
+	for _, r := range b.runners {
+		if "shell-"+r.Backend() == name {
+			return r
+		}
+	}
+	return nil
+}
+
+// executeTool evaluates one tool call through the guard on the addressed
+// backend and, when permitted, runs it. The return value always becomes the
+// RoleTool feedback text.
 func (b *Brain) executeTool(ctx context.Context, call ToolCall) string {
+	runner := b.runnerFor(call.Name)
+	if runner == nil {
+		return fmt.Sprintf("unknown tool %q", call.Name)
+	}
+
 	command, err := commandFromArgs(call.Arguments)
 	if err != nil {
 		return fmt.Sprintf("invalid arguments: %v", err)
 	}
 
-	req := GuardRequest{Backend: b.runner.Backend(), Category: CategoryCommands, Subject: command}
+	req := GuardRequest{Backend: runner.Backend(), Category: CategoryCommands, Subject: command}
 	switch b.guard.Evaluate(ctx, req) {
 	case DecisionAllow:
 	case DecisionAsk:
@@ -322,7 +340,7 @@ func (b *Brain) executeTool(ctx context.Context, call ToolCall) string {
 		return "blocked by policy"
 	}
 
-	out, err := b.runner.Run(ctx, command)
+	out, err := runner.Run(ctx, command)
 	if err != nil {
 		return "error: " + err.Error()
 	}
