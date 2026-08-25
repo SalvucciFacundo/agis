@@ -8,7 +8,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
+	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -17,6 +19,8 @@ import (
 	"github.com/SalvucciFacundo/agis/internal/config"
 	"github.com/SalvucciFacundo/agis/internal/core"
 	"github.com/SalvucciFacundo/agis/internal/memory"
+	"github.com/SalvucciFacundo/agis/internal/persona"
+	"github.com/SalvucciFacundo/agis/internal/skills"
 )
 
 func main() {
@@ -52,22 +56,56 @@ func main() {
 	// loop back-pressures the provider instead of dropping tokens.
 	stream := make(chan string, 64)
 
-	brainOpts := []core.Option{core.WithSink(func(text string) {
-		stream <- text
-	})}
+	identity, err := persona.LoadSoul(persona.SoulPath(config.AgisHome()), slog.Default())
+	if err != nil {
+		slog.Warn("persona: loading SOUL.md", "error", err)
+	}
+
+	brainOpts := []core.Option{
+		core.WithSink(func(text string) { stream <- text }),
+		core.WithIdentity(identity),
+	}
+
+	var evolution *persona.Evolution
+	if cfg.Agent.EvolutionEnabled {
+		evolution = persona.NewEvolution(repo, slog.Default())
+		brainOpts = append(brainOpts, core.WithEvolution(evolution))
+	}
+	if cfg.Skills.Enabled {
+		hub := skills.NewHub(repo, slog.Default())
+		if err := hub.LoadDir(ctx, cfg.Skills.Dir); err != nil {
+			slog.Warn("skills: loading directory", "error", err)
+		}
+		regDir := filepath.Join(config.AgisHome(), ".atl")
+		if mkErr := os.MkdirAll(regDir, 0o700); mkErr == nil {
+			hub.SyncRegistry(filepath.Join(regDir, "skill-registry.md"))
+		} else {
+			slog.Warn("skills: creating registry directory", "error", mkErr)
+		}
+		brainOpts = append(brainOpts, core.WithSkills(hub))
+	}
 	if cfg.Memory.LearningEnabled {
 		curator := memory.NewCurator(provider, repo, nil)
 		summarizer := memory.NewSummarizer(provider, repo, nil)
+		creator := skills.NewCreator(provider, repo, cfg.Skills.Enabled, nil)
 		brainOpts = append(brainOpts,
 			core.WithNudger(curator),
 			core.WithSessionCloser(summarizer),
+			core.WithSkillCreator(creator),
 			core.WithRecallLimit(cfg.Memory.RecallLimit),
 			core.WithNudgeEvery(cfg.Memory.NudgeEvery),
 		)
 	}
 	brain := core.NewBrain(repo, provider, brainOpts...)
 
-	app := tui.New(brain, repo, stream, tui.WithCloseTimeout(cfg.Memory.CloseTimeout))
+	tuiOpts := []tui.Option{
+		tui.WithCloseTimeout(cfg.Memory.CloseTimeout),
+		tui.WithOverlays(persona.NewOverlays(cfg.Agent.Personalities)),
+	}
+	if evolution != nil {
+		tuiOpts = append(tuiOpts, tui.WithEvolution(evolution))
+	}
+	app := tui.New(brain, repo, stream, tuiOpts...)
 
 	if _, err := tea.NewProgram(app).Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "agis: %v\n", err)
