@@ -32,12 +32,12 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: Skills package (PR2)
 
-- [ ] T2.1 Create `internal/scan/scan.go`: fixed lowercase substring pattern list; `ScanLines(text) (clean string, dropped int)`; RED tests first (injection patterns dropped, benign intact). AC: PER-002 shared engine
-- [ ] T2.2 Create `internal/skills/loader.go`: YAML frontmatter decode (`name`,`description` required; `trigger` optional), invalid files skipped+logged. Tests: valid loads, missing-name skipped, empty dir OK. AC: SKL-001
-- [ ] T2.3 Create `internal/skills/hub.go`: index by name/trigger/description; `Match` AND-term case-insensitive top-N (default 3); `RecordUse` via repo. Tests: trigger match, no-match, limit. AC: SKL-002/003
-- [ ] T2.4 Create `internal/skills/creator.go`: one bounded Chat call post-summarizer returning fenced JSON `{name,description,trigger,content}` or null; malformed log-and-skip; persists source=agent + records `skill` event; honors enabled flag. Tests: captured/malformed/disabled/error-nonfatal (curator test style). AC: SKL-004, BRN-003
-- [ ] T2.5 Create `internal/skills/registry.go`: atomic tmp+rename writer listing indexed skills; failure warns only. Tests: reflects state, unwritable path non-fatal. AC: SKL-005
-- [ ] T2.6 Hub startup sync: loaded file skills upsert to repo as source=imported. Test: import persists. AC: SKL-003
+- [x] T2.1 Create `internal/scan/scan.go`: fixed lowercase substring pattern list; `ScanLines(text) (clean string, dropped int)`; RED tests first (injection patterns dropped, benign intact). AC: PER-002 shared engine
+- [x] T2.2 Create `internal/skills/loader.go`: YAML frontmatter decode (`name`,`description` required; `trigger` optional), invalid files skipped+logged. Tests: valid loads, missing-name skipped, empty dir OK. AC: SKL-001
+- [x] T2.3 Create `internal/skills/hub.go`: index by name/trigger/description; `Match` AND-term case-insensitive top-N (default 3); `RecordUse` via repo. Tests: trigger match, no-match, limit. AC: SKL-002/003
+- [x] T2.4 Create `internal/skills/creator.go`: one bounded Chat call post-summarizer returning fenced JSON `{name,description,trigger,content}` or null; malformed log-and-skip; persists source=agent + records `skill` event; honors enabled flag. Tests: captured/malformed/disabled/error-nonfatal (curator test style). AC: SKL-004, BRN-003
+- [x] T2.5 Create `internal/skills/registry.go`: atomic tmp+rename writer listing indexed skills; failure warns only. Tests: reflects state, unwritable path non-fatal. AC: SKL-005
+- [x] T2.6 Hub startup sync: loaded file skills upsert to repo as source=imported. Test: import persists. AC: SKL-003
 
 ## Phase 3: Persona + config (PR3)
 
