@@ -41,18 +41,23 @@ const defaultSkillMatchLimit = 3
 // to answer directly, and the final round runs without tools advertised.
 const maxToolRounds = 8
 
-// shellToolDef is the advertised surface of the shell backend.
-func shellToolDef() ToolDef {
-	return ToolDef{
-		Name:        "shell",
-		Description: `Run a shell command. Arguments: {"command": "<the command string>"}. Prefer read-only commands.`,
-	}
-}
-
 // ToolRunner executes approved commands on one backend.
 type ToolRunner interface {
 	Run(ctx context.Context, command string) (string, error)
 	Backend() string
+}
+
+// toolDefs advertises one shell tool per registered backend so the model can
+// address them explicitly (shell-local, shell-docker, ...).
+func toolDefs(runners []ToolRunner) []ToolDef {
+	defs := make([]ToolDef, 0, len(runners))
+	for _, r := range runners {
+		defs = append(defs, ToolDef{
+			Name:        "shell-" + r.Backend(),
+			Description: fmt.Sprintf(`Run a shell command on the %s backend. Arguments: {"command": "<the command string>"}. Prefer read-only commands.`, r.Backend()),
+		})
+	}
+	return defs
 }
 
 // Approver resolves an ask decision interactively. Implementations block until

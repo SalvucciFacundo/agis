@@ -134,8 +134,9 @@ func main() {
 			approvalReq = make(chan core.GuardRequest)
 			approvalResp = make(chan core.Scope)
 		}
+		runners := tools.Select(cfg.Tools, slog.Default())
 		brainOpts = append(brainOpts, core.WithTools(
-			tools.NewLocal(0),
+			runners,
 			pstore,
 			func(ctx context.Context, req core.GuardRequest) core.Scope {
 				sc := approver(ctx, req)
