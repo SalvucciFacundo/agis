@@ -22,6 +22,7 @@ import (
 	"github.com/SalvucciFacundo/agis/internal/persona"
 	"github.com/SalvucciFacundo/agis/internal/policy"
 	"github.com/SalvucciFacundo/agis/internal/skills"
+	"github.com/SalvucciFacundo/agis/internal/tools"
 )
 
 func main() {
@@ -103,6 +104,52 @@ func main() {
 			core.WithNudgeEvery(cfg.Memory.NudgeEvery),
 		)
 	}
+	var approvalReq chan core.GuardRequest
+	var approvalResp chan core.Scope
+	approver := func(ctx context.Context, req core.GuardRequest) core.Scope {
+		if approvalReq == nil {
+			return core.ScopeDeny
+		}
+		select {
+		case approvalReq <- req:
+		case <-ctx.Done():
+			return core.ScopeDeny
+		}
+		select {
+		case sc := <-approvalResp:
+			return sc
+		case <-ctx.Done():
+			return core.ScopeDeny
+		}
+	}
+
+	if cfg.Tools.Enabled {
+		pstore, perr := policy.Load(filepath.Join(config.AgisHome(), "policy.yaml"))
+		if perr != nil {
+			slog.Warn("policy: loading (fail-closed)", "error", perr)
+		}
+		pstore.SetAuditSink(repo)
+
+		if approvalReq == nil {
+			approvalReq = make(chan core.GuardRequest)
+			approvalResp = make(chan core.Scope)
+		}
+		brainOpts = append(brainOpts, core.WithTools(
+			tools.NewLocal(0),
+			pstore,
+			func(ctx context.Context, req core.GuardRequest) core.Scope {
+				sc := approver(ctx, req)
+				switch sc {
+				case core.ScopeSession, core.ScopeAlways:
+					if err := pstore.ResolveAsk(ctx, req, sc); err != nil {
+						slog.Warn("policy: resolving ask", "error", err)
+					}
+				}
+				return sc
+			},
+		))
+	}
+
 	brain := core.NewBrain(repo, provider, brainOpts...)
 
 	tuiOpts := []tui.Option{
@@ -111,6 +158,10 @@ func main() {
 	}
 	if evolution != nil {
 		tuiOpts = append(tuiOpts, tui.WithEvolution(evolution))
+	}
+	if approvalReq != nil {
+		tuiOpts = append(tuiOpts,
+			tui.WithApprovalChannels(approvalReq, approvalResp))
 	}
 	app := tui.New(brain, repo, stream, tuiOpts...)
 

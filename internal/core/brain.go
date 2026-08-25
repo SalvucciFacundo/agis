@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -65,6 +66,10 @@ type Brain struct {
 	// session close. Both nil-able to disable their behavior.
 	hub     SkillHub
 	creator SkillCreator
+
+	runner   ToolRunner  // executes approved commands; nil disables tools
+	guard    PolicyGuard // evaluates every tool request
+	approver Approver    // resolves ask decisions interactively
 
 	// recallLimit bounds how many observations Step injects into the system
 	// prompt (default 10).
@@ -141,6 +146,19 @@ func WithEvolution(e EvolutionLayer) Option {
 // It takes effect from the next turn on.
 func (b *Brain) SetOverlay(text string) { b.overlay = text }
 
+// WithTools wires the bounded tool loop: runner executes, guard evaluates,
+// approver resolves ask decisions. Any nil component leaves tools disabled.
+func WithTools(runner ToolRunner, guard PolicyGuard, approver Approver) Option {
+	return func(b *Brain) {
+		if runner == nil || guard == nil {
+			return
+		}
+		b.runner = runner
+		b.guard = guard
+		b.approver = approver
+	}
+}
+
 // NewBrain returns a Brain backed by repo and provider.
 func NewBrain(repo Repository, provider Provider, opts ...Option) *Brain {
 	b := &Brain{
@@ -182,29 +200,12 @@ func (b *Brain) Step(ctx context.Context, input string) error {
 		return err
 	}
 
-	events, err := b.provider.Stream(ctx, ChatRequest{Messages: messages})
+	reply, err := b.runTurns(ctx, conv.ID, &messages)
 	if err != nil {
-		return fmt.Errorf("streaming response: %w", err)
+		return err
 	}
 
-	var reply strings.Builder
-	for ev := range events {
-		if ev.Err != nil {
-			// Drain the channel to its close before returning: the provider
-			// goroutine may still be blocked sending on an unbuffered channel,
-			// and the port contract requires providers to close the channel
-			// after a terminal Err event.
-			for range events {
-			}
-			return fmt.Errorf("stream error: %w", ev.Err)
-		}
-		reply.WriteString(ev.Text)
-		if b.sink != nil {
-			b.sink(ev.Text)
-		}
-	}
-
-	if err := b.repo.AppendMessage(ctx, conv.ID, Message{Role: RoleAssistant, Content: reply.String()}); err != nil {
+	if err := b.repo.AppendMessage(ctx, conv.ID, Message{Role: RoleAssistant, Content: reply}); err != nil {
 		return fmt.Errorf("persisting assistant message: %w", err)
 	}
 
@@ -216,6 +217,130 @@ func (b *Brain) Step(ctx context.Context, input string) error {
 	}
 
 	return nil
+}
+
+// runTurns streams the reply with a bounded tool loop (spec TOL-002): each
+// round drains one stream; tool calls are evaluated through the guard,
+// executed when allowed/approved, and their results feed back as RoleTool
+// messages. After maxToolRounds the model is told to answer without tools and
+// the final round runs unadvertised. The conversation message slice is
+// mutated in place so subsequent rounds see the full exchange.
+func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message) (string, error) {
+	toolsEnabled := b.runner != nil && b.guard != nil
+
+	for round := 0; ; round++ {
+		req := ChatRequest{Messages: *messages}
+		capReached := toolsEnabled && round >= maxToolRounds
+		if toolsEnabled && !capReached {
+			req.Tools = []ToolDef{shellToolDef()}
+		}
+
+		events, err := b.provider.Stream(ctx, req)
+		if err != nil {
+			return "", fmt.Errorf("streaming response: %w", err)
+		}
+
+		var text strings.Builder
+		var calls []*ToolCall
+		for ev := range events {
+			if ev.Err != nil {
+				// Drain to close before returning: the provider goroutine may
+				// still be blocked on an unbuffered send.
+				for range events {
+				}
+				return "", fmt.Errorf("stream error: %w", ev.Err)
+			}
+			if ev.ToolCall != nil {
+				if toolsEnabled {
+					calls = append(calls, ev.ToolCall)
+				}
+				continue
+			}
+			text.WriteString(ev.Text)
+			if b.sink != nil {
+				b.sink(ev.Text)
+			}
+		}
+
+		if len(calls) == 0 {
+			return text.String(), nil
+		}
+
+		if capReached {
+			_ = b.repo.AppendAudit(ctx, AuditEntry{
+				Backend:  "local",
+				Category: CategoryCommands,
+				Subject:  fmt.Sprintf("%d pending tool calls", len(calls)),
+				Decision: "deny",
+				Scope:    "round-cap",
+			})
+			*messages = append(*messages,
+				Message{Role: RoleUser, Content: "[policy] Tool round limit reached. Answer directly without calling tools."},
+			)
+			continue
+		}
+
+		// Record the assistant's tool request before executing (the protocol
+		// requires it ahead of each RoleTool result).
+		request := Message{Role: RoleAssistant, Content: text.String()}
+		for _, c := range calls {
+			request.ToolCalls = append(request.ToolCalls, *c)
+		}
+		*messages = append(*messages, request)
+
+		for _, c := range calls {
+			out := b.executeTool(ctx, *c)
+			*messages = append(*messages, Message{
+				Role:       RoleTool,
+				Content:    out,
+				ToolCallID: c.ID,
+			})
+		}
+	}
+}
+
+// executeTool evaluates one tool call through the guard and, when permitted,
+// runs it. Its return value always becomes the RoleTool feedback text.
+func (b *Brain) executeTool(ctx context.Context, call ToolCall) string {
+	command, err := commandFromArgs(call.Arguments)
+	if err != nil {
+		return fmt.Sprintf("invalid arguments: %v", err)
+	}
+
+	req := GuardRequest{Backend: b.runner.Backend(), Category: CategoryCommands, Subject: command}
+	switch b.guard.Evaluate(ctx, req) {
+	case DecisionAllow:
+	case DecisionAsk:
+		if b.approver == nil {
+			return "blocked by policy"
+		}
+		scope := b.approver(ctx, req)
+		if scope == ScopeDeny || scope == "" {
+			return "blocked by policy (user denied)"
+		}
+	default:
+		return "blocked by policy"
+	}
+
+	out, err := b.runner.Run(ctx, command)
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	return out
+}
+
+// commandFromArgs extracts the command string from a tool call's JSON args.
+func commandFromArgs(args string) (string, error) {
+	var parsed struct {
+		Command string `json:"command"`
+	}
+	if err := json.Unmarshal([]byte(args), &parsed); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(parsed.Command) == "" {
+		return "", fmt.Errorf("empty command")
+	}
+	return parsed.Command, nil
 }
 
 // maybeNudge triggers the curator on the nudge cadence boundary (every

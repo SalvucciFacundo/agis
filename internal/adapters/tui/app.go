@@ -70,6 +70,14 @@ func WithEvolution(e *persona.Evolution) Option {
 	return func(m *Model) { m.evolution = e }
 }
 
+// WithApprovalChannels wires the interactive Policy Guard prompt.
+func WithApprovalChannels(req <-chan core.GuardRequest, resp chan<- core.Scope) Option {
+	return func(m *Model) {
+		m.approvalReq = req
+		m.approvalResp = resp
+	}
+}
+
 // Model is the Bubbletea TUI. It owns a Brain and a Repository; the stream
 // channel carries assistant tokens from the Brain's sink into the viewport.
 type Model struct {
@@ -116,6 +124,13 @@ type Model struct {
 	overlays    *persona.Overlays
 	evolution   *persona.Evolution
 	personality string // active overlay name for status display
+
+	// approval channels wire the interactive Policy Guard prompt: the brain's
+	// approver sends a request, the update loop renders it and answers with a
+	// scope. pending holds the request awaiting an answer.
+	approvalReq  <-chan core.GuardRequest
+	approvalResp chan<- core.Scope
+	pending      *core.GuardRequest
 }
 
 // tokenMsg carries one streamed assistant token into the update loop.
@@ -128,6 +143,11 @@ type streamDoneMsg struct {
 
 // closedMsg signals that CloseSession finished and the program may quit.
 type closedMsg struct{}
+
+// approvalMsg carries one Policy Guard ask awaiting a user decision.
+type approvalMsg struct {
+	req core.GuardRequest
+}
 
 // historyMsg carries the restored conversation (or a load error) from Init.
 type historyMsg struct {
@@ -198,6 +218,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// An open approval intercepts every key: CtrlC and Esc deny instead of
+		// quitting (spec TUI-002 safe default).
+		if m.pending != nil {
+			switch {
+			case msg.Type == tea.KeyCtrlC, msg.Type == tea.KeyEsc:
+				return m.resolveApproval(core.ScopeDeny), nil
+			case len(msg.Runes) == 1:
+				switch string(msg.Runes) {
+				case "a":
+					return m.resolveApproval(core.ScopeOnce), nil
+				case "s":
+					return m.resolveApproval(core.ScopeSession), nil
+				case "l":
+					return m.resolveApproval(core.ScopeAlways), nil
+				case "n":
+					return m.resolveApproval(core.ScopeDeny), nil
+				}
+			}
+			return m, nil
+		}
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m.handleQuit()
@@ -218,6 +258,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case closedMsg:
 		return m, tea.Quit
+
+	case approvalMsg:
+		m.pending = &msg.req
+		return m.feedback(fmt.Sprintf(
+			"approve [%s] %s — [a]llow once, [s]ession, a[l]ways, [n]o",
+			msg.req.Backend, msg.req.Subject)), m.waitApproval()
 	}
 
 	// Delegate everything else to the input and spinner widgets.
@@ -266,6 +312,21 @@ func (m *Model) handleQuit() (tea.Model, tea.Cmd) {
 	return m, m.closeSession()
 }
 
+// resolveApproval answers the pending ask, clears it, and reports the choice.
+func (m *Model) resolveApproval(scope core.Scope) *Model {
+	req := m.pending
+	m.pending = nil
+	if req == nil || m.approvalResp == nil {
+		return m
+	}
+	m.approvalResp <- scope
+	line := "denied"
+	if scope != core.ScopeDeny {
+		line = "approved (" + string(scope) + ")"
+	}
+	return m.feedback("· policy: " + line)
+}
+
 // closeSession runs Brain.CloseSession bounded by the close timeout on its own
 // context. CloseSession is non-fatal by contract: it logs its own failures and
 // always returns nil, so the program quits either way.
@@ -309,7 +370,21 @@ func (m *Model) submit() (tea.Model, tea.Cmd) {
 		close(m.stream)
 	}()
 
-	return m, m.waitToken()
+	return m, tea.Batch(m.waitToken(), m.waitApproval())
+}
+
+// waitApproval reads the next Policy Guard ask from the approval channel.
+func (m *Model) waitApproval() tea.Cmd {
+	if m.approvalReq == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		req, ok := <-m.approvalReq
+		if !ok {
+			return nil
+		}
+		return approvalMsg{req: req}
+	}
 }
 
 // waitToken reads the next token from the stream channel. A closed channel

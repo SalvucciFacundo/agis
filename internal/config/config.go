@@ -31,6 +31,8 @@ const (
 	defaultCloseTimeout = 30 * time.Second
 
 	skillsDirName = "skills"
+
+	defaultDockerImage = "alpine:3"
 )
 
 // Config is the root AGIS configuration.
@@ -40,6 +42,29 @@ type Config struct {
 	Memory MemoryConfig `yaml:"memory"`
 	Agent  AgentConfig  `yaml:"agent"`
 	Skills SkillsConfig `yaml:"skills"`
+	Tools  ToolsConfig  `yaml:"tools"`
+}
+
+// ToolsConfig gates the M4 execution subsystem. Disabled by default: tools
+// are strictly opt-in.
+type ToolsConfig struct {
+	Enabled bool         `yaml:"enabled"`
+	Docker  DockerConfig `yaml:"docker"`
+	SSH     SSHConfig    `yaml:"ssh"`
+}
+
+// DockerConfig configures the container backend.
+type DockerConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Image   string `yaml:"image"`
+}
+
+// SSHConfig configures the remote execution backend.
+type SSHConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Host    string `yaml:"host"`
+	User    string `yaml:"user"`
+	KeyPath string `yaml:"key_path"`
 }
 
 // AgentConfig carries identity and persona settings: custom personality
@@ -139,6 +164,9 @@ func defaults() *Config {
 		Skills: SkillsConfig{
 			Enabled: true,
 			Dir:     defaultSkillsDir(),
+		},
+		Tools: ToolsConfig{
+			Docker: DockerConfig{Image: defaultDockerImage},
 		},
 	}
 }

@@ -300,3 +300,32 @@ func TestLoad_AgentExplicitOffSurvives(t *testing.T) {
 		t.Errorf("Skills.Dir = %q, want the explicit override", cfg.Skills.Dir)
 	}
 }
+
+func TestLoad_ToolsDefaultsAndExplicit(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("AGIS_HOME", home)
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Tools.Enabled {
+		t.Error("Tools.Enabled = true, want default false (tools are opt-in)")
+	}
+	if cfg.Tools.Docker.Image != "alpine:3" {
+		t.Errorf("Tools.Docker.Image = %q, want alpine:3 default", cfg.Tools.Docker.Image)
+	}
+
+	writeConfig(t, home, "tools:\n  enabled: true\n  docker:\n    enabled: true\n    image: debian:12\n  ssh:\n    enabled: true\n    host: vps.example\n    user: kuno\n    key_path: ~/.ssh/id_ed25519\n", 0o600)
+
+	cfg, err = Load("")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.Tools.Enabled || !cfg.Tools.Docker.Enabled || cfg.Tools.Docker.Image != "debian:12" {
+		t.Errorf("tools config = %+v, want enabled with custom image", cfg.Tools)
+	}
+	if !cfg.Tools.SSH.Enabled || cfg.Tools.SSH.Host != "vps.example" || cfg.Tools.SSH.User != "kuno" {
+		t.Errorf("ssh config = %+v, want enabled remote host", cfg.Tools.SSH)
+	}
+}

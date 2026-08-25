@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -278,4 +279,112 @@ func collect(ch <-chan core.StreamEvent) []core.StreamEvent {
 		events = append(events, ev)
 	}
 	return events
+}
+
+func TestStream_ToolCallsAccumulated(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	events := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Let me check."}}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"shell","arguments":"{\"comm"}}]}}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"and\":\"git status\"}"}}]}}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	server := newSSEServer(t, events...)
+	defer server.Close()
+
+	ch, err := newTestOpenAI(server.URL).Stream(context.Background(), core.ChatRequest{
+		Messages: []core.Message{{Role: core.RoleUser, Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+
+	var text strings.Builder
+	var calls []*core.ToolCall
+	for ev := range ch {
+		switch {
+		case ev.Err != nil:
+			t.Fatalf("stream error: %v", ev.Err)
+		case ev.ToolCall != nil:
+			calls = append(calls, ev.ToolCall)
+		default:
+			text.WriteString(ev.Text)
+		}
+	}
+
+	if text.String() != "Let me check." {
+		t.Errorf("text = %q, want the pre-call content", text.String())
+	}
+	if len(calls) != 1 {
+		t.Fatalf("got %d tool calls, want 1 accumulated call", len(calls))
+	}
+	c := calls[0]
+	if c.ID != "call_1" || c.Name != "shell" {
+		t.Errorf("call = %+v, want id/name preserved", c)
+	}
+	if c.Arguments != `{"command":"git status"}` {
+		t.Errorf("arguments = %q, want fragments concatenated in order", c.Arguments)
+	}
+}
+
+func TestStream_RequestCarriesToolsAndToolMessages(t *testing.T) {
+	var gotBody chatCompletionRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &gotBody)
+		fmt.Fprintln(w, "data: [DONE]")
+	}))
+	defer server.Close()
+
+	ch, err := newTestOpenAI(server.URL).Stream(context.Background(), core.ChatRequest{
+		Messages: []core.Message{
+			{Role: core.RoleAssistant, Content: "", ToolCalls: []core.ToolCall{{ID: "call_9", Name: "shell", Arguments: "{}"}}},
+			{Role: core.RoleTool, Content: "out", ToolCallID: "call_9"},
+		},
+		Tools: []core.ToolDef{{Name: "shell", Description: "run a command"}},
+	})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+	for range ch {
+	}
+
+	if len(gotBody.Tools) != 1 || gotBody.Tools[0].Function.Name != "shell" || gotBody.Tools[0].Type != "function" {
+		t.Errorf("tools payload = %+v, want one function def", gotBody.Tools)
+	}
+	msgs := gotBody.Messages
+	if len(msgs) != 2 {
+		t.Fatalf("messages = %d, want 2", len(msgs))
+	}
+	if len(msgs[0].ToolCalls) != 1 || msgs[0].ToolCalls[0].ID != "call_9" {
+		t.Errorf("assistant tool_calls = %+v, want the request echoed", msgs[0].ToolCalls)
+	}
+	if msgs[1].Role != "tool" || msgs[1].ToolCallID != "call_9" || msgs[1].Content != "out" {
+		t.Errorf("tool result = %+v, want role/tool_call_id/content", msgs[1])
+	}
+}
+
+func TestStream_MalformedToolCallDegradesToClose(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	// finish_reason arrives with an unparseable arguments fragment; the
+	// stream still closes cleanly (LLM-001 degrade path).
+	events := []string{
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c","function":{"name":"x","arguments":"not json"}}]},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	server := newSSEServer(t, events...)
+	defer server.Close()
+
+	ch, err := newTestOpenAI(server.URL).Stream(context.Background(), core.ChatRequest{})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+	count := 0
+	for range ch {
+		count++
+	}
+	if count == 0 {
+		t.Error("no events emitted for malformed tool call")
+	}
 }

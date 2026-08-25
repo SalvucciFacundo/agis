@@ -57,9 +57,11 @@ type fakeRepo struct {
 	lastRecallLimit int
 	latest          *Conversation
 	sessionEvents   []sessionEventRecord
+	auditEntries    []AuditEntry
 }
 
 // sessionEventRecord captures one RecordSessionEvent call for assertion.
+
 type sessionEventRecord struct {
 	sessionID string
 	kind      string
@@ -151,7 +153,10 @@ func (r *fakeRepo) UserModelRows(context.Context, int) ([]UserModel, error) { re
 
 func (r *fakeRepo) ClearUserModel(context.Context) error { return nil }
 
-func (r *fakeRepo) AppendAudit(context.Context, AuditEntry) error { return nil }
+func (r *fakeRepo) AppendAudit(_ context.Context, e AuditEntry) error {
+	r.auditEntries = append(r.auditEntries, e)
+	return nil
+}
 
 func (r *fakeRepo) AuditTail(context.Context, int) ([]AuditEntry, error) { return nil, nil }
 

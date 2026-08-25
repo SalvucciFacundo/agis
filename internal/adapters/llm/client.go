@@ -111,11 +111,27 @@ func (c *Client) doChat(ctx context.Context, req core.ChatRequest, stream bool) 
 		Messages: make([]messagePayload, 0, len(req.Messages)),
 		Stream:   stream,
 	}
+	if len(req.Tools) > 0 {
+		payload.Tools = make([]toolDefPayload, 0, len(req.Tools))
+		for _, t := range req.Tools {
+			var td toolDefPayload
+			td.Type = "function"
+			td.Function.Name = t.Name
+			td.Function.Description = t.Description
+			payload.Tools = append(payload.Tools, td)
+		}
+	}
 	for _, m := range req.Messages {
-		payload.Messages = append(payload.Messages, messagePayload{
-			Role:    string(m.Role),
-			Content: m.Content,
-		})
+		mp := messagePayload{Role: string(m.Role), Content: m.Content}
+		for _, tc := range m.ToolCalls {
+			mp.ToolCalls = append(mp.ToolCalls, toolCallPayload{
+				ID:       tc.ID,
+				Type:     "function",
+				Function: funcSpec{Name: tc.Name, Arguments: tc.Arguments},
+			})
+		}
+		mp.ToolCallID = m.ToolCallID
+		payload.Messages = append(payload.Messages, mp)
 	}
 
 	body, err := json.Marshal(payload)
@@ -155,6 +171,30 @@ func (c *Client) streamEvents(body io.Reader, ch chan<- core.StreamEvent) {
 	sc := bufio.NewScanner(body)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
+	// Accumulator for streamed tool-call fragments keyed by their index.
+	type accToolCall struct {
+		id, name string
+		args     strings.Builder
+	}
+	var accOrder []int
+	acc := map[int]*accToolCall{}
+	flushed := false
+
+	flushToolCalls := func() {
+		if flushed {
+			return
+		}
+		flushed = true
+		for _, idx := range accOrder {
+			a := acc[idx]
+			ch <- core.StreamEvent{ToolCall: &core.ToolCall{
+				ID:        a.id,
+				Name:      a.name,
+				Arguments: a.args.String(),
+			}}
+		}
+	}
+
 	for sc.Scan() {
 		line := sc.Text()
 		if !strings.HasPrefix(line, "data:") {
@@ -165,6 +205,7 @@ func (c *Client) streamEvents(body io.Reader, ch chan<- core.StreamEvent) {
 			continue
 		}
 		if data == "[DONE]" {
+			flushToolCalls()
 			return
 		}
 
@@ -177,10 +218,30 @@ func (c *Client) streamEvents(body io.Reader, ch chan<- core.StreamEvent) {
 			ch <- core.StreamEvent{Err: chunk.Error}
 			return
 		}
-		if len(chunk.Choices) > 0 {
-			if text := chunk.Choices[0].Delta.Content; text != "" {
-				ch <- core.StreamEvent{Text: text}
+		if len(chunk.Choices) == 0 {
+			continue
+		}
+		choice := chunk.Choices[0]
+		if text := choice.Delta.Content; text != "" {
+			ch <- core.StreamEvent{Text: text}
+		}
+		for _, tc := range choice.Delta.ToolCalls {
+			a := acc[tc.Index]
+			if a == nil {
+				a = &accToolCall{}
+				acc[tc.Index] = a
+				accOrder = append(accOrder, tc.Index)
 			}
+			if tc.ID != "" {
+				a.id = tc.ID
+			}
+			if tc.Function.Name != "" {
+				a.name += tc.Function.Name
+			}
+			a.args.WriteString(tc.Function.Arguments)
+		}
+		if choice.FinishReason == "tool_calls" {
+			flushToolCalls()
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -193,12 +254,39 @@ type chatCompletionRequest struct {
 	Model    string           `json:"model"`
 	Messages []messagePayload `json:"messages"`
 	Stream   bool             `json:"stream,omitempty"`
+	Tools    []toolDefPayload `json:"tools,omitempty"`
 }
 
-// messagePayload is one message in a chat-completion request.
+// toolDefPayload advertises one callable function to the provider.
+type toolDefPayload struct {
+	Type     string `json:"type"` // always "function"
+	Function struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	} `json:"function"`
+}
+
+// messagePayload is one message in a chat-completion request. ToolCalls and
+// ToolCallID are additive M4 fields for the assistant-request / tool-result
+// protocol halves.
 type messagePayload struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string            `json:"role"`
+	Content    string            `json:"content"`
+	ToolCalls  []toolCallPayload `json:"tool_calls,omitempty"`
+	ToolCallID string            `json:"tool_call_id,omitempty"`
+}
+
+// toolCallPayload is one tool invocation on the wire.
+type toolCallPayload struct {
+	ID       string   `json:"id,omitempty"`
+	Type     string   `json:"type,omitempty"` // "function"
+	Function funcSpec `json:"function"`
+}
+
+// funcSpec is the callable part of a tool call.
+type funcSpec struct {
+	Name      string `json:"name,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
 }
 
 // chatCompletionResponse is the non-streaming response body.
@@ -215,10 +303,22 @@ type chatCompletionResponse struct {
 type streamChunk struct {
 	Choices []struct {
 		Delta struct {
-			Content string `json:"content"`
+			Content   string           `json:"content"`
+			ToolCalls []streamToolCall `json:"tool_calls"`
 		} `json:"delta"`
+		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
 	Error *apiError `json:"error"`
+}
+
+// streamToolCall is one incremental tool-call fragment keyed by Index:
+// arguments arrive split across several chunks and must be concatenated in
+// order before emission (design D5).
+type streamToolCall struct {
+	Index    int      `json:"index"`
+	ID       string   `json:"id,omitempty"`
+	Type     string   `json:"type,omitempty"`
+	Function funcSpec `json:"function"`
 }
 
 // apiError is the OpenAI-compatible error envelope.
