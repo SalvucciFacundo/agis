@@ -40,14 +40,14 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Wire format, loop, local backend (PR3)
 
-- [ ] T3.1 RED parsing tests internal/adapters/llm: SSE fixtures with tool_calls deltas (accumulate arguments), finish_reason=tool_calls emission, malformed shape degrade-to-text, channel always closes. AC: LLM-001
-- [ ] T3.2 Extend core wire: ChatRequest.Tools []ToolDef; StreamEvent.ToolCall *ToolCall{ID,Name,Arguments}; Message.ToolCallID field. Zero-value regression test: no tools = byte-identical events. AC: TOL-001
-- [ ] T3.3 Implement provider tool_calls accumulation/parsing (OpenAI-compatible SSE). AC: LLM-001
-- [ ] T3.4 RED loop tests internal/core: scripted provider emitting tool calls; allow executes backend and feeds RoleTool result; deny informs model; cap at 8 rounds forces answer; every round audited. AC: TOL-002, BRN-004
-- [ ] T3.5 Brain tool loop in brain.go: WithTools registration, WithApprover callback, bounded rounds, RoleTool append with ToolCallID. AC: TOL-002
-- [ ] T3.6 Create internal/tools/local.go shell tool (exec.CommandContext, output capture, timeout) guarded by registry order local-first. Sandbox destructive-class refusal lives in guard matcher (T1.1). AC: TLS-002
-- [ ] T3.7 TUI approval prompt: WithApprover implementation rendering action + keys a=once s=session l=always n=deny; CtrlC resolves deny; blocks Step goroutine on channels without freezing update loop. RED test: interrupt denies + audits. AC: TUI-002
-- [ ] T3.8 Config tools block: tools.enabled (default false), backends settings. Wiring in main.go behind kill switch. AC: CONF-002
+- [x] T3.1 RED parsing tests internal/adapters/llm: SSE fixtures with tool_calls deltas (accumulate arguments), finish_reason=tool_calls emission, malformed shape degrade-to-text, channel always closes. AC: LLM-001
+- [x] T3.2 Extend core wire: ChatRequest.Tools []ToolDef; StreamEvent.ToolCall *ToolCall{ID,Name,Arguments}; Message.ToolCallID field. Zero-value regression test: no tools = byte-identical events. AC: TOL-001
+- [x] T3.3 Implement provider tool_calls accumulation/parsing (OpenAI-compatible SSE). AC: LLM-001
+- [x] T3.4 RED loop tests internal/core: scripted provider emitting tool calls; allow executes backend and feeds RoleTool result; deny informs model; cap at 8 rounds forces answer; every round audited. AC: TOL-002, BRN-004
+- [x] T3.5 Brain tool loop in brain.go: WithTools registration, WithApprover callback, bounded rounds, RoleTool append with ToolCallID. AC: TOL-002
+- [x] T3.6 Create internal/tools/local.go shell tool (exec.CommandContext, output capture, timeout) guarded by registry order local-first. Sandbox destructive-class refusal lives in guard matcher (T1.1). AC: TLS-002
+- [x] T3.7 TUI approval prompt: WithApprover implementation rendering action + keys a=once s=session l=always n=deny; CtrlC resolves deny; blocks Step goroutine on channels without freezing update loop. RED test: interrupt denies + audits. AC: TUI-002
+- [x] T3.8 Config tools block: tools.enabled (default false), backends settings. Wiring in main.go behind kill switch. AC: CONF-002
 
 ## Phase 4: Remote backends (PR4)
 
