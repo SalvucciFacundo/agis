@@ -151,6 +151,10 @@ func (r *fakeRepo) UserModelRows(context.Context, int) ([]UserModel, error) { re
 
 func (r *fakeRepo) ClearUserModel(context.Context) error { return nil }
 
+func (r *fakeRepo) AppendAudit(context.Context, AuditEntry) error { return nil }
+
+func (r *fakeRepo) AuditTail(context.Context, int) ([]AuditEntry, error) { return nil, nil }
+
 func (r *fakeRepo) SaveSkill(context.Context, Skill) error { return nil }
 
 func (r *fakeRepo) ListSkills(context.Context) ([]Skill, error) { return nil, nil }

@@ -97,6 +97,10 @@ func (r *fakeRepo) UserModelRows(context.Context, int) ([]core.UserModel, error)
 
 func (r *fakeRepo) ClearUserModel(context.Context) error { return nil }
 
+func (r *fakeRepo) AppendAudit(context.Context, core.AuditEntry) error { return nil }
+
+func (r *fakeRepo) AuditTail(context.Context, int) ([]core.AuditEntry, error) { return nil, nil }
+
 func (r *fakeRepo) SaveSkill(context.Context, core.Skill) error { return nil }
 
 func (r *fakeRepo) ListSkills(context.Context) ([]core.Skill, error) { return nil, nil }
