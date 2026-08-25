@@ -76,3 +76,25 @@ MUST: (1) ADD updated_at+backfill, (2) UNIQUE topic_key index, (3) CREATE user_m
 - GIVEN user_version=2 → no SQL, version=2
 
 ---
+
+
+repository-memory (MODIFIED)
+
+### Requirement: Skills persistence
+Repository port MUST add `SaveSkill` (upsert by unique name, preserving `created_at`), `ListSkills`, and `RecordSkillUsage` (increment `usage_count`, set `last_used`). `ListSkills` MUST order by `last_used` DESC then name.
+
+#### Scenario: Upsert by name
+- GIVEN skill "deploy-notes" exists
+- WHEN saved again with new content
+- THEN one row remains with updated content
+
+#### Scenario: Usage bump
+- WHEN RecordSkillUsage runs twice
+- THEN usage_count increased by 2
+
+### Requirement: Migration 0003
+Migration 0003 MUST create the `skills` table (`id`, UNIQUE `name`, `description`, `trigger`, `content`, `source` CHECK IN(`imported`,`agent`), `usage_count` DEFAULT 0, `last_used`, `created_at`) gated idempotently by `user_version`.
+
+#### Scenario: v2 to v3
+- GIVEN user_version=2
+- THEN 0003 applies once, version becomes 3

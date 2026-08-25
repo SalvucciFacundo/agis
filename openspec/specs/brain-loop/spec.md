@@ -39,3 +39,24 @@ MUST: (1) load msgs, (2) Chat→summary+obs, (3) UpdateConversationSummary, (4) 
 - GIVEN streaming Step, ctx canceled → stream drains, CloseSession runs
 
 ---
+
+
+brain-loop (MODIFIED)
+
+### Requirement: Context assembly slots
+Step MUST assemble system messages in this order: composed identity (SOUL + active overlay + evolution layer), matched skills (when any), recall observations (when any). Empty layers MUST be omitted. Identity is loaded once at startup; overlay changes apply from the next turn.
+
+#### Scenario: Full stack
+- GIVEN identity, one matched skill, and recall observations
+- THEN three system messages precede the conversation tail in that order
+
+#### Scenario: Bare minimum
+- GIVEN no skills and no observations
+- THEN only the identity system message precedes the tail
+
+### Requirement: Close-time extraction hook
+CloseSession MUST run skill extraction after the summarizer when enabled, bounded by the same close timeout. Extraction failures MUST log-and-continue; successful creations MUST record a `skill` session event.
+
+#### Scenario: Extractor error non-fatal
+- GIVEN the extraction LLM call fails
+- THEN close completes and quit proceeds

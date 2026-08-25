@@ -29,3 +29,17 @@ CtrlC/Esc MUST call `CloseSession` with status line. Synchronous, bounded by `cl
 
 #### Scenario: Force quit
 - CtrlC×2 → immediate quit, no close
+
+
+minimal-tui (MODIFIED)
+
+### Requirement: Slash-command dispatch
+Input beginning with `/` MUST dispatch exact-match commands locally and MUST NOT reach the provider or persist as a message. Required commands: `/personality <name|none>`, `/persona freeze|reset|status`. Unknown commands MUST print an error line without changing state.
+
+#### Scenario: Command handled locally
+- GIVEN `/persona status`
+- THEN status renders in the viewport and no provider call occurs
+
+#### Scenario: Unknown command
+- GIVEN `/foo`
+- THEN an error line appears; conversation unchanged
