@@ -93,6 +93,12 @@ func (r *fakeRepo) UpsertUserModel(context.Context, []core.UserModel) error { re
 
 func (r *fakeRepo) RecordSessionEvent(context.Context, string, string, string) error { return nil }
 
+func (r *fakeRepo) SaveSkill(context.Context, core.Skill) error { return nil }
+
+func (r *fakeRepo) ListSkills(context.Context) ([]core.Skill, error) { return nil, nil }
+
+func (r *fakeRepo) RecordSkillUsage(context.Context, string) error { return nil }
+
 func (r *fakeRepo) Close() error { return nil }
 
 // newTestModel wires a Model around a fake provider that streams the given

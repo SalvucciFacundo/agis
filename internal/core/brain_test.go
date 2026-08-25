@@ -147,6 +147,12 @@ func (r *fakeRepo) RecordSessionEvent(_ context.Context, sessionID, kind, payloa
 	return nil
 }
 
+func (r *fakeRepo) SaveSkill(context.Context, Skill) error { return nil }
+
+func (r *fakeRepo) ListSkills(context.Context) ([]Skill, error) { return nil, nil }
+
+func (r *fakeRepo) RecordSkillUsage(context.Context, string) error { return nil }
+
 func (r *fakeRepo) Close() error {
 	return nil
 }

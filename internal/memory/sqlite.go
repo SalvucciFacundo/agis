@@ -469,3 +469,132 @@ func parseTime(s string) (time.Time, error) {
 	}
 	return t, nil
 }
+
+// skillSources are the allowed skills.source values, mirroring the CHECK
+// constraint in 0003_skills.sql.
+var skillSources = map[string]bool{
+	core.SourceImported: true,
+	core.SourceAgent:    true,
+}
+
+// SaveSkill persists one skill, upserting on the unique name. A re-saved name
+// keeps its id, created_at, and usage counters and only refreshes description,
+// trigger, content, and source; a new name gets a fresh UUID and starts with
+// zero usage.
+func (r *Repository) SaveSkill(ctx context.Context, skill core.Skill) error {
+	if strings.TrimSpace(skill.Name) == "" {
+		return fmt.Errorf("skill has empty name")
+	}
+	if strings.TrimSpace(skill.Content) == "" {
+		return fmt.Errorf("skill %q has empty content", skill.Name)
+	}
+	if !skillSources[skill.Source] {
+		return fmt.Errorf("invalid skill source %q", skill.Source)
+	}
+
+	now := time.Now().UTC()
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("beginning skill transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var id string
+	err = tx.QueryRowContext(ctx, `SELECT id FROM skills WHERE name = ?`, skill.Name).Scan(&id)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		id = uuid.NewString()
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO skills (id, name, description, "trigger", content, source, usage_count, last_used, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, 0, '', ?)`,
+			id, skill.Name, skill.Description, skill.Trigger, skill.Content,
+			skill.Source, formatTime(now)); err != nil {
+			return fmt.Errorf("inserting skill %q: %w", skill.Name, err)
+		}
+	case err != nil:
+		return fmt.Errorf("looking up skill %q: %w", skill.Name, err)
+	default:
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE skills SET description = ?, "trigger" = ?, content = ?, source = ? WHERE id = ?`,
+			skill.Description, skill.Trigger, skill.Content, skill.Source, id); err != nil {
+			return fmt.Errorf("updating skill %q: %w", skill.Name, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing skill %q: %w", skill.Name, err)
+	}
+	return nil
+}
+
+// ListSkills returns every known skill ordered by last_used descending
+// (never-used entries last), then by name ascending as a stable tiebreak.
+func (r *Repository) ListSkills(ctx context.Context) ([]core.Skill, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, name, description, "trigger", content, source, usage_count, last_used, created_at
+		 FROM skills
+		 ORDER BY last_used DESC, name ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("listing skills: %w", err)
+	}
+	defer rows.Close()
+
+	var out []core.Skill
+	for rows.Next() {
+		s, err := scanSkill(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating skills: %w", err)
+	}
+	return out, nil
+}
+
+// RecordSkillUsage increments the usage counter and stamps last_used for the
+// named skill. An unknown name returns an error wrapping ErrNotFound.
+func (r *Repository) RecordSkillUsage(ctx context.Context, name string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE skills SET usage_count = usage_count + 1, last_used = ?
+		 WHERE name = ?`, formatTime(time.Now().UTC()), name)
+	if err != nil {
+		return fmt.Errorf("recording skill usage %q: %w", name, err)
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return fmt.Errorf("recording skill usage %q: %w", name, core.ErrNotFound)
+	}
+	return nil
+}
+
+// scanner is the subset of *sql.Row/*sql.Rows both skill readers use.
+type scanner interface {
+	Scan(dest ...any) error
+}
+
+// scanSkill reads one skills row into a domain Skill.
+func scanSkill(sc scanner) (core.Skill, error) {
+	var (
+		s            core.Skill
+		lastUsedStr  string
+		createdAtStr string
+	)
+	if err := sc.Scan(&s.ID, &s.Name, &s.Description, &s.Trigger, &s.Content,
+		&s.Source, &s.UsageCount, &lastUsedStr, &createdAtStr); err != nil {
+		return core.Skill{}, fmt.Errorf("scanning skill: %w", err)
+	}
+	if lastUsedStr != "" {
+		t, err := parseTime(lastUsedStr)
+		if err != nil {
+			return core.Skill{}, fmt.Errorf("parsing skill last_used: %w", err)
+		}
+		s.LastUsed = t
+	}
+	created, err := parseTime(createdAtStr)
+	if err != nil {
+		return core.Skill{}, fmt.Errorf("parsing skill created_at: %w", err)
+	}
+	s.CreatedAt = created
+	return s, nil
+}
