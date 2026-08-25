@@ -42,5 +42,18 @@ type Repository interface {
 	// conversation UUID the event belongs to.
 	RecordSessionEvent(ctx context.Context, sessionID, kind, payload string) error
 
+	// SaveSkill persists one skill, upserting on the unique name: a re-saved
+	// name keeps its id, created_at, and usage counters and only refreshes
+	// description, trigger, content, and source; a new name gets a fresh id.
+	SaveSkill(ctx context.Context, skill Skill) error
+
+	// ListSkills returns every known skill ordered by last_used descending
+	// (never-used entries last), then by name ascending as a stable tiebreak.
+	ListSkills(ctx context.Context) ([]Skill, error)
+
+	// RecordSkillUsage increments the usage counter and stamps last_used for
+	// the named skill. An unknown name returns an error wrapping ErrNotFound.
+	RecordSkillUsage(ctx context.Context, name string) error
+
 	Close() error
 }

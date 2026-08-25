@@ -42,6 +42,9 @@ type recordingRepo struct {
 	summary           string
 	summaryConvID     string
 	events            []recordedEvent
+	savedSkills       []core.Skill
+	skills            []core.Skill
+	usedSkill         string
 }
 
 type recordedEvent struct {
@@ -104,6 +107,23 @@ func (r *recordingRepo) UpsertUserModel(_ context.Context, rows []core.UserModel
 func (r *recordingRepo) RecordSessionEvent(_ context.Context, sessionID, kind, payload string) error {
 	r.calls = append(r.calls, "RecordSessionEvent")
 	r.events = append(r.events, recordedEvent{sessionID: sessionID, kind: kind, payload: payload})
+	return nil
+}
+
+func (r *recordingRepo) SaveSkill(_ context.Context, skill core.Skill) error {
+	r.calls = append(r.calls, "SaveSkill")
+	r.savedSkills = append(r.savedSkills, skill)
+	return nil
+}
+
+func (r *recordingRepo) ListSkills(context.Context) ([]core.Skill, error) {
+	r.calls = append(r.calls, "ListSkills")
+	return r.skills, nil
+}
+
+func (r *recordingRepo) RecordSkillUsage(_ context.Context, name string) error {
+	r.calls = append(r.calls, "RecordSkillUsage")
+	r.usedSkill = name
 	return nil
 }
 
