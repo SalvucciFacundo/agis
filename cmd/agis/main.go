@@ -20,10 +20,17 @@ import (
 	"github.com/SalvucciFacundo/agis/internal/core"
 	"github.com/SalvucciFacundo/agis/internal/memory"
 	"github.com/SalvucciFacundo/agis/internal/persona"
+	"github.com/SalvucciFacundo/agis/internal/policy"
 	"github.com/SalvucciFacundo/agis/internal/skills"
 )
 
 func main() {
+	// Subcommands route before any flag parsing (design D9): the interactive
+	// TUI is the default surface, everything else is a managed subcommand.
+	if len(os.Args) > 1 && os.Args[1] == "policy" {
+		os.Exit(policy.RunCLI(os.Args[2:], os.Stdout, os.Stderr))
+	}
+
 	fs := flag.NewFlagSet("agis", flag.ExitOnError)
 	configPath := fs.String(
 		"config",

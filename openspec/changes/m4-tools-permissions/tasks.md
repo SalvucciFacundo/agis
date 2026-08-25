@@ -34,9 +34,9 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: CLI (PR2)
 
-- [ ] T2.1 Route subcommands in cmd/agis/main.go before flag parsing: agis policy <sub> dispatches to internal/policy/cli. AC: POL-004
-- [ ] T2.2 Implement internal/policy/cli.go: init (safe defaults, refuses overwrite unless --force), set, rm, show (table output), tier (refuses full with session-only guidance), test (dry-run decision print). AC: POL-004
-- [ ] T2.3 CLI tests against temp AGIS_HOME: init/set/show/test/rm round-trip; tier full refusal; exit codes 0/1. AC: POL-004 scenarios
+- [x] T2.1 Route subcommands in cmd/agis/main.go before flag parsing: agis policy <sub> dispatches to internal/policy/cli. AC: POL-004
+- [x] T2.2 Implement internal/policy/cli.go: init (safe defaults, refuses overwrite unless --force), set, rm, show (table output), tier (refuses full with session-only guidance), test (dry-run decision print). AC: POL-004
+- [x] T2.3 CLI tests against temp AGIS_HOME: init/set/show/test/rm round-trip; tier full refusal; exit codes 0/1. AC: POL-004 scenarios
 
 ## Phase 3: Wire format, loop, local backend (PR3)
 
