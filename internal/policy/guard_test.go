@@ -215,7 +215,7 @@ func TestMatchPattern_ExactPrefixPath(t *testing.T) {
 		want             bool
 	}{
 		{"git status", "git", true},
-		{"gitx", "git", false},           // prefix requires separator
+		{"gitx", "git", false}, // prefix requires separator
 		{"~/Documents/a.txt", "~/Documents", true},
 		{"~/DocumentsX", "~/Documents", false},
 		{"git", "git", true},
