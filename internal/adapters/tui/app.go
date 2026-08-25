@@ -263,7 +263,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pending = &msg.req
 		return m.feedback(fmt.Sprintf(
 			"approve [%s] %s — [a]llow once, [s]ession, a[l]ways, [n]o",
-			msg.req.Backend, msg.req.Subject)), nil
+			msg.req.Backend, msg.req.Subject)), m.waitApproval()
 	}
 
 	// Delegate everything else to the input and spinner widgets.

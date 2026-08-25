@@ -257,7 +257,7 @@ func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message
 				continue
 			}
 			text.WriteString(ev.Text)
-			if b.sink != nil && !capReached {
+			if b.sink != nil {
 				b.sink(ev.Text)
 			}
 		}

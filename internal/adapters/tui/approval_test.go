@@ -105,3 +105,26 @@ func resolve(t *testing.T, m *Model, key string) *Model {
 	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
 	return model.(*Model)
 }
+
+func TestApproval_SecondAskStillReachesUI(t *testing.T) {
+	m, reqCh, respCh := newApprovalModel(t)
+	deliverApproval(t, m, reqCh, "first command")
+	m = resolve(t, m, "a")
+	<-respCh // drain the first resolution
+
+	// A second ask must re-arm the watcher: deliver it through the same path.
+	reqCh <- core.GuardRequest{Backend: "local", Category: "commands", Subject: "second command"}
+	cmd := m.waitApproval()
+	msg := cmd()
+	if _, ok := msg.(approvalMsg); !ok {
+		t.Fatalf("second ask msg = %T, want approvalMsg (watcher re-armed)", msg)
+	}
+	m.Update(msg)
+	if !strings.Contains(m.View(), "second command") {
+		t.Errorf("View() = %q, want the second prompt", m.View())
+	}
+	m = resolve(t, m, "n")
+	if got := <-respCh; got != core.ScopeDeny {
+		t.Errorf("second resolution = %v, want deny", got)
+	}
+}

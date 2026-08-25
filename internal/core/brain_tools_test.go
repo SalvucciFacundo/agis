@@ -243,3 +243,26 @@ func TestCommandFromArgs(t *testing.T) {
 		t.Error("empty command accepted")
 	}
 }
+
+func TestBrainLoop_CapFinalAnswerStillStreams(t *testing.T) {
+	calls := toolCallEvents("call_x")
+	rounds := make([][]StreamEvent, maxToolRounds+1)
+	for i := range rounds {
+		rounds[i] = calls
+	}
+	rounds[maxToolRounds] = []StreamEvent{{Text: "final visible answer"}}
+	provider := &scriptedToolProvider{rounds: rounds}
+
+	var streamed strings.Builder
+	brain := NewBrain(newFakeRepo(), provider,
+		WithSink(func(s string) { streamed.WriteString(s) }),
+		WithTools(&fakeRunner{}, &mapGuard{verdicts: map[string]Decision{"git status": DecisionAllow}}, nil),
+	)
+
+	if err := brain.Step(context.Background(), "loop"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+	if !strings.Contains(streamed.String(), "final visible answer") {
+		t.Errorf("sink = %q, want the forced final answer streamed live", streamed.String())
+	}
+}
