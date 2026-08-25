@@ -48,12 +48,12 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: Integration (PR4)
 
-- [ ] T4.1 Core: `SkillHub` consumer-side port, `WithIdentity`, `WithSkills`, `WithSkillCreator`, `SetOverlay`; compose identity text = SOUL + overlay + evolution at Step start; prepend system slots identity→skills(matched, RecordUse)→recall, omit empties. Tests: slot order full stack + bare minimum. AC: BRN-001
-- [ ] T4.2 Wire creator into `CloseSession` after summarizer, same timeout, non-fatal, kill switch respected. Tests: created skill + event; extractor error continues. AC: BRN-003/SKL-004
-- [ ] T4.3 TUI slash dispatcher in `app.go`: exact-match first token; `/personality <name|none>` calls overlay resolver; `/persona freeze|reset|status` drives evolution; feedback lines prefixed `· `, never persisted/sent; unknown → error line. Tests through drive helpers. AC: TUI-001
-- [ ] T4.4 Wire `cmd/agis/main.go`: load persona + hub + registry sync at startup, options into Brain/TUI. Manual harness: seeded SOUL on first run, `/persona status`, quit-close extraction
-- [ ] T4.5 Docs: create `docs/skills.md` + `docs/persona.md`; update `docs/configuration.md` (agent/skills blocks), README roadmap table (M2 DONE, M3 DONE), roadmap.md M3 section
-- [ ] T4.6 Full suite green: `go build ./...`, `go vet ./...`, `go test ./...` under goleak
+- [x] T4.1 Core: `SkillHub` consumer-side port, `WithIdentity`, `WithSkills`, `WithSkillCreator`, `SetOverlay`; compose identity text = SOUL + overlay + evolution at Step start; prepend system slots identity→skills(matched, RecordUse)→recall, omit empties. Tests: slot order full stack + bare minimum. AC: BRN-001
+- [x] T4.2 Wire creator into `CloseSession` after summarizer, same timeout, non-fatal, kill switch respected. Tests: created skill + event; extractor error continues. AC: BRN-003/SKL-004
+- [x] T4.3 TUI slash dispatcher in `app.go`: exact-match first token; `/personality <name|none>` calls overlay resolver; `/persona freeze|reset|status` drives evolution; feedback lines prefixed `· `, never persisted/sent; unknown → error line. Tests through drive helpers. AC: TUI-001
+- [x] T4.4 Wire `cmd/agis/main.go`: load persona + hub + registry sync at startup, options into Brain/TUI. Manual harness: seeded SOUL on first run, `/persona status`, quit-close extraction
+- [x] T4.5 Docs: create `docs/skills.md` + `docs/persona.md`; update `docs/configuration.md` (agent/skills blocks), README roadmap table (M2 DONE, M3 DONE), roadmap.md M3 section
+- [x] T4.6 Full suite green: `go build ./...`, `go vet ./...`, `go test ./...` under goleak
 
 ## Dependency Ordering
 

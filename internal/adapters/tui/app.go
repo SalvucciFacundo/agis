@@ -10,6 +10,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/SalvucciFacundo/agis/internal/core"
+	"github.com/SalvucciFacundo/agis/internal/persona"
 )
 
 // Viewport line prefixes for the message kinds the TUI renders.
@@ -56,6 +58,16 @@ func WithCloseTimeout(d time.Duration) Option {
 			m.closeTimeout = d
 		}
 	}
+}
+
+// WithOverlays wires the /personality resolver.
+func WithOverlays(o *persona.Overlays) Option {
+	return func(m *Model) { m.overlays = o }
+}
+
+// WithEvolution wires the /persona command target.
+func WithEvolution(e *persona.Evolution) Option {
+	return func(m *Model) { m.evolution = e }
 }
 
 // Model is the Bubbletea TUI. It owns a Brain and a Repository; the stream
@@ -98,6 +110,12 @@ type Model struct {
 	closeTimeout time.Duration
 	closing      bool
 	status       string
+
+	// overlays resolves /personality names; evolution backs /persona
+	// commands. Both may be nil, which disables the corresponding commands.
+	overlays    *persona.Overlays
+	evolution   *persona.Evolution
+	personality string // active overlay name for status display
 }
 
 // tokenMsg carries one streamed assistant token into the update loop.
@@ -270,6 +288,9 @@ func (m *Model) submit() (tea.Model, tea.Cmd) {
 	if input == "" {
 		return m, nil
 	}
+	if strings.HasPrefix(input, "/") {
+		return m.runCommand(input)
+	}
 
 	m.streaming = true
 	m.current.Reset()
@@ -378,4 +399,124 @@ func formatMessage(msg core.Message) string {
 	default:
 		return string(msg.Role) + ": " + msg.Content
 	}
+}
+
+// commandFeedbackPrefix marks local command output lines in the viewport.
+const commandFeedbackPrefix = "· "
+
+// runCommand handles slash commands locally: they never reach the provider
+// and never persist as conversation messages (spec TUI-001).
+func (m *Model) runCommand(input string) (tea.Model, tea.Cmd) {
+	fields := strings.Fields(input)
+	switch fields[0] {
+	case "/personality":
+		return m.cmdPersonality(fields[1:])
+	case "/persona":
+		return m.cmdPersona(fields[1:])
+	default:
+		return m.feedback("unknown command: " + fields[0]), nil
+	}
+}
+
+// feedback appends a prefixed line to the viewport.
+func (m *Model) feedback(line string) *Model {
+	m.history.WriteString(commandFeedbackPrefix + line + "\n")
+	m.refresh()
+	return m
+}
+
+// cmdPersonality applies or clears the session overlay.
+func (m *Model) cmdPersonality(args []string) (tea.Model, tea.Cmd) {
+	if len(args) == 0 {
+		current := m.personality
+		if current == "" {
+			current = "none"
+		}
+		names := ""
+		if m.overlays != nil {
+			names = strings.Join(m.overlays.Names(), ", ")
+		}
+		return m.feedbackEcho(fmt.Sprintf("personality: %s (available: %s)", current, names))
+	}
+
+	name := strings.ToLower(strings.TrimSpace(args[0]))
+	if m.overlays == nil {
+		return m.feedbackEcho("personalities are not wired")
+	}
+	text, err := m.overlays.Resolve(name)
+	if err != nil {
+		return m.feedbackEcho(fmt.Sprintf("unknown personality %q", name))
+	}
+	m.brain.SetOverlay(text)
+	m.personality = name
+	if text == "" {
+		m.personality = ""
+		return m.feedbackEcho("personality cleared")
+	}
+	return m.feedbackEcho("personality: " + name)
+}
+
+// cmdPersona drives the evolution layer commands.
+func (m *Model) cmdPersona(args []string) (tea.Model, tea.Cmd) {
+	if len(args) == 0 {
+		return m.feedbackEcho("usage: /persona freeze|reset|status")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultCloseTimeout)
+	defer cancel()
+
+	switch args[0] {
+	case "freeze":
+		if m.evolution == nil {
+			return m.feedbackEcho("evolution is not wired")
+		}
+		m.evolution.Freeze()
+		return m.feedbackEcho("persona evolution frozen for this session")
+	case "reset":
+		if m.evolution == nil {
+			return m.feedbackEcho("evolution is not wired")
+		}
+		if err := m.evolution.Reset(ctx); err != nil {
+			return m.feedbackEcho("persona reset failed: " + err.Error())
+		}
+		return m.feedbackEcho("persona evolution reset to seed state")
+	case "status":
+		st, err := m.evolutionStatus(ctx)
+		if err != nil {
+			return m.feedbackEcho("persona status failed: " + err.Error())
+		}
+		mode := "active"
+		switch {
+		case m.evolution == nil:
+			mode = "not wired"
+		case st.Frozen:
+			mode = "frozen"
+		case !st.Active:
+			mode = "learning (no rows yet)"
+		}
+		return m.feedbackEcho(fmt.Sprintf(
+			"persona: evolution %s (%d rows) · personality %s",
+			mode, st.Rows, m.personalityOrNone()))
+	default:
+		return m.feedbackEcho(fmt.Sprintf("unknown /persona command %q", args[0]))
+	}
+}
+
+func (m *Model) evolutionStatus(ctx context.Context) (persona.Status, error) {
+	if m.evolution == nil {
+		return persona.Status{}, nil
+	}
+	return m.evolution.Status(ctx)
+}
+
+func (m *Model) personalityOrNone() string {
+	if m.personality == "" {
+		return "none"
+	}
+	return m.personality
+}
+
+// feedbackEcho writes the feedback line and returns the model with no
+// follow-up command.
+func (m *Model) feedbackEcho(line string) (tea.Model, tea.Cmd) {
+	return m.feedback(line), nil
 }

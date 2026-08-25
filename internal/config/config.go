@@ -170,6 +170,12 @@ func applyDefaults(cfg *Config) {
 	}
 }
 
+// AgisHome exposes the resolved AGIS home directory ($AGIS_HOME or
+// ~/.agis). Identity, skills, and the registry live here.
+func AgisHome() string {
+	return agisDir()
+}
+
 // defaultSkillsDir returns $AGIS_HOME/skills (or ~/.agis/skills).
 func defaultSkillsDir() string {
 	return filepath.Join(agisDir(), skillsDirName)
