@@ -25,6 +25,10 @@ func openTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
+// latestVersion is the highest embedded migration version. Update when a new
+// migrations/*.sql file is added.
+const latestVersion = 3
+
 func TestMigrations(t *testing.T) {
 	ctx := context.Background()
 	db := openTestDB(t)
@@ -33,18 +37,18 @@ func TestMigrations(t *testing.T) {
 		t.Fatalf("applyMigrations() error = %v", err)
 	}
 
-	// user_version advanced to 2.
+	// user_version advanced to the latest migration version.
 	var v int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
 		t.Fatalf("reading user_version: %v", err)
 	}
-	if v != 2 {
-		t.Errorf("user_version = %d, want 2", v)
+	if v != latestVersion {
+		t.Errorf("user_version = %d, want %d", v, latestVersion)
 	}
 
-	// The three base tables, the FTS table, and the two M2 tables exist.
+	// The base tables, the FTS table, and the learning-loop tables exist.
 	for _, table := range []string{
-		"conversations", "messages", "observations", "memory_fts", "user_model", "session_events",
+		"conversations", "messages", "observations", "memory_fts", "user_model", "session_events", "skills",
 	} {
 		var name string
 		err := db.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE name = ?`, table).Scan(&name)
@@ -77,8 +81,8 @@ func TestMigrations_Idempotent(t *testing.T) {
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
 		t.Fatalf("reading user_version: %v", err)
 	}
-	if v != 2 {
-		t.Errorf("user_version = %d, want 2", v)
+	if v != latestVersion {
+		t.Errorf("user_version = %d, want %d", v, latestVersion)
 	}
 }
 
@@ -117,8 +121,8 @@ func TestMigration_V1ToV2(t *testing.T) {
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
 		t.Fatalf("reading user_version: %v", err)
 	}
-	if v != 2 {
-		t.Errorf("user_version = %d, want 2", v)
+	if v != latestVersion {
+		t.Errorf("user_version = %d, want %d", v, latestVersion)
 	}
 
 	// updated_at backfilled from created_at.
