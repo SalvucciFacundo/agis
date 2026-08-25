@@ -7,7 +7,6 @@ package persona
 
 import (
 	"embed"
-	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -69,7 +68,8 @@ func LoadSoul(soulPath string, logger *slog.Logger) (string, error) {
 	case os.IsNotExist(err):
 		def := DefaultIdentity()
 		if mkErr := os.MkdirAll(filepath.Dir(soulPath), 0o700); mkErr != nil {
-			return def, fmt.Errorf("creating AGIS home for SOUL.md: %w", mkErr)
+			logger.Warn("persona: could not create AGIS home; using built-in identity", "error", mkErr)
+			return def, nil
 		}
 		if writeErr := os.WriteFile(soulPath, []byte(def), soulPerm); writeErr != nil {
 			logger.Warn("persona: could not seed SOUL.md; using built-in identity", "error", writeErr)
