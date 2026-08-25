@@ -13,6 +13,18 @@ import (
 // does not bound it.
 const DefaultMatchLimit = 3
 
+// stopWords are dropped from the input before AND matching so natural
+// language phrasing ("how do I deploy this") still reaches its keywords
+// without loosening the AND guarantee for meaningful terms.
+var stopWords = map[string]bool{
+	"a": true, "an": true, "and": true, "are": true, "can": true,
+	"do": true, "does": true, "for": true, "how": true, "i": true,
+	"in": true, "is": true, "it": true, "me": true, "my": true,
+	"of": true, "on": true, "or": true, "should": true, "the": true,
+	"this": true, "to": true, "we": true, "what": true, "with": true,
+	"you": true, "your": true,
+}
+
 // Hub is the in-memory skill index. It loads imported skills from a
 // directory, keeps them synced to the repository, matches the current user
 // input against name/trigger/description with whitespace-split AND term
@@ -61,14 +73,20 @@ func (h *Hub) LoadDir(ctx context.Context, dir string) error {
 }
 
 // Match returns up to limit skills whose combined name, trigger, and
-// description contain every whitespace-separated term of the input,
-// case-insensitively. A non-positive limit falls back to DefaultMatchLimit.
+// description contain every whitespace-separated meaningful term of the
+// input (common stop words are dropped first), case-insensitively. A
+// non-positive limit falls back to DefaultMatchLimit.
 func (h *Hub) Match(input string, limit int) []core.Skill {
 	if limit <= 0 {
 		limit = DefaultMatchLimit
 	}
 
-	terms := strings.Fields(strings.ToLower(input))
+	var terms []string
+	for _, w := range strings.Fields(strings.ToLower(input)) {
+		if !stopWords[w] {
+			terms = append(terms, w)
+		}
+	}
 	if len(terms) == 0 {
 		return nil
 	}

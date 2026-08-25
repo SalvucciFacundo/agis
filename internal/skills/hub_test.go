@@ -9,12 +9,10 @@ import (
 	"github.com/SalvucciFacundo/agis/internal/core"
 )
 
-// fakeSkillRepo is a minimal core.Repository double for hub tests. Only the
+// fakeSkillRepo is a stateful core.Repository double for hub tests. Only the
 // skill methods carry behavior; the rest are inert.
 type fakeSkillRepo struct {
-	saved    []core.Skill
-	listed   []core.Skill
-	usage    []string
+	store    []core.Skill
 	failSave error
 }
 
@@ -22,17 +20,20 @@ func (r *fakeSkillRepo) SaveSkill(_ context.Context, s core.Skill) error {
 	if r.failSave != nil {
 		return r.failSave
 	}
-	r.saved = append(r.saved, s)
+	for i := range r.store {
+		if r.store[i].Name == s.Name {
+			r.store[i] = s
+			return nil
+		}
+	}
+	r.store = append(r.store, s)
 	return nil
 }
 
 func (r *fakeSkillRepo) ListSkills(context.Context) ([]core.Skill, error) {
-	return r.listed, nil
-}
-
-func (r *fakeSkillRepo) RecordSkillUsage(_ context.Context, name string) error {
-	r.usage = append(r.usage, name)
-	return nil
+	out := make([]core.Skill, len(r.store))
+	copy(out, r.store)
+	return out, nil
 }
 
 func (r *fakeSkillRepo) CreateConversation(context.Context, string) (*core.Conversation, error) {
@@ -60,6 +61,8 @@ func (r *fakeSkillRepo) UpdateConversationSummary(context.Context, string, strin
 	return nil
 }
 func (r *fakeSkillRepo) UpsertUserModel(context.Context, []core.UserModel) error { return nil }
+func (r *fakeSkillRepo) RecordSkillUsage(context.Context, string) error          { return nil }
+
 func (r *fakeSkillRepo) RecordSessionEvent(context.Context, string, string, string) error {
 	return nil
 }
@@ -70,7 +73,7 @@ func TestHub_LoadDirSyncsImportsAndIndexesAll(t *testing.T) {
 	dir := t.TempDir()
 	writeSkill(t, dir, "deploy.md", "---\nname: deploy-notes\ndescription: ship a release\ntrigger: deploy\n---\n\nsteps here\n")
 
-	repo := &fakeSkillRepo{listed: []core.Skill{
+	repo := &fakeSkillRepo{store: []core.Skill{
 		{Name: "old-agent-skill", Description: "legacy agent skill", Source: core.SourceAgent},
 	}}
 	hub := NewHub(repo, discardLogger())
@@ -79,8 +82,14 @@ func TestHub_LoadDirSyncsImportsAndIndexesAll(t *testing.T) {
 		t.Fatalf("LoadDir() error = %v", err)
 	}
 
-	if len(repo.saved) != 1 || repo.saved[0].Name != "deploy-notes" || repo.saved[0].Source != core.SourceImported {
-		t.Errorf("saved = %+v, want the imported skill", repo.saved)
+	saved := 0
+	for _, s := range repo.store {
+		if s.Name == "deploy-notes" && s.Source == core.SourceImported {
+			saved++
+		}
+	}
+	if saved != 1 {
+		t.Errorf("imported skill persisted %d times, want exactly 1 (store = %+v)", saved, repo.store)
 	}
 	if len(hub.Skills()) != 2 {
 		t.Fatalf("index has %d skills, want 2 (import + existing agent)", len(hub.Skills()))
@@ -101,8 +110,8 @@ func TestHub_MatchANDSemantics(t *testing.T) {
 		limit int
 		want  []string
 	}{
-		{"trigger term matches", "how do I deploy this", 0, []string{"deploy-notes"}},
-		{"case insensitive", "DEPLOY", 0, []string{"deploy-notes"}},
+		{"trigger term matches after stop words", "how do I deploy this", 0, []string{"deploy-notes", "release-checklist"}},
+		{"case insensitive", "DEPLOY", 0, []string{"deploy-notes", "release-checklist"}},
 		{"multi-term AND over fields", "deploy release notes", 0, []string{"deploy-notes"}},
 		{"term outside haystack excludes", "coffee weather", 0, nil},
 		{"shared term hits several, order kept", "deploy", 0, []string{"deploy-notes", "release-checklist"}},
@@ -123,14 +132,25 @@ func TestHub_MatchANDSemantics(t *testing.T) {
 	}
 }
 
-func TestHub_RecordUseSwallowsRepoError(t *testing.T) {
-	repo := &fakeSkillRepo{}
+// recordingUsageRepo wraps a repo to observe RecordSkillUsage reaching it.
+type recordingUsageRepo struct {
+	fakeSkillRepo
+	usage []string
+}
+
+func (r *recordingUsageRepo) RecordSkillUsage(_ context.Context, name string) error {
+	r.usage = append(r.usage, name)
+	return nil
+}
+
+func TestHub_RecordUseReachesRepo(t *testing.T) {
+	repo := &recordingUsageRepo{}
 	hub := NewHub(repo, discardLogger())
 
 	hub.RecordUse(context.Background(), "anything")
 
-	if len(repo.usage) != 1 {
-		t.Errorf("usage calls = %d, want 1 (errors logged, not returned)", len(repo.usage))
+	if len(repo.usage) != 1 || repo.usage[0] != "anything" {
+		t.Errorf("usage = %v, want one call for anything", repo.usage)
 	}
 }
 
