@@ -10,10 +10,12 @@ type Provider interface {
 	Models() []ModelInfo
 }
 
-// StreamEvent is one token of a streaming response. Exactly one of Text or
-// Err is meaningful per event. A provider MUST close the channel after
-// emitting a terminal Err event.
+// StreamEvent is one event of a streaming response. Exactly one of Text,
+// ToolCall, or Err is meaningful per event. A provider MUST close the channel
+// after emitting a terminal Err event. ToolCall events are additive in M4:
+// streams without tools emit only Text/Err exactly as before.
 type StreamEvent struct {
-	Text string
-	Err  error
+	Text     string
+	ToolCall *ToolCall
+	Err      error
 }
