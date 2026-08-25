@@ -178,8 +178,13 @@ func (c *Client) streamEvents(body io.Reader, ch chan<- core.StreamEvent) {
 	}
 	var accOrder []int
 	acc := map[int]*accToolCall{}
+	flushed := false
 
 	flushToolCalls := func() {
+		if flushed {
+			return
+		}
+		flushed = true
 		for _, idx := range accOrder {
 			a := acc[idx]
 			ch <- core.StreamEvent{ToolCall: &core.ToolCall{
