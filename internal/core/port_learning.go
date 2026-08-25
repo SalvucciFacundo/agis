@@ -36,6 +36,31 @@ type SkillCreator interface {
 // defaultSkillMatchLimit caps how many skills enter context per turn.
 const defaultSkillMatchLimit = 3
 
+// maxToolRounds bounds the tool execution loop inside one Step (spec TOL-002).
+// When reached, pending tool calls are dropped and audited, the model is told
+// to answer directly, and the final round runs without tools advertised.
+const maxToolRounds = 8
+
+// shellToolDef is the advertised surface of the shell backend.
+func shellToolDef() ToolDef {
+	return ToolDef{
+		Name:        "shell",
+		Description: `Run a shell command. Arguments: {"command": "<the command string>"}. Prefer read-only commands.`,
+	}
+}
+
+// ToolRunner executes approved commands on one backend.
+type ToolRunner interface {
+	Run(ctx context.Context, command string) (string, error)
+	Backend() string
+}
+
+// Approver resolves an ask decision interactively. Implementations block until
+// the user answers; returning Deny (or an empty scope) blocks the action.
+// Persisting session/always grants is the approver side's responsibility —
+// never the brain's.
+type Approver func(ctx context.Context, req GuardRequest) Scope
+
 // skillsSystemMessage renders matched skills as one system message.
 func skillsSystemMessage(matched []Skill) string {
 	var b strings.Builder
