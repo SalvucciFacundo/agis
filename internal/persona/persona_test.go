@@ -198,6 +198,12 @@ func (r *fakeEvolutionRepo) UpsertUserModel(context.Context, []core.UserModel) e
 func (r *fakeEvolutionRepo) RecordSessionEvent(context.Context, string, string, string) error {
 	return nil
 }
+func (r *fakeEvolutionRepo) AppendAudit(context.Context, core.AuditEntry) error { return nil }
+
+func (r *fakeEvolutionRepo) AuditTail(context.Context, int) ([]core.AuditEntry, error) {
+	return nil, nil
+}
+
 func (r *fakeEvolutionRepo) SaveSkill(context.Context, core.Skill) error { return nil }
 func (r *fakeEvolutionRepo) ListSkills(context.Context) ([]core.Skill, error) {
 	return nil, nil

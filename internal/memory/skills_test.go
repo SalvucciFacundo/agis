@@ -165,3 +165,37 @@ func TestRecordSkillUsage_UnknownNameNotFound(t *testing.T) {
 		t.Errorf("error = %v, want wrap of ErrNotFound", err)
 	}
 }
+
+func TestAppendAuditAndTail(t *testing.T) {
+	ctx := context.Background()
+	repo := openTestRepo(t)
+
+	for i, d := range []string{"deny", "allow", "ask"} {
+		if err := repo.AppendAudit(ctx, core.AuditEntry{
+			Backend: "local", Category: "commands", Subject: "cmd", Decision: d,
+			Scope: map[bool]string{true: "once"}[i == 2],
+		}); err != nil {
+			t.Fatalf("AppendAudit(%d) error = %v", i, err)
+		}
+	}
+
+	got, err := repo.AuditTail(ctx, 2)
+	if err != nil {
+		t.Fatalf("AuditTail() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d entries, want 2 (tail limit)", len(got))
+	}
+	// Newest first.
+	if got[0].Decision != "ask" || got[0].Scope != "once" {
+		t.Errorf("newest = %+v, want the ask/once entry", got[0])
+	}
+	if got[1].Decision != "allow" {
+		t.Errorf("second = %+v, want the allow entry", got[1])
+	}
+
+	all, err := repo.AuditTail(ctx, 0)
+	if err != nil || len(all) != 3 {
+		t.Errorf("unbounded tail = %d entries, %v; want 3, nil", len(all), err)
+	}
+}

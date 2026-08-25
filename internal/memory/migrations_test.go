@@ -27,7 +27,7 @@ func openTestDB(t *testing.T) *sql.DB {
 
 // latestVersion is the highest embedded migration version. Update when a new
 // migrations/*.sql file is added.
-const latestVersion = 3
+const latestVersion = 4
 
 func TestMigrations(t *testing.T) {
 	ctx := context.Background()

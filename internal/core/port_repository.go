@@ -64,5 +64,13 @@ type Repository interface {
 	// the named skill. An unknown name returns an error wrapping ErrNotFound.
 	RecordSkillUsage(ctx context.Context, name string) error
 
+	// AppendAudit records one security-relevant event (policy decision, grant,
+	// revocation, tier change). Audit failures never block decisions; the
+	// guard logs them.
+	AppendAudit(ctx context.Context, entry AuditEntry) error
+
+	// AuditTail returns up to n audit entries, newest first.
+	AuditTail(ctx context.Context, n int) ([]AuditEntry, error)
+
 	Close() error
 }

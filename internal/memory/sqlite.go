@@ -645,3 +645,47 @@ func scanSkill(sc scanner) (core.Skill, error) {
 	s.CreatedAt = created
 	return s, nil
 }
+
+// AppendAudit records one security-relevant event.
+func (r *Repository) AppendAudit(ctx context.Context, e core.AuditEntry) error {
+	if _, err := r.db.ExecContext(ctx,
+		`INSERT INTO audit_log (ts, backend, category, subject, decision, scope)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		formatTime(time.Now().UTC()), e.Backend, e.Category, e.Subject, e.Decision, e.Scope); err != nil {
+		return fmt.Errorf("appending audit entry: %w", err)
+	}
+	return nil
+}
+
+// AuditTail returns up to n audit entries, newest first.
+func (r *Repository) AuditTail(ctx context.Context, n int) ([]core.AuditEntry, error) {
+	q := `SELECT id, ts, backend, category, subject, decision, scope FROM audit_log ORDER BY id DESC`
+	args := []any{}
+	if n > 0 {
+		q += ` LIMIT ?`
+		args = append(args, n)
+	}
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("reading audit tail: %w", err)
+	}
+	defer rows.Close()
+
+	var out []core.AuditEntry
+	for rows.Next() {
+		var (
+			e     core.AuditEntry
+			tsStr string
+		)
+		if err := rows.Scan(&e.ID, &tsStr, &e.Backend, &e.Category, &e.Subject, &e.Decision, &e.Scope); err != nil {
+			return nil, fmt.Errorf("scanning audit entry: %w", err)
+		}
+		ts, err := parseTime(tsStr)
+		if err != nil {
+			return nil, fmt.Errorf("parsing audit ts: %w", err)
+		}
+		e.Time = ts
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}

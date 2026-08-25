@@ -22,6 +22,12 @@ func (r *fakeSkillRepo) UserModelRows(context.Context, int) ([]core.UserModel, e
 
 func (r *fakeSkillRepo) ClearUserModel(context.Context) error { return nil }
 
+func (r *fakeSkillRepo) AppendAudit(context.Context, core.AuditEntry) error { return nil }
+
+func (r *fakeSkillRepo) AuditTail(context.Context, int) ([]core.AuditEntry, error) {
+	return nil, nil
+}
+
 func (r *fakeSkillRepo) SaveSkill(_ context.Context, s core.Skill) error {
 	if r.failSave != nil {
 		return r.failSave

@@ -46,6 +46,7 @@ type recordingRepo struct {
 	skills            []core.Skill
 	usedSkill         string
 	userModelRows     []core.UserModel
+	auditEntries      []core.AuditEntry
 }
 
 type recordedEvent struct {
@@ -136,6 +137,17 @@ func (r *recordingRepo) UserModelRows(context.Context, int) ([]core.UserModel, e
 func (r *recordingRepo) ClearUserModel(context.Context) error {
 	r.calls = append(r.calls, "ClearUserModel")
 	return nil
+}
+
+func (r *recordingRepo) AppendAudit(_ context.Context, e core.AuditEntry) error {
+	r.calls = append(r.calls, "AppendAudit")
+	r.auditEntries = append(r.auditEntries, e)
+	return nil
+}
+
+func (r *recordingRepo) AuditTail(context.Context, int) ([]core.AuditEntry, error) {
+	r.calls = append(r.calls, "AuditTail")
+	return r.auditEntries, nil
 }
 
 func (r *recordingRepo) Close() error { return nil }
