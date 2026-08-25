@@ -33,10 +33,19 @@ Change `m2-learning-loop`, archived **2026-08-24**, delivered as 4 stacked PRs m
 
 **Verification:** independent bounded reviews approved per slice (PR3 with zero findings after one abandoned iteration was fixed); `go build ./...`, `go vet ./...`, `go test ./...` green. "Done" criteria met: the curator writes observations, `summary` is populated at close, and `user_model` rows exist with confidence.
 
-## M3 — Skills & persona
+## M3 — Skills & persona ✅ DONE
 
-- Skill hub, agentskills.io-compatible loading, skill creation from experience, skill registry.
-- `SOUL.md` loader (durable identity in `~/.agis`, seeded on first run), persona overlays (`/personality`), seed + evolution model.
+Change `m3-skills-persona`, delivered as 4 stacked PRs merged to main (PR #9 skills substrate → #10 skill hub → #11 persona → integration PR).
+
+**Shipped:**
+
+- Skill hub: agentskills.io-compatible Markdown loading with strict frontmatter validation, AND-term matching over name/trigger/description with stop-word filtering, usage tracking (`usage_count`, `last_used`), atomic `.atl/skill-registry.md` regeneration in `$AGIS_HOME`.
+- Agent-created skills: one bounded LLM call at session close distills reusable procedures into `source=agent` skills; malformed answers log-and-skip; `skill` session events recorded.
+- SOUL.md durable identity: embedded-default seed at first run (0600), never overwritten, fallback on empty/unreadable, prompt-injection scanning.
+- Personality overlays: built-ins (concise/teacher/technical/creative) + config presets; `/personality none|default|neutral` clears; session-scoped only.
+- Derived evolution: top-5 user-model rows by confidence as a guidance layer; `/persona freeze|reset|status`; evolution never rewrites SOUL.md.
+
+**Verification:** independent bounded reviews approved per slice (PR2 and PR3 with zero findings after self-caught fixes); full suite green under goleak. "Done" criteria met: dropped files load and match, close-time creation persists agent skills, first run seeds SOUL.md, `/personality` switches voice next turn, freeze disables evolution.
 
 ## M4 — Tools, backends & permissions
 

@@ -16,6 +16,12 @@ memory:
   recall_limit: 10                # top-N observations injected per turn
   nudge_every: 10                 # curator runs every N assistant messages
   close_timeout: 30s              # bounded wait for session close on quit
+agent:
+  personalities: {}               # custom /personality presets (name -> text)
+  evolution_enabled: true         # derived persona layer from user model
+skills:
+  enabled: true                   # skill hub: loading, matching, creation
+  dir: ~/.agis/skills             # where skill files live
 ```
 
 The `llm` and `db` blocks are the M1 core. The `memory` block tunes the learning loop (curator, summarizer, user model, recall).
@@ -47,6 +53,10 @@ A missing file is **not an error**: the loader falls back to built-in defaults. 
 | `memory.recall_limit` | `10` |
 | `memory.nudge_every` | `10` |
 | `memory.close_timeout` | `30s` |
+| `agent.evolution_enabled` | `true` |
+| `agent.personalities` | (empty) |
+| `skills.enabled` | `true` |
+| `skills.dir` | `$AGIS_HOME/skills` or `~/.agis/skills` |
 
 Defaults apply per-field: a config file that sets only `llm.model` keeps the default provider and database path (`applyDefaults`, `internal/config/config.go:102`).
 
@@ -61,7 +71,7 @@ The learning loop runs by default. When `learning_enabled: false`, the brain is 
 | `nudge_every` | Curator fires every N assistant messages; an explicit `0` disables nudging and survives defaulting on purpose |
 | `close_timeout` | How long quitting waits for the summarizer before giving up (Go duration string, e.g. `30s`, `1m`) |
 
-Two values are intentionally exempt from defaulting because their zero/false forms are meaningful — `learning_enabled: false` and `nudge_every: 0`. Keys absent from the file always keep their defaults, so a partial block such as `memory: {recall_limit: 5}` leaves learning enabled.
+Several values are intentionally exempt from defaulting because their zero/false forms are meaningful — `learning_enabled: false`, `nudge_every: 0`, `agent.evolution_enabled: false`, and `skills.enabled: false`. Keys absent from the file always keep their defaults, so a partial block such as `memory: {recall_limit: 5}` leaves every other default intact.
 
 On quit (CtrlC/Esc) the TUI shows a `closing...` status and waits up to `close_timeout` for the session summary to finish before exiting. While streaming, the first press cancels the stream and commits the partial reply; the second force-quits without closing.
 
