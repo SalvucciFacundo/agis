@@ -93,6 +93,10 @@ func (r *fakeRepo) UpsertUserModel(context.Context, []core.UserModel) error { re
 
 func (r *fakeRepo) RecordSessionEvent(context.Context, string, string, string) error { return nil }
 
+func (r *fakeRepo) UserModelRows(context.Context, int) ([]core.UserModel, error) { return nil, nil }
+
+func (r *fakeRepo) ClearUserModel(context.Context) error { return nil }
+
 func (r *fakeRepo) SaveSkill(context.Context, core.Skill) error { return nil }
 
 func (r *fakeRepo) ListSkills(context.Context) ([]core.Skill, error) { return nil, nil }

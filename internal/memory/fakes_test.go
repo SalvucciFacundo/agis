@@ -45,6 +45,7 @@ type recordingRepo struct {
 	savedSkills       []core.Skill
 	skills            []core.Skill
 	usedSkill         string
+	userModelRows     []core.UserModel
 }
 
 type recordedEvent struct {
@@ -124,6 +125,16 @@ func (r *recordingRepo) ListSkills(context.Context) ([]core.Skill, error) {
 func (r *recordingRepo) RecordSkillUsage(_ context.Context, name string) error {
 	r.calls = append(r.calls, "RecordSkillUsage")
 	r.usedSkill = name
+	return nil
+}
+
+func (r *recordingRepo) UserModelRows(context.Context, int) ([]core.UserModel, error) {
+	r.calls = append(r.calls, "UserModelRows")
+	return r.userModelRows, nil
+}
+
+func (r *recordingRepo) ClearUserModel(context.Context) error {
+	r.calls = append(r.calls, "ClearUserModel")
 	return nil
 }
 

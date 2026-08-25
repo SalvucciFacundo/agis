@@ -376,6 +376,53 @@ func (r *Repository) upsertUserModel(ctx context.Context, tx *sql.Tx, u core.Use
 	return nil
 }
 
+// UserModelRows returns up to limit user-model rows ordered by confidence
+// descending, then key ascending. A non-positive limit is unbounded.
+func (r *Repository) UserModelRows(ctx context.Context, limit int) ([]core.UserModel, error) {
+	q := `SELECT id, key, value, confidence, updated_at FROM user_model`
+	args := []any{}
+	if limit > 0 {
+		q += ` ORDER BY confidence DESC, key ASC LIMIT ?`
+		args = append(args, limit)
+	} else {
+		q += ` ORDER BY confidence DESC, key ASC`
+	}
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("listing user model: %w", err)
+	}
+	defer rows.Close()
+
+	var out []core.UserModel
+	for rows.Next() {
+		var u core.UserModel
+		var updatedStr string
+		if err := rows.Scan(&u.ID, &u.Key, &u.Value, &u.Confidence, &updatedStr); err != nil {
+			return nil, fmt.Errorf("scanning user model: %w", err)
+		}
+		updated, err := parseTime(updatedStr)
+		if err != nil {
+			return nil, fmt.Errorf("parsing user model updated_at: %w", err)
+		}
+		u.UpdatedAt = updated
+		out = append(out, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating user model: %w", err)
+	}
+	return out, nil
+}
+
+// ClearUserModel deletes every user-model row. The rows are derived data, so
+// clearing them resets persona evolution without touching observations.
+func (r *Repository) ClearUserModel(ctx context.Context) error {
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM user_model`); err != nil {
+		return fmt.Errorf("clearing user model: %w", err)
+	}
+	return nil
+}
+
 // sessionEventKinds are the allowed session_events.kind values, mirroring the
 // CHECK constraint in 0002_learning.sql.
 var sessionEventKinds = map[string]bool{
