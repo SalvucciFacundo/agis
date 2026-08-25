@@ -54,6 +54,18 @@ type Brain struct {
 	closer SessionCloser
 	logger *slog.Logger
 
+	// identity is the static durable identity text (scanned SOUL.md). overlay
+	// is the session personality overlay set at runtime via SetOverlay.
+	// evolution supplies the derived guidance layer; nil disables it.
+	identity  string
+	overlay   string
+	evolution EvolutionLayer
+
+	// hub matches skills against the user input; creator distills skills at
+	// session close. Both nil-able to disable their behavior.
+	hub     SkillHub
+	creator SkillCreator
+
 	// recallLimit bounds how many observations Step injects into the system
 	// prompt (default 10).
 	recallLimit int
@@ -101,6 +113,34 @@ func WithNudgeEvery(n int) Option {
 	return func(b *Brain) { b.nudgeEvery = n }
 }
 
+// WithIdentity sets the static identity text (scanned SOUL.md). Empty text
+// (the default) omits the identity slot from context assembly.
+func WithIdentity(text string) Option {
+	return func(b *Brain) { b.identity = text }
+}
+
+// WithSkills wires the skill hub for per-turn matching. A nil hub (the
+// default) disables skill injection.
+func WithSkills(h SkillHub) Option {
+	return func(b *Brain) { b.hub = h }
+}
+
+// WithSkillCreator wires close-time skill extraction. A nil creator (the
+// default) disables extraction.
+func WithSkillCreator(c SkillCreator) Option {
+	return func(b *Brain) { b.creator = c }
+}
+
+// WithEvolution wires the derived persona layer. A nil value (the default)
+// omits the evolution slot.
+func WithEvolution(e EvolutionLayer) Option {
+	return func(b *Brain) { b.evolution = e }
+}
+
+// SetOverlay applies or clears (empty text) the session personality overlay.
+// It takes effect from the next turn on.
+func (b *Brain) SetOverlay(text string) { b.overlay = text }
+
 // NewBrain returns a Brain backed by repo and provider.
 func NewBrain(repo Repository, provider Provider, opts ...Option) *Brain {
 	b := &Brain{
@@ -137,7 +177,7 @@ func (b *Brain) Step(ctx context.Context, input string) error {
 		return fmt.Errorf("loading conversation tail: %w", err)
 	}
 
-	messages, err := b.withRecall(ctx, tail)
+	messages, err := b.contextMessages(ctx, tail, input)
 	if err != nil {
 		return err
 	}
@@ -243,11 +283,65 @@ func (b *Brain) CloseSession(ctx context.Context) error {
 		return nil
 	}
 
+	if b.creator != nil {
+		if _, err := b.creator.Extract(ctx, conv.ID, msgs); err != nil {
+			b.logger.Warn("close session: skill extraction", "error", err)
+		}
+	}
+
 	if err := b.repo.RecordSessionEvent(ctx, conv.ID, "summary", ""); err != nil {
 		b.logger.Warn("close session: recording event", "error", err)
 		return nil
 	}
 	return nil
+}
+
+// identityText composes the identity slot from the static SOUL text, the
+// active session overlay, and the evolution layer, joining non-empty parts.
+func (b *Brain) identityText(ctx context.Context) string {
+	parts := make([]string, 0, 3)
+	if b.identity != "" {
+		parts = append(parts, b.identity)
+	}
+	if b.overlay != "" {
+		parts = append(parts, b.overlay)
+	}
+	if b.evolution != nil {
+		if layer := b.evolution.Layer(ctx); layer != "" {
+			parts = append(parts, layer)
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// contextMessages assembles the system slots preceding the conversation tail,
+// in order: composed identity, matched skills, recall observations. Empty
+// layers are omitted entirely (spec BRN-001). Matched skills record usage.
+func (b *Brain) contextMessages(ctx context.Context, tail []Message, input string) ([]Message, error) {
+	var head []Message
+
+	if id := b.identityText(ctx); id != "" {
+		head = append(head, Message{Role: RoleSystem, Content: id})
+	}
+
+	if b.hub != nil {
+		matched := b.hub.Match(input, defaultSkillMatchLimit)
+		if len(matched) > 0 {
+			head = append(head, Message{Role: RoleSystem, Content: skillsSystemMessage(matched)})
+			for _, s := range matched {
+				b.hub.RecordUse(ctx, s.Name)
+			}
+		}
+	}
+
+	recall, err := b.withRecall(ctx, tail)
+	if err != nil {
+		return nil, err
+	}
+	if len(recall) > len(tail) { // a recall message was prepended
+		head = append(head, recall[0])
+	}
+	return append(head, tail...), nil
 }
 
 // withRecall loads the top-N observations and, when any exist, prepends a
