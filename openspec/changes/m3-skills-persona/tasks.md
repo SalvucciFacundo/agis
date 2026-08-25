@@ -41,10 +41,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Persona + config (PR3)
 
-- [ ] T3.1 Config: `agent.personalities` map, `agent.evolution_enabled` (default true, false survives), `skills.enabled`/`skills.dir` (defaults true / `$AGIS_HOME/skills`). Tests: defaults, partial overlay, explicit off survives. AC: CONF-001
-- [ ] T3.2 Create `internal/persona/soul.go`: `//go:embed` default SOUL template; seed-if-missing at 0600, never overwrite, fallback on empty/unreadable, read only from `$AGIS_HOME`; run through `scan.ScanLines`. Tests: seeds/preserves/falls-back/drops-injected. AC: PER-001/002
-- [ ] T3.3 Create `internal/persona/overlay.go`: built-in presets (concise, teacher, technical, creative) + custom from config map; resolve(name) error on unknown; none/default/neutral clears. Tests: preset/custom/unknown/clear. AC: PER-003
-- [ ] T3.4 Create `internal/persona/evolution.go`: assemble layer from top-5 `user_model` rows by confidence; `Freeze()` excludes; `Reset(ctx)` deletes user_model rows via repo; `Status()`. Tests: participates/frozen/reset/status. AC: PER-004
+- [x] T3.1 Config: `agent.personalities` map, `agent.evolution_enabled` (default true, false survives), `skills.enabled`/`skills.dir` (defaults true / `$AGIS_HOME/skills`). Tests: defaults, partial overlay, explicit off survives. AC: CONF-001
+- [x] T3.2 Create `internal/persona/soul.go`: `//go:embed` default SOUL template; seed-if-missing at 0600, never overwrite, fallback on empty/unreadable, read only from `$AGIS_HOME`; run through `scan.ScanLines`. Tests: seeds/preserves/falls-back/drops-injected. AC: PER-001/002
+- [x] T3.3 Create `internal/persona/overlay.go`: built-in presets (concise, teacher, technical, creative) + custom from config map; resolve(name) error on unknown; none/default/neutral clears. Tests: preset/custom/unknown/clear. AC: PER-003
+- [x] T3.4 Create `internal/persona/evolution.go`: assemble layer from top-5 `user_model` rows by confidence; `Freeze()` excludes; `Reset(ctx)` deletes user_model rows via repo; `Status()`. Tests: participates/frozen/reset/status. AC: PER-004
 
 ## Phase 4: Integration (PR4)
 

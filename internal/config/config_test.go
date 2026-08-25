@@ -253,3 +253,50 @@ func TestLoad_MemoryEmptyValuesRestoreDefaults(t *testing.T) {
 		t.Errorf("Memory.CloseTimeout = %v, want restored default 30s", cfg.Memory.CloseTimeout)
 	}
 }
+
+func TestLoad_AgentAndSkillsDefaults(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("AGIS_HOME", home)
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if !cfg.Agent.EvolutionEnabled {
+		t.Error("Agent.EvolutionEnabled = false, want default true")
+	}
+	if cfg.Agent.Personalities != nil && len(cfg.Agent.Personalities) != 0 {
+		t.Errorf("Agent.Personalities = %v, want empty by default", cfg.Agent.Personalities)
+	}
+	if !cfg.Skills.Enabled {
+		t.Error("Skills.Enabled = false, want default true")
+	}
+	if cfg.Skills.Dir != filepath.Join(home, "skills") {
+		t.Errorf("Skills.Dir = %q, want %q", cfg.Skills.Dir, filepath.Join(home, "skills"))
+	}
+}
+
+func TestLoad_AgentExplicitOffSurvives(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("AGIS_HOME", home)
+	writeConfig(t, home, "agent:\n  evolution_enabled: false\n  personalities:\n    mentor: be a mentor\nskills:\n  enabled: false\n  dir: /tmp/my-skills\n", 0o600)
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.Agent.EvolutionEnabled {
+		t.Error("Agent.EvolutionEnabled = true, want explicit false to survive")
+	}
+	if cfg.Agent.Personalities["mentor"] != "be a mentor" {
+		t.Errorf("Agent.Personalities = %v, want the custom preset", cfg.Agent.Personalities)
+	}
+	if cfg.Skills.Enabled {
+		t.Error("Skills.Enabled = true, want explicit false to survive")
+	}
+	if cfg.Skills.Dir != "/tmp/my-skills" {
+		t.Errorf("Skills.Dir = %q, want the explicit override", cfg.Skills.Dir)
+	}
+}

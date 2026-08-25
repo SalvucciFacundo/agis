@@ -37,6 +37,15 @@ type Repository interface {
 	// bumping updated_at on re-save.
 	UpsertUserModel(ctx context.Context, rows []UserModel) error
 
+	// UserModelRows returns up to limit user-model rows ordered by confidence
+	// descending, then key ascending. A non-positive limit is unbounded.
+	UserModelRows(ctx context.Context, limit int) ([]UserModel, error)
+
+	// ClearUserModel deletes every user-model row. The rows are derived data —
+	// rebuildable from observations via AggregateUserModel — so clearing them
+	// resets persona evolution without touching long-term memory.
+	ClearUserModel(ctx context.Context) error
+
 	// RecordSessionEvent appends one observability row about learning-loop
 	// activity. kind is one of "nudge", "summary", or "skill"; sessionID is the
 	// conversation UUID the event belongs to.

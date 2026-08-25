@@ -147,6 +147,10 @@ func (r *fakeRepo) RecordSessionEvent(_ context.Context, sessionID, kind, payloa
 	return nil
 }
 
+func (r *fakeRepo) UserModelRows(context.Context, int) ([]UserModel, error) { return nil, nil }
+
+func (r *fakeRepo) ClearUserModel(context.Context) error { return nil }
+
 func (r *fakeRepo) SaveSkill(context.Context, Skill) error { return nil }
 
 func (r *fakeRepo) ListSkills(context.Context) ([]Skill, error) { return nil, nil }

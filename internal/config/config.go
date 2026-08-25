@@ -29,6 +29,8 @@ const (
 	defaultRecallLimit  = 10
 	defaultNudgeEvery   = 10
 	defaultCloseTimeout = 30 * time.Second
+
+	skillsDirName = "skills"
 )
 
 // Config is the root AGIS configuration.
@@ -36,6 +38,21 @@ type Config struct {
 	LLM    LLMConfig    `yaml:"llm"`
 	DB     DBConfig     `yaml:"db"`
 	Memory MemoryConfig `yaml:"memory"`
+	Agent  AgentConfig  `yaml:"agent"`
+	Skills SkillsConfig `yaml:"skills"`
+}
+
+// AgentConfig carries identity and persona settings: custom personality
+// presets and whether persona evolution participates in prompts.
+type AgentConfig struct {
+	Personalities    map[string]string `yaml:"personalities"`
+	EvolutionEnabled bool              `yaml:"evolution_enabled"`
+}
+
+// SkillsConfig tunes the skill hub: master switch and where skill files live.
+type SkillsConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Dir     string `yaml:"dir"`
 }
 
 // MemoryConfig tunes the M2 learning loop: whether curation runs at all, the
@@ -116,6 +133,13 @@ func defaults() *Config {
 			NudgeEvery:      defaultNudgeEvery,
 			CloseTimeout:    defaultCloseTimeout,
 		},
+		Agent: AgentConfig{
+			EvolutionEnabled: true,
+		},
+		Skills: SkillsConfig{
+			Enabled: true,
+			Dir:     defaultSkillsDir(),
+		},
 	}
 }
 
@@ -141,6 +165,14 @@ func applyDefaults(cfg *Config) {
 	if cfg.Memory.CloseTimeout <= 0 {
 		cfg.Memory.CloseTimeout = defaultCloseTimeout
 	}
+	if cfg.Skills.Dir == "" {
+		cfg.Skills.Dir = defaultSkillsDir()
+	}
+}
+
+// defaultSkillsDir returns $AGIS_HOME/skills (or ~/.agis/skills).
+func defaultSkillsDir() string {
+	return filepath.Join(agisDir(), skillsDirName)
 }
 
 // resolvePath applies the -config flag > AGIS_HOME > default precedence.
