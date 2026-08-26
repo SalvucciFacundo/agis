@@ -39,9 +39,9 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Docs + verification (PR3)
 
-- [ ] T3.1 Update `docs/sessions.md` header to Implemented, document the 7 commands with the lifecycle diagram.
-- [ ] T3.2 Update `docs/configuration.md` if session-related config added (none expected), `README.md` roadmap M5 DONE, `docs/roadmap.md` M5 section to ✅ DONE with shipped bullets.
-- [ ] T3.3 Full suite green: `go build ./...`, `go vet ./...`, `go test ./...` under `goleak`, `golangci-lint` if configured.
+- [x] T3.1 Update `docs/sessions.md` header to Implemented, document the 7 commands with the lifecycle diagram.
+- [x] T3.2 Update `docs/configuration.md` if session-related config added (none expected), `README.md` roadmap M5 DONE, `docs/roadmap.md` M5 section to ✅ DONE with shipped bullets.
+- [x] T3.3 Full suite green: `go build ./...`, `go vet ./...`, `go test ./...` under `goleak`, `golangci-lint` if configured.
 
 ## Dependency Ordering
 

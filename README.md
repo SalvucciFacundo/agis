@@ -4,7 +4,7 @@ A general-purpose autonomous agent in Go: a single static binary, SQLite persist
 
 ## Status
 
-**M1 — Thinking agent with memory: DONE** (archived 2026-08-15). Verified 9/9 requirements, 11/11 scenarios, test suite green (50 test cases across 6 packages). M2–M6 are designed in `spec.md` and tracked in [docs/roadmap.md](docs/roadmap.md).
+**M1 — Thinking agent with memory: DONE** (archived 2026-08-15). Verified 9/9 requirements, 11/11 scenarios, test suite green (50 test cases across 6 packages). M2–M5 are shipped and archived; M6 is designed in `spec.md` and tracked in [docs/roadmap.md](docs/roadmap.md).
 
 ## What works (M1)
 
@@ -54,7 +54,7 @@ db:
 | M2 | Learning loop: curator, nudges, session summarization, user model | **DONE** |
 | M3 | Skills & persona: skill hub, SOUL.md, persona overlays | **DONE** |
 | M4 | Tools, backends & permissions: Policy Guard, `agis policy`, `/permisos` | **DONE** |
-| M5 | Full TUI: slash commands, session browse, interrupt-and-redirect | planned |
+| M5 | Full TUI: slash commands, session browse, interrupt-and-redirect | **DONE** |
 | M6 | Gateway (Telegram/Discord first) + cron + ecosystem | planned |
 
 Full detail in [docs/roadmap.md](docs/roadmap.md).
@@ -64,8 +64,8 @@ Full detail in [docs/roadmap.md](docs/roadmap.md).
 - [docs/architecture.md](docs/architecture.md) — hexagonal layout, ports, data flow, dependency direction
 - [docs/memory.md](docs/memory.md) — SQLite schema, FTS5, embedded migrations, M2 learning-loop vision
 - [docs/configuration.md](docs/configuration.md) — config file, precedence, defaults, security
-- [docs/sessions.md](docs/sessions.md) — session manager design vs. the M1 persistence reality
-- [docs/permissions.md](docs/permissions.md) — permission system design (M4, not yet implemented)
+- [docs/sessions.md](docs/sessions.md) — session lifecycle, 7 slash commands, snapshots (implemented in M5)
+- [docs/permissions.md](docs/permissions.md) — permission system (implemented in M4)
 - [docs/security.md](docs/security.md) — threat model and defenses (partially implemented)
 - [docs/roadmap.md](docs/roadmap.md) — M1 shipped scope, M2–M6 plans, M1 review follow-ups
 

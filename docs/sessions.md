@@ -1,62 +1,59 @@
 # Sessions
 
-A session is a bounded conversation: it has an identity, a lifespan, and at close it produces a summary and candidate observations. The Session Manager is designed in `spec.md` §7; M1 ships the persistence substrate it will run on.
+A session is a bounded conversation: it has an identity, a lifespan, and at close it produces a summary and candidate observations. The Session Manager is implemented in `internal/session` and owns the lifecycle independent of surface (TUI today, gateway and cron in M6).
 
-## What exists today (M1)
+## What exists today (M5)
 
-M1 implements the storage layer, not the session manager. What you can do now:
+M5 implements the full session manager. What you can do now:
 
 - **Persist conversations and messages** — `conversations` and `messages` tables, written transactionally by `Brain.Step` and `Repository.AppendMessage`.
 - **Latest conversation** — `LatestConversation` returns the most recently updated conversation (`ORDER BY updated_at DESC, id DESC`), creating one titled `New session` when none exists.
 - **Restore on TUI startup** — the TUI's `Init` loads the latest conversation and renders its full message history (`internal/adapters/tui/app.go:241`). Launch AGIS and your last session is there.
-- **Single-writer model** — there is exactly one active conversation; `Brain.Step` reuses the latest one (`ensureConversation`, `internal/core/brain.go:93`).
+- **Session lifecycle via slash commands** — `/new`, `/save`, `/list`, `/restore`, `/compress`, `/snapshot`, `/rename` (see table below). Active session id is tracked by `internal/session.Manager` and `Brain.SetActiveConversation`, so every `Step` continues the chosen session.
+- **Title and snapshot persistence** — `ListConversations`, `GetConversation`, `RenameConversation` (with injection scan), `CreateSnapshot`/`ListSnapshots` via `snapshots` table (`internal/memory/migrations/0005_snapshots.sql`).
 
-Messages accumulate in one conversation across runs. The tail sent to the provider is bounded at 50 messages (`tailLimit`, `internal/core/brain.go:13`).
+Messages accumulate in the active conversation across runs. The tail sent to the provider is bounded at 50 messages (`tailLimit`, `internal/core/brain.go:13`).
 
-## Session lifecycle (designed, not implemented)
+## Session lifecycle (implemented in M5)
 
-The full manager arrives with M5. Designed behavior:
-
-1. **Start** — a session is created; cross-session recall loads relevant observations (FTS5) and a context digest.
+1. **Start** — `Manager.NewSession` creates a conversation; `Brain.SetActiveConversation` makes it the target for subsequent `Step` calls. Cross-session recall loads relevant observations (FTS5) and a context digest.
 2. **Run** — messages and tool activity persist incrementally, so a crash loses nothing.
-3. **Close** — on `/new`, `/save`, app exit, or timeout: the curator evaluates pending observations, the summarizer compresses the session into `conversations.summary`, and session-scoped permission grants are discarded.
-4. **Restore** — `/restore <id>` reloads the summary plus the tail of messages; the full history stays queryable via FTS5.
+3. **Close** — on `/new`, `/save`, app exit, or timeout: the curator evaluates pending observations, the summarizer compresses the session into `conversations.summary`, and session-scoped permission grants are discarded via `ClearSessionGrants`.
+4. **Restore** — `/restore <id>` validates via `GetConversation`, switches `Manager` and `Brain` active ids, then reloads `Messages` into the viewport.
 
-## Slash commands (M5)
+## Slash commands (M5 — implemented)
 
-| Command | Purpose | Milestone |
-|---|---|---|
-| `/new` or `/reset` | start a fresh session, closing the current one | M5 |
-| `/save` | persist the current session explicitly | M5 |
-| `/list` | browse recent sessions (id, title, created_at) | M5 |
-| `/restore <id>` | load a session from summary + last messages | M5 |
-| `/compress` | run the session summarizer early, freeing context | M5 |
-| `/snapshot` | capture a point-in-time snapshot of session state | M5 |
-| `/rename <title>` | title the session for later discovery | M5 |
+| Command | Purpose |
+|---|---|
+| `/new` or `/reset` | start a fresh session, closing the current one |
+| `/save` | persist the current session explicitly (feedback `· saved`) |
+| `/list` | browse recent sessions (id, title, created_at) via `ListConversations` |
+| `/restore <id>` | load a session from summary + tail and continue it |
+| `/compress` | run the session summarizer early, freeing context (gated `!streaming && !closing`) |
+| `/snapshot` | capture a point-in-time snapshot (`snapshots` row with `messages_json`) |
+| `/rename <title>` | title the session for later discovery (scanned via `internal/scan`) |
 
-None of these commands exist in the M1 TUI. The TUI's only key handling is Enter (submit), Ctrl+C / Esc (quit), and window-resize.
+All session slash commands are gated while `streaming || closing` and never reach the provider nor persist as messages.
 
-## Today's single-conversation behavior
+## Today's behavior (post-M5)
 
-M1 has no `/new`: there is exactly one active conversation, and every `Brain.Step` continues it. The observable consequences:
+- Restarting AGIS resumes the latest conversation unless you used `/new` or `/restore` to switch. There is now a way to start clean.
+- Every conversation is titled `New session` by default (`defaultTitle` in `internal/memory/sqlite.go:17`); `/rename` changes it and bumps `updated_at` so the renamed session becomes latest.
+- `summary` is populated by the M2 summarizer on close or by `/compress` early; `ListConversations` ordering is `updated_at DESC, id DESC` — shared constant ensures `LatestConversation` == `List` top.
+- Snapshots are point-in-time copies in `snapshots`; full history for a conversation stays queryable via `Messages` and FTS5.
 
-- Restarting AGIS resumes the same conversation — there is no way to start clean yet.
-- Every conversation is titled `New session` (`defaultTitle` in `internal/memory/sqlite.go:17`); `summary` is always `""` because the summarizer is M2.
-- The full history is always reloaded into the TUI on startup; context sent to the provider is bounded at the 50-message tail.
-- Conversation ordering is `updated_at DESC, id DESC` — the newest write wins; UUID ordering is the tie-break for identical timestamps.
+## Crash-safety
 
-## Crash-safety today
+Messages persist incrementally inside `Brain.Step`'s transaction: the user message is committed before the provider is called, so a crash mid-stream never loses your input. The assistant reply commits only when the stream completes. Snapshots are independent inserts and do not affect the active session.
 
-Messages persist incrementally inside `Brain.Step`'s transaction: the user message is committed before the provider is called, so a crash mid-stream never loses your input. The assistant reply commits only when the stream completes. On restart the TUI restores whatever was committed.
+## Where the Session Manager sits
 
-## Where the Session Manager will sit
-
-The M5 manager is a domain component (per the hexagon in `spec.md` §Architecture) that will own session lifecycle **independent of the surface** — the TUI, the future gateway, and cron all attach to sessions. It will build directly on the M1 `Repository` methods (`CreateConversation`, `LatestConversation`, `AppendMessage`, `Messages`, `Search`), which is why M1 scoped the port exactly to those five calls.
+The M5 manager is a domain component (`internal/session/manager.go`) that owns the active session id and the 7 operations, wrapping the `Repository` port. It builds directly on the M1 `Repository` methods plus the 5 new ones added in this milestone. The TUI (`internal/adapters/tui/app.go`) is a thin surface: each slash branch is ≤10 lines plus a feedback line, matching `cmdPersonality`/`cmdPersona` style, and `cmd/agis/main.go` wires the manager via `WithSessionManager` and seeds it from `LatestConversation` on startup.
 
 ## Session-scoped permission grants (M4)
 
-The `session` approval scope from the permission system will live here: grants held in memory for the active session, expiring at close, never persisted. This depends on M4's Policy Guard — see [docs/permissions.md](docs/permissions.md). It is not implemented.
+The `session` approval scope from the permission system lives here: grants held in memory for the active session, expiring at close via `ClearSessionGrants`, never persisted. See [docs/permissions.md](docs/permissions.md).
 
 ## Summary
 
-M1 delivers the durable half of sessions — conversations and messages persist, the latest is restored on startup, writes are crash-safe — and leaves the lifecycle half (commands, summarize, restore-by-id, session-scoped grants) to M4/M5.
+M5 delivers both halves of sessions — the durable half (conversations, messages, snapshots) and the lifecycle half (7 slash commands, active-id switching, early summarization, title management). The manager is surface-agnostic and ready for gateway and cron in M6.
