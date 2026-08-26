@@ -70,3 +70,16 @@ Step MUST route every model-initiated tool request through the PolicyGuard port 
 #### Scenario: Model cannot self-grant
 - GIVEN a model reply attempting to change policy
 - THEN no policy mutation occurs and the attempt is inert data
+
+
+## MODIFIED Requirements
+
+### Requirement: Active conversation tracking
+The Brain MUST delegate active session tracking to the Session Manager via `SetActiveConversation(id)`. `ensureConversation` MUST prefer the manager's active id when set, falling back to `LatestConversation` when empty (startup). `Step` MUST continue appending to the active id.
+
+#### Scenario: Restore switches active session
+- GIVEN manager active id set to past conversation
+- WHEN Step is invoked
+- THEN messages append to that id, not to latest
+
+---

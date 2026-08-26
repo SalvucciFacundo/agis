@@ -98,3 +98,30 @@ Migration 0003 MUST create the `skills` table (`id`, UNIQUE `name`, `description
 #### Scenario: v2 to v3
 - GIVEN user_version=2
 - THEN 0003 applies once, version becomes 3
+
+
+## ADDED Requirements
+
+### Requirement: List and get conversations
+The Repository MUST expose `ListConversations(ctx, limit, offset) ([]Conversation, error)` ordered `updated_at DESC, id DESC` and `GetConversation(ctx, id) (*Conversation, error)`.
+
+#### Scenario: List ordering matches latest
+- GIVEN LatestConversation returns id X
+- THEN ListConversations(1,0)[0].ID == X
+
+### Requirement: Rename conversation
+`RenameConversation(ctx, id, title)` MUST update `conversations.title` and bump `updated_at` (so renamed session becomes latest). Title MUST be scanned for injection before write. Empty title MUST error.
+
+#### Scenario: Rename bumps ordering
+- GIVEN two conversations A (older), B (latest)
+- WHEN A is renamed
+- THEN A becomes latest
+
+### Requirement: Snapshots table
+Migration 0005 MUST create `snapshots` (`id TEXT PRIMARY KEY`, `conversation_id TEXT NOT NULL`, `title TEXT`, `summary TEXT`, `messages_json TEXT NOT NULL`, `created_at TEXT NOT NULL`) with index on `conversation_id`, gated by `user_version`.
+
+#### Scenario: v4→v5
+- GIVEN user_version=4
+- THEN 0005 applies once, version becomes 5
+
+---

@@ -62,3 +62,25 @@ When the guard returns ask during a turn, the TUI MUST show the exact action wit
 - GIVEN an always rule visible in the panel
 - WHEN revoked
 - THEN policy.yaml loses the rule and the audit records the revocation
+
+
+## MODIFIED Requirements
+
+### Requirement: Session slash commands
+Input beginning with `/` that matches `/new`, `/reset`, `/save`, `/list`, `/restore`, `/compress`, `/snapshot`, `/rename` MUST dispatch locally and MUST NOT reach the provider nor persist as a message. Unknown slash MUST print an error line. All session commands MUST be gated with `streaming || closing` check.
+
+#### Scenario: Unknown slash
+- GIVEN `/unknown`
+- THEN error line appears and no provider call occurs
+
+#### Scenario: Commands gated while streaming
+- GIVEN streaming true
+- WHEN `/new` is invoked
+- THEN it is ignored
+
+### Requirement: Session feedback and views
+`/list` MUST render id, title, created_at from `ListConversations`. `/restore` MUST load summary + tail into viewport. `/save` MUST trigger an explicit persist without quitting. Feedback lines MUST use `commandFeedbackPrefix`.
+
+#### Scenario: Save feedback
+- GIVEN `/save`
+- THEN viewport shows `· saved` and no new conversation is created
