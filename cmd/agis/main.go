@@ -21,6 +21,7 @@ import (
 	"github.com/SalvucciFacundo/agis/internal/memory"
 	"github.com/SalvucciFacundo/agis/internal/persona"
 	"github.com/SalvucciFacundo/agis/internal/policy"
+	"github.com/SalvucciFacundo/agis/internal/session"
 	"github.com/SalvucciFacundo/agis/internal/skills"
 	"github.com/SalvucciFacundo/agis/internal/tools"
 )
@@ -92,9 +93,10 @@ func main() {
 		}
 		brainOpts = append(brainOpts, core.WithSkills(hub))
 	}
+	var summarizer *memory.Summarizer
 	if cfg.Memory.LearningEnabled {
 		curator := memory.NewCurator(provider, repo, nil)
-		summarizer := memory.NewSummarizer(provider, repo, nil)
+		summarizer = memory.NewSummarizer(provider, repo, nil)
 		creator := skills.NewCreator(provider, repo, cfg.Skills.Enabled, nil)
 		brainOpts = append(brainOpts,
 			core.WithNudger(curator),
@@ -104,6 +106,7 @@ func main() {
 			core.WithNudgeEvery(cfg.Memory.NudgeEvery),
 		)
 	}
+	sessionManager := session.New(repo, summarizer, slog.Default())
 	// Policy store is always available for the /permisos panel, even when
 	// tools are disabled. Tools wiring reuses the same store instance.
 	pstore, perr := policy.Load(filepath.Join(config.AgisHome(), "policy.yaml"))
@@ -155,10 +158,18 @@ func main() {
 
 	brain := core.NewBrain(repo, provider, brainOpts...)
 
+	// Seed session manager from latest conversation so first turn continues
+	// the same session as before.
+	if conv, err := repo.LatestConversation(ctx); err == nil {
+		sessionManager.SetActive(conv.ID)
+		brain.SetActiveConversation(conv.ID)
+	}
+
 	tuiOpts := []tui.Option{
 		tui.WithCloseTimeout(cfg.Memory.CloseTimeout),
 		tui.WithOverlays(persona.NewOverlays(cfg.Agent.Personalities)),
 		tui.WithPolicy(pstore, pstore),
+		tui.WithSessionManager(sessionManager),
 	}
 	if evolution != nil {
 		tuiOpts = append(tuiOpts, tui.WithEvolution(evolution))
