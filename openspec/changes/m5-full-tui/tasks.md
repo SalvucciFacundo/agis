@@ -24,18 +24,18 @@ Chain strategy: stacked-to-main
 
 ## Phase 1: Repository + Manager substrate (PR1)
 
-- [ ] T1.1 Create `internal/memory/migrations/0005_snapshots.sql` (`snapshots` table: id PK, conversation_id FK, title, summary, messages_json, created_at; index on conversation_id) + bump `user_version` gate. Tests: v4→v5 applies, re-run no-op.
-- [ ] T1.2 Extend `internal/core/port_repository.go`: `ListConversations(limit, offset)`, `GetConversation(id)`, `RenameConversation(id, title)`, `CreateSnapshot`, `ListSnapshots` — all ordered `updated_at DESC, id DESC` where applicable. Scan title via `scan.Lines` before write.
-- [ ] T1.3 Implement `internal/memory/sqlite.go` for new methods: shared ordering constant, `Rename` bumps `updated_at` via `UPDATE ... SET title=?, updated_at=?`, snapshot inserts JSON array of `Messages` for the conversation.
-- [ ] T1.4 Create `internal/session/manager.go`: struct `Manager{repo, activeID, logger}`, methods `NewSession`, `List`, `Get`, `Restore`, `Rename`, `Compress` (early summarizer reusing `SessionCloser`), `Snapshot`, `Save`, `ActiveID`/`SetActive`. `NewSession` also clears `activeID` switch. Tests with fake repo.
+- [x] T1.1 Create `internal/memory/migrations/0005_snapshots.sql` (`snapshots` table: id PK, conversation_id FK, title, summary, messages_json, created_at; index on conversation_id) + bump `user_version` gate. Tests: v4→v5 applies, re-run no-op.
+- [x] T1.2 Extend `internal/core/port_repository.go`: `ListConversations(limit, offset)`, `GetConversation(id)`, `RenameConversation(id, title)`, `CreateSnapshot`, `ListSnapshots` — all ordered `updated_at DESC, id DESC` where applicable. Scan title via `scan.Lines` before write.
+- [x] T1.3 Implement `internal/memory/sqlite.go` for new methods: shared ordering constant, `Rename` bumps `updated_at` via `UPDATE ... SET title=?, updated_at=?`, snapshot inserts JSON array of `Messages` for the conversation.
+- [x] T1.4 Create `internal/session/manager.go`: struct `Manager{repo, activeID, logger}`, methods `NewSession`, `List`, `Get`, `Restore`, `Rename`, `Compress` (early summarizer reusing `SessionCloser`), `Snapshot`, `Save`, `ActiveID`/`SetActive`. `NewSession` also clears `activeID` switch. Tests with fake repo.
 
 ## Phase 2: TUI slash commands + wiring (PR2)
 
-- [ ] T2.1 Add `Brain.SetActiveConversation(id)` and branch in `ensureConversation` to prefer manager id. Test: restore switches active id.
-- [ ] T2.2 Wire Session Manager in `cmd/agis/main.go` via `WithSessionManager` / `WithSession` option, pass to TUI.
-- [ ] T2.3 Implement `internal/adapters/tui/app.go` 7 slash branches in `runCommand`: `/new`/`/reset` → `manager.NewSession` + `brain.SetActive` + feedback; `/save` → `manager.Save`; `/list` → render `List` ids/titles; `/restore <id>` → `Restore` + `loadHistory`; `/compress` → `Compress` gated `!streaming && !closing`; `/snapshot` → `CreateSnapshot` + feedback; `/rename <title>` → `Rename` with scan. Each gated while streaming/closing.
-- [ ] T2.4 Add session list sub-view or inline rendering for `/list` (reuse panel pattern if needed). Tests via `drive` helpers: after `/new` next turn uses new id; `/list` shows titles; gated while streaming ignores.
-- [ ] T2.5 Tests: TUI slash commands through `newTestModel` with fake manager/repo; interrupt-and-redirect reuse existing cancel/drain.
+- [x] T2.1 Add `Brain.SetActiveConversation(id)` and branch in `ensureConversation` to prefer manager id. Test: restore switches active id.
+- [x] T2.2 Wire Session Manager in `cmd/agis/main.go` via `WithSessionManager` / `WithSession` option, pass to TUI.
+- [x] T2.3 Implement `internal/adapters/tui/app.go` 7 slash branches in `runCommand`: `/new`/`/reset` → `manager.NewSession` + `brain.SetActive` + feedback; `/save` → `manager.Save`; `/list` → render `List` ids/titles; `/restore <id>` → `Restore` + `loadHistory`; `/compress` → `Compress` gated `!streaming && !closing`; `/snapshot` → `CreateSnapshot` + feedback; `/rename <title>` → `Rename` with scan. Each gated while streaming/closing.
+- [x] T2.4 Add session list sub-view or inline rendering for `/list` (reuse panel pattern if needed). Tests via `drive` helpers: after `/new` next turn uses new id; `/list` shows titles; gated while streaming ignores.
+- [x] T2.5 Tests: TUI slash commands through `newTestModel` with fake manager/repo; interrupt-and-redirect reuse existing cancel/drain.
 
 ## Phase 3: Docs + verification (PR3)
 

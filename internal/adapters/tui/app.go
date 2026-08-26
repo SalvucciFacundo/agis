@@ -22,6 +22,7 @@ import (
 
 	"github.com/SalvucciFacundo/agis/internal/core"
 	"github.com/SalvucciFacundo/agis/internal/persona"
+	"github.com/SalvucciFacundo/agis/internal/session"
 )
 
 // Viewport line prefixes for the message kinds the TUI renders.
@@ -86,6 +87,13 @@ func WithPolicy(admin core.PolicyAdmin, guard core.PolicyGuard) Option {
 	}
 }
 
+// WithSessionManager wires the M5 session lifecycle owner.
+func WithSessionManager(mgr *session.Manager) Option {
+	return func(m *Model) {
+		m.sessionManager = mgr
+	}
+}
+
 // Model is the Bubbletea TUI. It owns a Brain and a Repository; the stream
 // channel carries assistant tokens from the Brain's sink into the viewport.
 type Model struct {
@@ -146,6 +154,9 @@ type Model struct {
 	policyGuard core.PolicyGuard
 	panel       *Panel
 	showPanel   bool
+
+	// sessionManager owns M5 session lifecycle, wired from main.
+	sessionManager *session.Manager
 }
 
 // tokenMsg carries one streamed assistant token into the update loop.
@@ -543,6 +554,20 @@ func (m *Model) runCommand(input string) (tea.Model, tea.Cmd) {
 		m.panel = p
 		m.showPanel = true
 		return m, nil
+	case "/new", "/reset":
+		return m.cmdNew()
+	case "/save":
+		return m.cmdSave()
+	case "/list":
+		return m.cmdList()
+	case "/restore":
+		return m.cmdRestore(fields[1:])
+	case "/compress":
+		return m.cmdCompress()
+	case "/snapshot":
+		return m.cmdSnapshot()
+	case "/rename":
+		return m.cmdRename(fields[1:])
 	default:
 		return m.feedback("unknown command: " + fields[0]), nil
 	}
@@ -649,4 +674,125 @@ func (m *Model) personalityOrNone() string {
 // follow-up command.
 func (m *Model) feedbackEcho(line string) (tea.Model, tea.Cmd) {
 	return m.feedback(line), nil
+}
+
+func (m *Model) cmdNew() (tea.Model, tea.Cmd) {
+	if m.sessionManager == nil {
+		return m.feedback("session manager not wired"), nil
+	}
+	if m.streaming || m.closing {
+		return m, nil
+	}
+	conv, err := m.sessionManager.NewSession(context.Background())
+	if err != nil {
+		return m.feedback("new session failed: " + err.Error()), nil
+	}
+	m.brain.SetActiveConversation(conv.ID)
+	m.history.Reset()
+	m.current.Reset()
+	m.refresh()
+	return m.feedback("· new session " + conv.ID[:8]), nil
+}
+
+func (m *Model) cmdSave() (tea.Model, tea.Cmd) {
+	if m.sessionManager == nil {
+		return m.feedback("session manager not wired"), nil
+	}
+	if err := m.sessionManager.Save(context.Background()); err != nil {
+		return m.feedback("save failed: " + err.Error()), nil
+	}
+	return m.feedback("· saved"), nil
+}
+
+func (m *Model) cmdList() (tea.Model, tea.Cmd) {
+	if m.sessionManager == nil {
+		return m.feedback("session manager not wired"), nil
+	}
+	convs, err := m.sessionManager.List(context.Background(), 20)
+	if err != nil {
+		return m.feedback("list failed: " + err.Error()), nil
+	}
+	if len(convs) == 0 {
+		return m.feedback("(no sessions)"), nil
+	}
+	var b strings.Builder
+	for _, c := range convs {
+		b.WriteString(fmt.Sprintf("· %s — %s (%s)\n", c.ID[:8], c.Title, c.CreatedAt.Format("2006-01-02 15:04")))
+	}
+	m.history.WriteString(b.String())
+	m.refresh()
+	return m, nil
+}
+
+func (m *Model) cmdRestore(args []string) (tea.Model, tea.Cmd) {
+	if m.sessionManager == nil {
+		return m.feedback("session manager not wired"), nil
+	}
+	if m.streaming || m.closing {
+		return m, nil
+	}
+	if len(args) == 0 {
+		return m.feedback("usage: /restore <id>"), nil
+	}
+	id := args[0]
+	if err := m.sessionManager.Restore(context.Background(), id); err != nil {
+		return m.feedback("restore failed: " + err.Error()), nil
+	}
+	m.brain.SetActiveConversation(id)
+	// Load and render the restored conversation
+	msgs, err := m.repo.Messages(context.Background(), id, 0)
+	if err != nil {
+		return m.feedback("restore failed: " + err.Error()), nil
+	}
+	m.history.Reset()
+	for _, msg := range msgs {
+		m.history.WriteString(formatMessage(msg) + "\n")
+	}
+	m.refresh()
+	return m.feedback("· restored " + id[:8]), nil
+}
+
+func (m *Model) cmdCompress() (tea.Model, tea.Cmd) {
+	if m.sessionManager == nil {
+		return m.feedback("session manager not wired"), nil
+	}
+	if m.streaming || m.closing {
+		return m, nil
+	}
+	if err := m.sessionManager.Compress(context.Background()); err != nil {
+		return m.feedback("compress failed: " + err.Error()), nil
+	}
+	return m.feedback("· compressed"), nil
+}
+
+func (m *Model) cmdSnapshot() (tea.Model, tea.Cmd) {
+	if m.sessionManager == nil {
+		return m.feedback("session manager not wired"), nil
+	}
+	snap, err := m.sessionManager.Snapshot(context.Background())
+	if err != nil {
+		return m.feedback("snapshot failed: " + err.Error()), nil
+	}
+	return m.feedback("· snapshot " + snap.ID[:8]), nil
+}
+
+func (m *Model) cmdRename(args []string) (tea.Model, tea.Cmd) {
+	if m.sessionManager == nil {
+		return m.feedback("session manager not wired"), nil
+	}
+	if len(args) == 0 {
+		return m.feedback("usage: /rename <title>"), nil
+	}
+	title := strings.Join(args, " ")
+	activeID := m.sessionManager.ActiveID()
+	if activeID == "" {
+		// Fall back to latest conversation
+		if conv, err := m.repo.LatestConversation(context.Background()); err == nil {
+			activeID = conv.ID
+		}
+	}
+	if err := m.sessionManager.Rename(context.Background(), activeID, title); err != nil {
+		return m.feedback("rename failed: " + err.Error()), nil
+	}
+	return m.feedback("· renamed to " + title), nil
 }
