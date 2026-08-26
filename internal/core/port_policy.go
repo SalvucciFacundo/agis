@@ -95,6 +95,7 @@ type PolicyAdmin interface {
 	RemoveRule(ctx context.Context, category, backend, pattern string) error
 	Rules(ctx context.Context) ([]RuleView, error)
 	SetTier(ctx context.Context, backend string, posture Posture) error
+	Tier(ctx context.Context, backend string) (Posture, error)
 	AuditTail(ctx context.Context, n int) ([]AuditEntry, error)
 	ResolveAsk(ctx context.Context, req GuardRequest, scope Scope) error
 	ClearSessionGrants()

@@ -22,6 +22,16 @@ agent:
 skills:
   enabled: true                   # skill hub: loading, matching, creation
   dir: ~/.agis/skills             # where skill files live
+tools:
+  enabled: false                  # master switch: no tools without explicit opt-in
+  docker:
+    enabled: false
+    image: alpine:3               # ephemeral container image
+  ssh:
+    enabled: false
+    host: ""                      # e.g. vps.example
+    user: ""                      # remote user
+    key_path: ""                  # path to private key
 ```
 
 The `llm` and `db` blocks are the M1 core. The `memory` block tunes the learning loop (curator, summarizer, user model, recall).
@@ -57,6 +67,13 @@ A missing file is **not an error**: the loader falls back to built-in defaults. 
 | `agent.personalities` | (empty) |
 | `skills.enabled` | `true` |
 | `skills.dir` | `$AGIS_HOME/skills` or `~/.agis/skills` |
+| `tools.enabled` | `false` |
+| `tools.docker.enabled` | `false` |
+| `tools.docker.image` | `alpine:3` |
+| `tools.ssh.enabled` | `false` |
+| `tools.ssh.host` | (empty) |
+| `tools.ssh.user` | (empty) |
+| `tools.ssh.key_path` | (empty) |
 
 Defaults apply per-field: a config file that sets only `llm.model` keeps the default provider and database path (`applyDefaults`, `internal/config/config.go:102`).
 
@@ -108,6 +125,10 @@ AGIS_HOME=/srv/agis ./bin/agis -config /srv/agis/config.yaml
 
 `AGIS_HOME` also relocates the database — useful for a portable or multi-instance setup without touching the file.
 
+## Tools
+
+Tools are **opt-in**: set `tools.enabled: true` and enable the backends you want. Missing binaries degrade gracefully with a warning at startup. Every tool call is evaluated by the Policy Guard; see [permissions.md](permissions.md) for the `agis policy` CLI and `/permisos` panel.
+
 ## Not yet implemented
 
-The `-config` flag is the only CLI flag in M1; `agis config set/get` and `agis model` are designed in `spec.md` but not yet implemented.
+`agis config set/get` and `agis model` remain designed in `spec.md` but not yet implemented. Gateway and cron surfaces are M6.

@@ -57,10 +57,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 5: Panel + docs (PR5)
 
-- [ ] T5.1 /permisos panel sub-model in internal/adapters/tui/panel.go: sections rules-by-category / postures / preview / audit; navigation j-k, tab section switch, space toggle action, r revoke always, q close. AC: TUI-003
-- [ ] T5.2 Panel tests through drive helpers: revoke always updates store + audits; preview reflects live decisions. AC: TUI-003
-- [ ] T5.3 Docs: update docs/permissions.md header (implemented in M4), docs/configuration.md tools block, README roadmap M4 DONE, roadmap.md M4 section.
-- [ ] T5.4 Full suite green: go build ./..., go vet ./..., go test ./... under goleak.
+- [x] T5.1 /permisos panel sub-model in internal/adapters/tui/panel.go: sections rules-by-category / postures / preview / audit; navigation j-k, tab section switch, space toggle action, r revoke always, q close. AC: TUI-003
+- [x] T5.2 Panel tests through drive helpers: revoke always updates store + audits; preview reflects live decisions. AC: TUI-003
+- [x] T5.3 Docs: update docs/permissions.md header (implemented in M4), docs/configuration.md tools block, README roadmap M4 DONE, roadmap.md M4 section.
+- [x] T5.4 Full suite green: go build ./..., go vet ./..., go test ./... under goleak.
 
 ## Dependency Ordering
 

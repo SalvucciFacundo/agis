@@ -104,6 +104,14 @@ func main() {
 			core.WithNudgeEvery(cfg.Memory.NudgeEvery),
 		)
 	}
+	// Policy store is always available for the /permisos panel, even when
+	// tools are disabled. Tools wiring reuses the same store instance.
+	pstore, perr := policy.Load(filepath.Join(config.AgisHome(), "policy.yaml"))
+	if perr != nil {
+		slog.Warn("policy: loading (fail-closed)", "error", perr)
+	}
+	pstore.SetAuditSink(repo)
+
 	var approvalReq chan core.GuardRequest
 	var approvalResp chan core.Scope
 	approver := func(ctx context.Context, req core.GuardRequest) core.Scope {
@@ -124,12 +132,6 @@ func main() {
 	}
 
 	if cfg.Tools.Enabled {
-		pstore, perr := policy.Load(filepath.Join(config.AgisHome(), "policy.yaml"))
-		if perr != nil {
-			slog.Warn("policy: loading (fail-closed)", "error", perr)
-		}
-		pstore.SetAuditSink(repo)
-
 		if approvalReq == nil {
 			approvalReq = make(chan core.GuardRequest)
 			approvalResp = make(chan core.Scope)
@@ -156,6 +158,7 @@ func main() {
 	tuiOpts := []tui.Option{
 		tui.WithCloseTimeout(cfg.Memory.CloseTimeout),
 		tui.WithOverlays(persona.NewOverlays(cfg.Agent.Personalities)),
+		tui.WithPolicy(pstore, pstore),
 	}
 	if evolution != nil {
 		tuiOpts = append(tuiOpts, tui.WithEvolution(evolution))

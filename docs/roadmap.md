@@ -1,6 +1,6 @@
 # Roadmap
 
-Milestone scopes come from `spec.md` §Milestones. M1 and M2 are shipped; M3–M6 are planned. The archived M1 requirements live as synced OpenSpec capability specs under `openspec/specs/` (`config-loader`, `repository-memory`, `llm-provider-port`, `brain-loop`, `minimal-tui`), joined by the M2 capabilities (`memory-curator`, `session-summarizer`, `user-model`).
+Milestone scopes come from `spec.md` §Milestones. M1, M2, M3 and M4 are shipped; M5–M6 are planned. The archived requirements live as synced OpenSpec capability specs under `openspec/specs/` (`config-loader`, `repository-memory`, `llm-provider-port`, `brain-loop`, `minimal-tui`, `memory-curator`, `session-summarizer`, `user-model`, `skill-hub`, `persona`, `policy-guard`, `tools-backends`, `tool-calling`).
 
 ## M1 — Thinking agent with memory ✅ DONE
 
@@ -47,11 +47,20 @@ Change `m3-skills-persona`, delivered as 4 stacked PRs merged to main (PR #9 ski
 
 **Verification:** independent bounded reviews approved per slice (PR2 and PR3 with zero findings after self-caught fixes); full suite green under goleak. "Done" criteria met: dropped files load and match, close-time creation persists agent skills, first run seeds SOUL.md, `/personality` switches voice next turn, freeze disables evolution.
 
-## M4 — Tools, backends & permissions
+## M4 — Tools, backends & permissions ✅ DONE
 
-- Local tools with Policy Guard, Docker backend, SSH backend.
-- `agis policy` CLI and `/permisos` TUI panel, interactive approval in the TUI.
-- Full design in [docs/permissions.md](docs/permissions.md) and the security controls in [docs/security.md](docs/security.md). "Done" means Policy Guard is the single enforcement point for real tool calls, `agis policy` works end-to-end, and the audit log records decisions.
+Change `m4-tools-permissions`, archived **2026-08-26**, delivered as 5 stacked PRs merged to main (PR #13 policy core+audit → #14 CLI → #15 wire+loop+local → #16 docker+ssh → #17 panel+docs).
+
+**Shipped:**
+
+- Policy Guard: fail-closed store at `$AGIS_HOME/policy.yaml`, postures `sandbox`/`standard`/`full` (full session-only), decision flow `allow|deny|ask` with `deny` beating `allow`, scopes `once|session|always|deny`, `always` persisting exact-subject allow rules, audit log of every decision/grant/revocation.
+- `agis policy` CLI: `init` (sandbox defaults), `set`/`rm` (per-backend with `-b` flag), `show`, `tier` (refuses `full`), `test` (dry-run preview).
+- Tool-calling wire: additive `ChatRequest.Tools` + `StreamEvent.ToolCall` + `Message.ToolCalls/ToolCallID`; provider accumulates streamed `tool_calls` fragments per index, emits once at `finish_reason`, malformed degrades to text.
+- Bounded brain loop: up to 8 rounds of evaluate→approve→execute→RoleTool feedback; cap audited with user notice; trust boundary kept type-level (brain sees only `PolicyGuard` + `Approver` callback).
+- Backends: local shell (`sh -c`, 60s timeout), docker (`--rm` ephemeral, `alpine:3` default), ssh (strict host-key, optional key) — all behind injectable `cmdExec` seam, graceful degradation when binaries missing or settings incomplete, per-backend routing via `shell-<backend>` tool names.
+- TUI: interactive approval prompt (`[a]llow once [s]ession a[l]ways [n]o`, `CtrlC` denies without quitting, watcher re-arms), and `/permisos` panel (rules by category, postures, live preview via guard, audit tail; `space` toggle, `r` revoke `always`, `q` close).
+
+**Verification:** independent bounded reviews approved per slice (PR3 HIGH with 3 advisories, PR4 HIGH with 1 suggestion); full suite green under `goleak`. "Done" means the single enforcement point holds for real tool calls, the CLI manages policy end-to-end, and decisions are audited.
 
 ## M5 — Full TUI
 
