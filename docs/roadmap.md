@@ -1,6 +1,6 @@
 # Roadmap
 
-Milestone scopes come from `spec.md` §Milestones. M1, M2, M3 and M4 are shipped; M5–M6 are planned. The archived requirements live as synced OpenSpec capability specs under `openspec/specs/` (`config-loader`, `repository-memory`, `llm-provider-port`, `brain-loop`, `minimal-tui`, `memory-curator`, `session-summarizer`, `user-model`, `skill-hub`, `persona`, `policy-guard`, `tools-backends`, `tool-calling`).
+Milestone scopes come from `spec.md` §Milestones. M1, M2, M3, M4 and M5 are shipped; M6 is planned. The archived requirements live as synced OpenSpec capability specs under `openspec/specs/` (`config-loader`, `repository-memory`, `llm-provider-port`, `brain-loop`, `minimal-tui`, `memory-curator`, `session-summarizer`, `user-model`, `skill-hub`, `persona`, `policy-guard`, `tools-backends`, `tool-calling`, `session-manager`).
 
 ## M1 — Thinking agent with memory ✅ DONE
 
@@ -62,9 +62,18 @@ Change `m4-tools-permissions`, archived **2026-08-26**, delivered as 5 stacked P
 
 **Verification:** independent bounded reviews approved per slice (PR3 HIGH with 3 advisories, PR4 HIGH with 1 suggestion); full suite green under `goleak`. "Done" means the single enforcement point holds for real tool calls, the CLI manages policy end-to-end, and decisions are audited.
 
-## M5 — Full TUI
+## M5 — Full TUI ✅ DONE
 
-- Slash commands (`/new`, `/save`, `/list`, `/restore`, `/compress`, `/snapshot`, `/rename`), session browse, interrupt-and-redirect. Design in [docs/sessions.md](docs/sessions.md). "Done" means every command in the table there is wired to the Session Manager and the Repository.
+Change `m5-full-tui`, archived **2026-08-26**, delivered as 3 stacked PRs merged to main (PR #18 repository+manager → #19 TUI slash commands + wiring → #20 docs + polish).
+
+**Shipped:**
+
+- Session Manager (`internal/session`): active session id owned independent of surface, 7 operations (`NewSession`, `Save`, `List` ordered `updated_at DESC, id DESC`, `Restore`, `Rename` with injection scan, `Compress` early summarizer, `Snapshot` point-in-time copy with `messages_json`), share with TUI/gateway/cron.
+- Repository extensions: `ListConversations`/`GetConversation`/`RenameConversation` (bumps `updated_at`, scanned title, empty rejected), `CreateSnapshot`/`ListSnapshots` via `snapshots` table (`internal/memory/migrations/0005_snapshots.sql`).
+- Brain delegation: `SetActiveConversation(id)` and `ensureConversation` prefers manager id when set, falling back to `LatestConversation`.
+- TUI: 7 slash branches in `runCommand` (`/new`/`/reset`, `/save`, `/list` inline, `/restore <id>` reloads history, `/compress` gated, `/snapshot`, `/rename <title>`), all gated `!streaming && !closing`, feedback via `commandFeedbackPrefix`, session list view, interrupt-and-redirect reuse.
+
+**Verification:** independent bounded reviews approved per slice; full suite green under `goleak`. "Done" means every slash command in `docs/sessions.md` is wired and the manager is surface-agnostic.
 
 ## M6 — Gateway + cron + ecosystem
 
