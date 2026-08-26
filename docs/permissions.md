@@ -1,6 +1,6 @@
 # Permissions
 
-> **DESIGNED, NOT IMPLEMENTED.** This is the full permission-system design from `spec.md` §11, targeting **M4**. In M1 there is no Policy Guard, no `policy.yaml`, and no `agis policy` CLI. The M1 surface executes no tools, so nothing here is enforced yet.
+> **Implemented in M4.** Policy Guard is the single enforcement point for every tool call. `policy.yaml` lives at `$AGIS_HOME/policy.yaml`, managed via `agis policy` CLI and the `/permisos` TUI panel.
 
 The permission system is the user-facing layer over the Policy Guard, which is the single enforcement point for every tool call. Modeled on GAIA's `policy init` + `/permisos` panel, generalized for a general-purpose agent — and fully configurable without hand-editing YAML.
 
@@ -66,4 +66,4 @@ agis policy test <command>   # dry-run: would this be allowed/denied/asked?
 - `always` grants are the only persistent approvals; they are visible, revocable, and auditable.
 - The policy file is user-owned, plain text, and versionable.
 
-Backends (`local` shell/fs, `docker`, `ssh`) are part of the M4 scope; the `Tool` port interface is defined in `spec.md` §5. None of it is live in M1.
+Backends (`local` shell/fs, `docker`, `ssh`) are implemented in `internal/tools` (`local.go`, `backends.go`, `registry.go`); the `Tool` port lives in `internal/core/port_learning.go:18`.

@@ -132,7 +132,7 @@ func matchPattern(subject, pattern string) bool {
 }
 
 // SetRule adds or replaces one rule and persists.
-func (s *Store) SetRule(_ context.Context, category, backend, pattern, action string) error {
+func (s *Store) SetRule(ctx context.Context, category, backend, pattern, action string) error {
 	if s.broken {
 		return fmt.Errorf("policy store is in deny-all mode: %w", s.loadErr)
 	}
@@ -146,15 +146,23 @@ func (s *Store) SetRule(_ context.Context, category, backend, pattern, action st
 	for i, r := range rules {
 		if r.Backend == backend && r.Pattern == pattern {
 			rules[i].Action = action
-			return s.save()
+			if err := s.save(); err != nil {
+				return err
+			}
+			s.record(ctx, core.GuardRequest{Backend: backend, Category: category, Subject: pattern}, action, "")
+			return nil
 		}
 	}
 	s.file.Rules[category] = append(rules, ruleYAML{Backend: backend, Pattern: pattern, Action: action})
-	return s.save()
+	if err := s.save(); err != nil {
+		return err
+	}
+	s.record(ctx, core.GuardRequest{Backend: backend, Category: category, Subject: pattern}, action, "")
+	return nil
 }
 
 // RemoveRule deletes every rule matching category/backend/pattern exactly.
-func (s *Store) RemoveRule(_ context.Context, category, backend, pattern string) error {
+func (s *Store) RemoveRule(ctx context.Context, category, backend, pattern string) error {
 	if s.broken {
 		return fmt.Errorf("policy store is in deny-all mode: %w", s.loadErr)
 	}
@@ -167,7 +175,11 @@ func (s *Store) RemoveRule(_ context.Context, category, backend, pattern string)
 		kept = append(kept, r)
 	}
 	s.file.Rules[category] = kept
-	return s.save()
+	if err := s.save(); err != nil {
+		return err
+	}
+	s.record(ctx, core.GuardRequest{Backend: backend, Category: category, Subject: pattern}, "revoke", "")
+	return nil
 }
 
 // Rules returns a flattened view of every stored rule.
@@ -191,7 +203,7 @@ func (s *Store) Rules(_ context.Context) ([]core.RuleView, error) {
 
 // SetTier persists a baseline posture. Full is refused here: it is a
 // session-only escalation managed through TUI approval (POL-004).
-func (s *Store) SetTier(_ context.Context, backend string, posture core.Posture) error {
+func (s *Store) SetTier(ctx context.Context, backend string, posture core.Posture) error {
 	if s.broken {
 		return fmt.Errorf("policy store is in deny-all mode: %w", s.loadErr)
 	}
@@ -199,5 +211,35 @@ func (s *Store) SetTier(_ context.Context, backend string, posture core.Posture)
 		return fmt.Errorf("full posture is session-only; grant it through the TUI panel")
 	}
 	s.file.Tiers[backend] = string(posture)
-	return s.save()
+	if err := s.save(); err != nil {
+		return err
+	}
+	s.record(ctx, core.GuardRequest{Backend: backend, Subject: string(posture)}, "tier", "")
+	return nil
+}
+
+// Tier returns the posture for a backend, defaulting to sandbox.
+func (s *Store) Tier(_ context.Context, backend string) (core.Posture, error) {
+	if s.broken {
+		return "", fmt.Errorf("policy store is in deny-all mode: %w", s.loadErr)
+	}
+	if p, ok := s.file.Tiers[backend]; ok && p != "" {
+		return core.Posture(p), nil
+	}
+	return core.PostureSandbox, nil
+}
+
+// AuditTail delegates to the audit sink's repository when available.
+func (s *Store) AuditTail(ctx context.Context, n int) ([]core.AuditEntry, error) {
+	if s.audit == nil {
+		return nil, nil
+	}
+	// AuditSink is narrower than Repository; check for full tail capability.
+	type tailer interface {
+		AuditTail(ctx context.Context, n int) ([]core.AuditEntry, error)
+	}
+	if t, ok := s.audit.(tailer); ok {
+		return t.AuditTail(ctx, n)
+	}
+	return nil, nil
 }

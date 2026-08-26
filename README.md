@@ -53,7 +53,7 @@ db:
 | M1 | Brain loop, LLM port, SQLite+FTS5 memory, minimal TUI, config | **DONE** |
 | M2 | Learning loop: curator, nudges, session summarization, user model | **DONE** |
 | M3 | Skills & persona: skill hub, SOUL.md, persona overlays | **DONE** |
-| M4 | Tools, backends & permissions: Policy Guard, `agis policy`, `/permisos` | planned |
+| M4 | Tools, backends & permissions: Policy Guard, `agis policy`, `/permisos` | **DONE** |
 | M5 | Full TUI: slash commands, session browse, interrupt-and-redirect | planned |
 | M6 | Gateway (Telegram/Discord first) + cron + ecosystem | planned |
 

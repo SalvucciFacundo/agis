@@ -78,6 +78,14 @@ func WithApprovalChannels(req <-chan core.GuardRequest, resp chan<- core.Scope) 
 	}
 }
 
+// WithPolicy wires the /permisos panel's policy handles.
+func WithPolicy(admin core.PolicyAdmin, guard core.PolicyGuard) Option {
+	return func(m *Model) {
+		m.policyAdmin = admin
+		m.policyGuard = guard
+	}
+}
+
 // Model is the Bubbletea TUI. It owns a Brain and a Repository; the stream
 // channel carries assistant tokens from the Brain's sink into the viewport.
 type Model struct {
@@ -131,6 +139,13 @@ type Model struct {
 	approvalReq  <-chan core.GuardRequest
 	approvalResp chan<- core.Scope
 	pending      *core.GuardRequest
+
+	// policyAdmin/policyGuard back the /permisos panel; panel holds the
+	// sub-model when visible.
+	policyAdmin core.PolicyAdmin
+	policyGuard core.PolicyGuard
+	panel       *Panel
+	showPanel   bool
 }
 
 // tokenMsg carries one streamed assistant token into the update loop.
@@ -200,6 +215,34 @@ func (m *Model) Init() tea.Cmd {
 // Update handles window resizes, keys, and the stream/restore messages. It
 // delegates everything else to the input and spinner widgets.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.showPanel {
+		switch msg := msg.(type) {
+		case closePanelMsg:
+			m.showPanel = false
+			m.panel = nil
+			return m, nil
+		case tea.KeyMsg:
+			if m.panel != nil {
+				newPanel, cmd := m.panel.Update(msg)
+				if p, ok := newPanel.(*Panel); ok {
+					m.panel = p
+				}
+				// Panel signals close via closePanelMsg already handled above;
+				// also check if panel requested close via returned model type.
+				return m, cmd
+			}
+		default:
+			if m.panel != nil {
+				newPanel, cmd := m.panel.Update(msg)
+				if p, ok := newPanel.(*Panel); ok {
+					m.panel = p
+				}
+				return m, cmd
+			}
+		}
+		// Fall through to normal handling for non-panel keys when needed.
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -283,6 +326,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the conversation viewport, the spinner/status line, and the
 // text input.
 func (m Model) View() string {
+	if m.showPanel && m.panel != nil {
+		return m.panel.View()
+	}
 	status := m.status
 	if status == "" && m.streaming {
 		status = m.spinner.View() + " thinking..."
@@ -488,6 +534,15 @@ func (m *Model) runCommand(input string) (tea.Model, tea.Cmd) {
 		return m.cmdPersonality(fields[1:])
 	case "/persona":
 		return m.cmdPersona(fields[1:])
+	case "/permisos":
+		if m.policyAdmin == nil {
+			return m.feedback("policy store not wired"), nil
+		}
+		p := NewPanel(m.policyAdmin, m.policyGuard)
+		_ = p.Refresh(context.Background())
+		m.panel = p
+		m.showPanel = true
+		return m, nil
 	default:
 		return m.feedback("unknown command: " + fields[0]), nil
 	}
