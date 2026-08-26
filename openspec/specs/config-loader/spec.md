@@ -27,3 +27,13 @@ Config MUST support `agent.personalities` (map of custom presets), `agent.evolut
 #### Scenario: Disabled skills
 - GIVEN `skills.enabled: false`
 - THEN no skill loading, matching, or close-time extraction occurs
+
+
+config-loader (MODIFIED)
+
+### Requirement: Tools configuration
+Config MUST support `tools.enabled` (default false — tools are opt-in), `tools.backends.docker` (enabled, image), and `tools.backends.ssh` (enabled, host, user, key_path). Absent keys MUST keep defaults; enabling a backend without its binary degrades with a warning.
+
+#### Scenario: Tools off by default
+- GIVEN no tools block in config
+- THEN no tools are registered and the brain streams exactly as before

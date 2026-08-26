@@ -43,3 +43,22 @@ Input beginning with `/` MUST dispatch exact-match commands locally and MUST NOT
 #### Scenario: Unknown command
 - GIVEN `/foo`
 - THEN an error line appears; conversation unchanged
+
+
+minimal-tui (MODIFIED)
+
+### Requirement: Interactive approval
+When the guard returns ask during a turn, the TUI MUST show the exact action with four choices — allow once, allow for session, always allow, deny — mapped to fixed keys, with deny as the safe default on interrupt.
+
+#### Scenario: Interrupting a prompt denies
+- GIVEN a visible approval prompt
+- WHEN CtrlC pressed
+- THEN the action is denied and audited
+
+### Requirement: Permissions panel
+`/permisos` MUST open a panel listing rules grouped by category, offering allow/deny toggles, per-backend posture display, a decision preview for a typed command, audit-log view, and revocation of always grants.
+
+#### Scenario: Revoke an always grant
+- GIVEN an always rule visible in the panel
+- WHEN revoked
+- THEN policy.yaml loses the rule and the audit records the revocation

@@ -60,3 +60,13 @@ CloseSession MUST run skill extraction after the summarizer when enabled, bounde
 #### Scenario: Extractor error non-fatal
 - GIVEN the extraction LLM call fails
 - THEN close completes and quit proceeds
+
+
+brain-loop (MODIFIED)
+
+### Requirement: Tool calls execute under guard
+Step MUST route every model-initiated tool request through the PolicyGuard port before any execution; the model's own output MUST be incapable of mutating policy state.
+
+#### Scenario: Model cannot self-grant
+- GIVEN a model reply attempting to change policy
+- THEN no policy mutation occurs and the attempt is inert data

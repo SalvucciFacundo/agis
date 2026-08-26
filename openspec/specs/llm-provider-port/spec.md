@@ -27,3 +27,13 @@ Abstract LLM access behind a single `Provider` port so the core never depends on
 - GIVEN `llm.provider: openai` and `llm.model: gpt-4o-mini`
 - WHEN `Models()` is called
 - THEN it returns one `ModelInfo` with the configured values.
+
+
+llm-provider-port (MODIFIED)
+
+### Requirement: Additive tool-call parsing
+Provider adapters MUST parse tool_calls from responses defensively: known shapes populate StreamEvent.ToolCall, unknown or malformed shapes degrade to plain text events without breaking the stream contract (channel always closes).
+
+#### Scenario: Malformed tool call degrades
+- GIVEN a provider emitting an unrecognized tool_calls shape
+- THEN the stream continues as text and closes normally
