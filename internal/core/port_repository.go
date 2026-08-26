@@ -72,5 +72,20 @@ type Repository interface {
 	// AuditTail returns up to n audit entries, newest first.
 	AuditTail(ctx context.Context, n int) ([]AuditEntry, error)
 
+	// ListConversations returns conversations ordered updated_at DESC, id DESC.
+	ListConversations(ctx context.Context, limit, offset int) ([]Conversation, error)
+
+	// GetConversation returns one conversation by id.
+	GetConversation(ctx context.Context, id string) (*Conversation, error)
+
+	// RenameConversation updates a conversation's title and bumps updated_at.
+	RenameConversation(ctx context.Context, id, title string) error
+
+	// CreateSnapshot captures a point-in-time copy of a conversation.
+	CreateSnapshot(ctx context.Context, convID string) (*Snapshot, error)
+
+	// ListSnapshots returns snapshots for a conversation, newest first.
+	ListSnapshots(ctx context.Context, convID string) ([]Snapshot, error)
+
 	Close() error
 }

@@ -103,3 +103,13 @@ type UserModel struct {
 	Confidence float64
 	UpdatedAt  time.Time
 }
+
+// Snapshot is a point-in-time copy of a conversation and its messages.
+type Snapshot struct {
+	ID             string
+	ConversationID string
+	Title          string
+	Summary        string
+	MessagesJSON   string
+	CreatedAt      time.Time
+}

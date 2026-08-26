@@ -166,6 +166,13 @@ func (r *fakeRepo) ListSkills(context.Context) ([]Skill, error) { return nil, ni
 
 func (r *fakeRepo) RecordSkillUsage(context.Context, string) error { return nil }
 
+
+func (r *fakeRepo) ListConversations(ctx context.Context, limit, offset int) ([]Conversation, error) { return nil, nil }
+func (r *fakeRepo) GetConversation(ctx context.Context, id string) (*Conversation, error) { return nil, ErrNotFound }
+func (r *fakeRepo) RenameConversation(ctx context.Context, id, title string) error { return nil }
+func (r *fakeRepo) CreateSnapshot(ctx context.Context, convID string) (*Snapshot, error) { return &Snapshot{ID: "snap-1"}, nil }
+func (r *fakeRepo) ListSnapshots(ctx context.Context, convID string) ([]Snapshot, error) { return nil, nil }
+
 func (r *fakeRepo) Close() error {
 	return nil
 }
