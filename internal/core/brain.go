@@ -80,6 +80,10 @@ type Brain struct {
 	// assistantCount counts completed assistant messages in this Brain's
 	// lifetime; it is the nudge cadence counter.
 	assistantCount int
+
+	// activeID tracks the session manager's active conversation when M5 is
+	// wired. Empty means "use LatestConversation" (M1 fallback).
+	activeID string
 }
 
 // Option configures a Brain.
@@ -145,6 +149,10 @@ func WithEvolution(e EvolutionLayer) Option {
 // SetOverlay applies or clears (empty text) the session personality overlay.
 // It takes effect from the next turn on.
 func (b *Brain) SetOverlay(text string) { b.overlay = text }
+
+// SetActiveConversation switches the conversation that Step continues.
+// Empty clears the override and restores LatestConversation behaviour.
+func (b *Brain) SetActiveConversation(id string) { b.activeID = id }
 
 // WithTools wires the bounded tool loop across the given backends: guard
 // evaluates every request, approver resolves ask decisions, runners execute.
@@ -516,9 +524,19 @@ func recallSystemMessage(obs []Observation) Message {
 	return Message{Role: RoleSystem, Content: b.String()}
 }
 
-// ensureConversation returns the latest conversation, creating one when none
-// exists yet.
+// ensureConversation returns the active conversation when M5 has set one,
+// otherwise the latest, creating one when none exists yet.
 func (b *Brain) ensureConversation(ctx context.Context) (*Conversation, error) {
+	if b.activeID != "" {
+		conv, err := b.repo.GetConversation(ctx, b.activeID)
+		if err == nil {
+			return conv, nil
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return nil, fmt.Errorf("loading active conversation: %w", err)
+		}
+		// Active id stale (deleted externally): fall through to latest.
+	}
 	conv, err := b.repo.LatestConversation(ctx)
 	if err == nil {
 		return conv, nil

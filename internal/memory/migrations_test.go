@@ -27,7 +27,7 @@ func openTestDB(t *testing.T) *sql.DB {
 
 // latestVersion is the highest embedded migration version. Update when a new
 // migrations/*.sql file is added.
-const latestVersion = 4
+const latestVersion = 5
 
 func TestMigrations(t *testing.T) {
 	ctx := context.Background()
@@ -48,7 +48,7 @@ func TestMigrations(t *testing.T) {
 
 	// The base tables, the FTS table, and the learning-loop tables exist.
 	for _, table := range []string{
-		"conversations", "messages", "observations", "memory_fts", "user_model", "session_events", "skills",
+		"conversations", "messages", "observations", "memory_fts", "user_model", "session_events", "skills", "snapshots", "audit_log",
 	} {
 		var name string
 		err := db.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE name = ?`, table).Scan(&name)

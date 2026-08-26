@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -688,4 +689,147 @@ func (r *Repository) AuditTail(ctx context.Context, n int) ([]core.AuditEntry, e
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// conversationOrder is the canonical ordering for conversations.
+const conversationOrder = `ORDER BY updated_at DESC, id DESC`
+
+// ListConversations returns conversations ordered updated_at DESC, id DESC.
+func (r *Repository) ListConversations(ctx context.Context, limit, offset int) ([]core.Conversation, error) {
+	q := `SELECT id, title, created_at, updated_at, summary, message_count FROM conversations ` + conversationOrder
+	args := []any{}
+	if limit > 0 {
+		q += ` LIMIT ?`
+		args = append(args, limit)
+		if offset > 0 {
+			q += ` OFFSET ?`
+			args = append(args, offset)
+		}
+	} else if offset > 0 {
+		q += ` LIMIT -1 OFFSET ?`
+		args = append(args, offset)
+	}
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("listing conversations: %w", err)
+	}
+	defer rows.Close()
+
+	var out []core.Conversation
+	for rows.Next() {
+		conv, err := scanConversation(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *conv)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating conversations: %w", err)
+	}
+	return out, nil
+}
+
+// GetConversation returns one conversation by id.
+func (r *Repository) GetConversation(ctx context.Context, id string) (*core.Conversation, error) {
+	conv, err := scanConversation(r.db.QueryRowContext(ctx,
+		`SELECT id, title, created_at, updated_at, summary, message_count FROM conversations WHERE id = ?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, core.ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("loading conversation %s: %w", id, err)
+	}
+	return conv, nil
+}
+
+// RenameConversation updates a conversation's title and bumps updated_at.
+func (r *Repository) RenameConversation(ctx context.Context, id, title string) error {
+	if strings.TrimSpace(title) == "" {
+		return fmt.Errorf("title must not be empty")
+	}
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?`,
+		title, formatTime(time.Now().UTC()), id)
+	if err != nil {
+		return fmt.Errorf("renaming conversation %s: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("renaming conversation %s: %w", id, err)
+	}
+	if n == 0 {
+		return core.ErrNotFound
+	}
+	return nil
+}
+
+// CreateSnapshot captures a point-in-time copy of a conversation.
+func (r *Repository) CreateSnapshot(ctx context.Context, convID string) (*core.Snapshot, error) {
+	conv, err := r.GetConversation(ctx, convID)
+	if err != nil {
+		return nil, err
+	}
+	msgs, err := r.Messages(ctx, convID, 0)
+	if err != nil {
+		return nil, fmt.Errorf("loading messages for snapshot: %w", err)
+	}
+	data, err := json.Marshal(msgs)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling snapshot messages: %w", err)
+	}
+	now := time.Now().UTC()
+	snap := &core.Snapshot{
+		ID:             uuid.NewString(),
+		ConversationID: conv.ID,
+		Title:          conv.Title,
+		Summary:        conv.Summary,
+		MessagesJSON:   string(data),
+		CreatedAt:      now,
+	}
+	if _, err := r.db.ExecContext(ctx,
+		`INSERT INTO snapshots (id, conversation_id, title, summary, messages_json, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		snap.ID, snap.ConversationID, snap.Title, snap.Summary, snap.MessagesJSON, formatTime(now)); err != nil {
+		return nil, fmt.Errorf("inserting snapshot: %w", err)
+	}
+	return snap, nil
+}
+
+// ListSnapshots returns snapshots for a conversation, newest first.
+func (r *Repository) ListSnapshots(ctx context.Context, convID string) ([]core.Snapshot, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, conversation_id, title, summary, messages_json, created_at
+		 FROM snapshots WHERE conversation_id = ? ORDER BY created_at DESC, id DESC`, convID)
+	if err != nil {
+		return nil, fmt.Errorf("listing snapshots: %w", err)
+	}
+	defer rows.Close()
+
+	var out []core.Snapshot
+	for rows.Next() {
+		snap, err := scanSnapshot(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, snap)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating snapshots: %w", err)
+	}
+	return out, nil
+}
+
+// scanSnapshot maps a snapshots row into a core.Snapshot.
+func scanSnapshot(s rowScanner) (core.Snapshot, error) {
+	var snap core.Snapshot
+	var createdAt string
+	if err := s.Scan(&snap.ID, &snap.ConversationID, &snap.Title, &snap.Summary, &snap.MessagesJSON, &createdAt); err != nil {
+		return core.Snapshot{}, err
+	}
+	t, err := parseTime(createdAt)
+	if err != nil {
+		return core.Snapshot{}, err
+	}
+	snap.CreatedAt = t
+	return snap, nil
 }
