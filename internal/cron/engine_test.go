@@ -178,8 +178,15 @@ func TestEngine_TriggerExecution_EphemeralSession(t *testing.T) {
 		t.Fatalf("Start error = %v", err)
 	}
 
-	// Wait for at least 1 run
-	time.Sleep(60 * time.Millisecond)
+	for i := 0; i < 100; i++ {
+		sender.mu.Lock()
+		sc := len(sender.sendCalls)
+		sender.mu.Unlock()
+		if sc >= 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	if err := engine.Stop(); err != nil {
 		t.Fatalf("Stop error = %v", err)
@@ -268,7 +275,15 @@ func TestEngine_TriggerExecution_BoundSession(t *testing.T) {
 		t.Fatalf("Start error = %v", err)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	for i := 0; i < 100; i++ {
+		brain.mu.Lock()
+		sc := len(brain.stepCalls)
+		brain.mu.Unlock()
+		if sc >= 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	if err := engine.Stop(); err != nil {
 		t.Fatalf("Stop error = %v", err)
@@ -329,7 +344,15 @@ func TestEngine_NoTarget_LogsOnly(t *testing.T) {
 		t.Fatalf("Start error = %v", err)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	for i := 0; i < 100; i++ {
+		brain.mu.Lock()
+		sc := len(brain.stepCalls)
+		brain.mu.Unlock()
+		if sc >= 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	if err := engine.Stop(); err != nil {
 		t.Fatalf("Stop error = %v", err)
@@ -380,7 +403,15 @@ func TestEngine_BrainError_LoggedGracefully(t *testing.T) {
 		t.Fatalf("Start error = %v", err)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	for i := 0; i < 100; i++ {
+		brain.mu.Lock()
+		sc := len(brain.stepCalls)
+		brain.mu.Unlock()
+		if sc >= 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	// Stop must succeed cleanly even if jobs returned errors
 	if err := engine.Stop(); err != nil {
