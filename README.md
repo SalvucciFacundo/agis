@@ -1,5 +1,16 @@
 # AGIS — Autonomous Go Intelligent System
 
+<p align="center">
+  <img src="assets/hero_banner.png" alt="AGIS — Autonomous Go Intelligent System" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://go.dev"><img src="https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go" alt="Go Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/Milestones-M1--M6%20Shipped-brightgreen" alt="Milestones M1-M6 Shipped"></a>
+  <a href="https://github.com/SalvucciFacundo/agis"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome"></a>
+</p>
+
 A general-purpose autonomous agent in Go: a single static binary, SQLite persistence, zero external services at runtime. AGIS pairs the functional scope of [Hermes Agent](https://github.com/NousResearch/hermes-agent) (learning loop, multi-provider LLMs, multi-backend tools, ecosystem integrations) with the hexagonal Go architecture of [GAIA](https://github.com/SalvucciFacundo/gaia) — built to run on anything from a $5 VPS to a laptop.
 
 ## Status
