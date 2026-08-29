@@ -670,3 +670,93 @@ func TestLoad_WebhookDefaultsAndExplicit(t *testing.T) {
 	}
 }
 
+func TestLoad_EmbeddingsDefaultsAndExplicit(t *testing.T) {
+	tests := []struct {
+		name           string
+		yaml           string
+		wantEnabled    bool
+		wantProvider   string
+		wantModel      string
+		wantDimensions int
+		wantBatchSize  int
+	}{
+		{
+			name:           "empty config has embeddings disabled with ollama defaults",
+			yaml:           "",
+			wantEnabled:    false,
+			wantProvider:   "ollama",
+			wantModel:      "nomic-embed-text",
+			wantDimensions: 768,
+			wantBatchSize:  100,
+		},
+		{
+			name: "openai provider without model sets openai default model and dimensions",
+			yaml: `embeddings:
+  enabled: true
+  provider: "openai"
+`,
+			wantEnabled:    true,
+			wantProvider:   "openai",
+			wantModel:      "text-embedding-3-small",
+			wantDimensions: 1536,
+			wantBatchSize:  100,
+		},
+		{
+			name: "explicit custom embeddings configuration",
+			yaml: `embeddings:
+  enabled: true
+  provider: "ollama"
+  model: "all-minilm"
+  dimensions: 384
+  batch_size: 50
+`,
+			wantEnabled:    true,
+			wantProvider:   "ollama",
+			wantModel:      "all-minilm",
+			wantDimensions: 384,
+			wantBatchSize:  50,
+		},
+		{
+			name: "batch size capping at 2048",
+			yaml: `embeddings:
+  enabled: true
+  batch_size: 5000
+`,
+			wantEnabled:    true,
+			wantProvider:   "ollama",
+			wantModel:      "nomic-embed-text",
+			wantDimensions: 768,
+			wantBatchSize:  2048,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+			path := writeConfig(t, home, tt.yaml, 0o600)
+
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			if cfg.Embeddings.Enabled != tt.wantEnabled {
+				t.Errorf("Embeddings.Enabled = %v, want %v", cfg.Embeddings.Enabled, tt.wantEnabled)
+			}
+			if cfg.Embeddings.Provider != tt.wantProvider {
+				t.Errorf("Embeddings.Provider = %q, want %q", cfg.Embeddings.Provider, tt.wantProvider)
+			}
+			if cfg.Embeddings.Model != tt.wantModel {
+				t.Errorf("Embeddings.Model = %q, want %q", cfg.Embeddings.Model, tt.wantModel)
+			}
+			if cfg.Embeddings.Dimensions != tt.wantDimensions {
+				t.Errorf("Embeddings.Dimensions = %d, want %d", cfg.Embeddings.Dimensions, tt.wantDimensions)
+			}
+			if cfg.Embeddings.BatchSize != tt.wantBatchSize {
+				t.Errorf("Embeddings.BatchSize = %d, want %d", cfg.Embeddings.BatchSize, tt.wantBatchSize)
+			}
+		})
+	}
+}
+

@@ -45,8 +45,18 @@ type Config struct {
 	Tools   ToolsConfig   `yaml:"tools"`
 	Gateway GatewayConfig `yaml:"gateway"`
 	Cron    CronConfig    `yaml:"cron"`
-	Plugins PluginsConfig `yaml:"plugins"`
-	Webhook WebhookConfig `yaml:"webhook"`
+	Plugins PluginsConfig  `yaml:"plugins"`
+	Webhook WebhookConfig  `yaml:"webhook"`
+	Embeddings EmbeddingsConfig `yaml:"embeddings"`
+}
+
+// EmbeddingsConfig tunes the M7 hybrid search embeddings subsystem.
+type EmbeddingsConfig struct {
+	Enabled    bool   `yaml:"enabled"`
+	Provider   string `yaml:"provider"`
+	Model      string `yaml:"model"`
+	Dimensions int    `yaml:"dimensions"`
+	BatchSize  int    `yaml:"batch_size"`
 }
 
 // PluginsConfig gates the M6 plugin subsystem and locates external plugin bundles.
@@ -247,6 +257,9 @@ func defaults() *Config {
 			Path:             "/webhook",
 			DefaultSessionID: "webhook-events",
 		},
+		Embeddings: EmbeddingsConfig{
+			Enabled: false,
+		},
 	}
 }
 
@@ -289,6 +302,28 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Webhook.DefaultSessionID == "" {
 		cfg.Webhook.DefaultSessionID = "webhook-events"
+	}
+	if cfg.Embeddings.Provider == "" {
+		cfg.Embeddings.Provider = "ollama"
+	}
+	if cfg.Embeddings.Model == "" {
+		if cfg.Embeddings.Provider == "openai" {
+			cfg.Embeddings.Model = "text-embedding-3-small"
+		} else {
+			cfg.Embeddings.Model = "nomic-embed-text"
+		}
+	}
+	if cfg.Embeddings.Dimensions <= 0 {
+		if cfg.Embeddings.Provider == "openai" {
+			cfg.Embeddings.Dimensions = 1536
+		} else {
+			cfg.Embeddings.Dimensions = 768
+		}
+	}
+	if cfg.Embeddings.BatchSize <= 0 {
+		cfg.Embeddings.BatchSize = 100
+	} else if cfg.Embeddings.BatchSize > 2048 {
+		cfg.Embeddings.BatchSize = 2048
 	}
 }
 
