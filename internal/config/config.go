@@ -45,6 +45,31 @@ type Config struct {
 	Tools   ToolsConfig   `yaml:"tools"`
 	Gateway GatewayConfig `yaml:"gateway"`
 	Cron    CronConfig    `yaml:"cron"`
+	Plugins PluginsConfig `yaml:"plugins"`
+	Webhook WebhookConfig `yaml:"webhook"`
+}
+
+// PluginsConfig gates the M6 plugin subsystem and locates external plugin bundles.
+type PluginsConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Dir     string `yaml:"dir"`
+}
+
+// WebhookConfig gates the M6 webhook listener subsystem for external event ingestion.
+type WebhookConfig struct {
+	Enabled          bool                 `yaml:"enabled"`
+	Host             string               `yaml:"host"`
+	Port             int                  `yaml:"port"`
+	Path             string               `yaml:"path"`
+	Secret           string               `yaml:"secret"`
+	DefaultSessionID string               `yaml:"default_session_id"`
+	Target           *WebhookTargetConfig `yaml:"target"`
+}
+
+// WebhookTargetConfig configures outbound notification target for webhook responses.
+type WebhookTargetConfig struct {
+	Adapter   string `yaml:"adapter"`
+	Recipient string `yaml:"recipient"`
 }
 
 // CronConfig gates the M6 cron scheduling subsystem for periodic tasks.
@@ -213,6 +238,15 @@ func defaults() *Config {
 		Tools: ToolsConfig{
 			Docker: DockerConfig{Image: defaultDockerImage},
 		},
+		Plugins: PluginsConfig{
+			Dir: defaultPluginsDir(),
+		},
+		Webhook: WebhookConfig{
+			Host:             "127.0.0.1",
+			Port:             8080,
+			Path:             "/webhook",
+			DefaultSessionID: "webhook-events",
+		},
 	}
 }
 
@@ -241,6 +275,26 @@ func applyDefaults(cfg *Config) {
 	if cfg.Skills.Dir == "" {
 		cfg.Skills.Dir = defaultSkillsDir()
 	}
+	if cfg.Plugins.Dir == "" {
+		cfg.Plugins.Dir = defaultPluginsDir()
+	}
+	if cfg.Webhook.Host == "" {
+		cfg.Webhook.Host = "127.0.0.1"
+	}
+	if cfg.Webhook.Port <= 0 {
+		cfg.Webhook.Port = 8080
+	}
+	if cfg.Webhook.Path == "" {
+		cfg.Webhook.Path = "/webhook"
+	}
+	if cfg.Webhook.DefaultSessionID == "" {
+		cfg.Webhook.DefaultSessionID = "webhook-events"
+	}
+}
+
+// defaultPluginsDir returns $AGIS_HOME/plugins (or ~/.agis/plugins).
+func defaultPluginsDir() string {
+	return filepath.Join(agisDir(), "plugins")
 }
 
 // AgisHome exposes the resolved AGIS home directory ($AGIS_HOME or

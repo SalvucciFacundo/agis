@@ -527,3 +527,146 @@ func TestLoad_GatewayDefaultsAndExplicit(t *testing.T) {
 	}
 }
 
+func TestLoad_PluginsDefaultsAndExplicit(t *testing.T) {
+	tests := []struct {
+		name        string
+		yaml        string
+		wantEnabled bool
+		wantDir     string
+	}{
+		{
+			name:        "empty config has plugins disabled with default dir",
+			yaml:        "",
+			wantEnabled: false,
+			wantDir:     "",
+		},
+		{
+			name: "explicit plugins config",
+			yaml: `plugins:
+  enabled: true
+  dir: "/custom/plugins/dir"
+`,
+			wantEnabled: true,
+			wantDir:     "/custom/plugins/dir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+			path := writeConfig(t, home, tt.yaml, 0o600)
+
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			if cfg.Plugins.Enabled != tt.wantEnabled {
+				t.Errorf("Plugins.Enabled = %v, want %v", cfg.Plugins.Enabled, tt.wantEnabled)
+			}
+			expectedDir := tt.wantDir
+			if expectedDir == "" {
+				expectedDir = filepath.Join(home, "plugins")
+			}
+			if cfg.Plugins.Dir != expectedDir {
+				t.Errorf("Plugins.Dir = %q, want %q", cfg.Plugins.Dir, expectedDir)
+			}
+		})
+	}
+}
+
+func TestLoad_WebhookDefaultsAndExplicit(t *testing.T) {
+	tests := []struct {
+		name        string
+		yaml        string
+		wantEnabled bool
+		wantHost    string
+		wantPort    int
+		wantPath    string
+		wantSecret  string
+		wantSession string
+		wantTarget  *WebhookTargetConfig
+	}{
+		{
+			name:        "empty config has webhook disabled with defaults",
+			yaml:        "",
+			wantEnabled: false,
+			wantHost:    "127.0.0.1",
+			wantPort:    8080,
+			wantPath:    "/webhook",
+			wantSecret:  "",
+			wantSession: "webhook-events",
+			wantTarget:  nil,
+		},
+		{
+			name: "explicit webhook config",
+			yaml: `webhook:
+  enabled: true
+  host: "0.0.0.0"
+  port: 9000
+  path: "/events"
+  secret: "super-secret"
+  default_session_id: "custom-webhook-session"
+  target:
+    adapter: "telegram"
+    recipient: "78910"
+`,
+			wantEnabled: true,
+			wantHost:    "0.0.0.0",
+			wantPort:    9000,
+			wantPath:    "/events",
+			wantSecret:  "super-secret",
+			wantSession: "custom-webhook-session",
+			wantTarget: &WebhookTargetConfig{
+				Adapter:   "telegram",
+				Recipient: "78910",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+			path := writeConfig(t, home, tt.yaml, 0o600)
+
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			if cfg.Webhook.Enabled != tt.wantEnabled {
+				t.Errorf("Webhook.Enabled = %v, want %v", cfg.Webhook.Enabled, tt.wantEnabled)
+			}
+			if cfg.Webhook.Host != tt.wantHost {
+				t.Errorf("Webhook.Host = %q, want %q", cfg.Webhook.Host, tt.wantHost)
+			}
+			if cfg.Webhook.Port != tt.wantPort {
+				t.Errorf("Webhook.Port = %d, want %d", cfg.Webhook.Port, tt.wantPort)
+			}
+			if cfg.Webhook.Path != tt.wantPath {
+				t.Errorf("Webhook.Path = %q, want %q", cfg.Webhook.Path, tt.wantPath)
+			}
+			if cfg.Webhook.Secret != tt.wantSecret {
+				t.Errorf("Webhook.Secret = %q, want %q", cfg.Webhook.Secret, tt.wantSecret)
+			}
+			if cfg.Webhook.DefaultSessionID != tt.wantSession {
+				t.Errorf("Webhook.DefaultSessionID = %q, want %q", cfg.Webhook.DefaultSessionID, tt.wantSession)
+			}
+			if tt.wantTarget == nil {
+				if cfg.Webhook.Target != nil {
+					t.Errorf("Webhook.Target expected nil, got %+v", cfg.Webhook.Target)
+				}
+			} else {
+				if cfg.Webhook.Target == nil {
+					t.Fatalf("Webhook.Target expected %+v, got nil", tt.wantTarget)
+				}
+				if *cfg.Webhook.Target != *tt.wantTarget {
+					t.Errorf("Webhook.Target = %+v, want %+v", *cfg.Webhook.Target, *tt.wantTarget)
+				}
+			}
+		})
+	}
+}
+

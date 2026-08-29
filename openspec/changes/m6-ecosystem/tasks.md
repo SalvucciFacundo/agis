@@ -37,14 +37,14 @@ Chain strategy: stacked-to-main
 - [x] 2.6 Implement Cobra subcommands `agis cron run` and `agis cron list` in `cmd/agis/cron.go`. <!-- sdd-owner: implementation -->
 
 ### PR 3: Plugin Manager & Webhook Listener (HMAC verification)
-- [ ] 3.1 Implement config extensions for `plugins` and `webhook` in `internal/config/config.go`. <!-- sdd-owner: implementation -->
-- [ ] 3.2 Implement plugin manifest parsing and schema validation in `internal/plugins/manifest.go` (RED → GREEN). <!-- sdd-owner: implementation -->
-- [ ] 3.3 Implement Plugin Manager lifecycle (`Load`, `List`, `Enable`, `Disable`, and tool/skill registry bridge) in `internal/plugins/manager.go`. <!-- sdd-owner: implementation -->
-- [ ] 3.4 Implement Webhook HTTP server and endpoint routing in `internal/webhook/server.go`. <!-- sdd-owner: implementation -->
-- [ ] 3.5 Implement HMAC-SHA256 signature verification using `crypto/subtle.ConstantTimeCompare` in `internal/webhook/server.go` (RED → GREEN). <!-- sdd-owner: implementation -->
-- [ ] 3.6 Implement webhook event ingestion and brain dispatching. <!-- sdd-owner: implementation -->
-- [ ] 3.7 Add unit tests under `internal/plugins/` and `internal/webhook/` and verify with `go test ./internal/plugins/... ./internal/webhook/...`. <!-- sdd-owner: implementation -->
-- [ ] 3.8 Implement Cobra subcommands `agis plugins` and `agis webhook` in `cmd/agis/plugins.go` and `cmd/agis/webhook.go`. <!-- sdd-owner: implementation -->
+- [x] 3.1 Implement config extensions for `plugins` and `webhook` in `internal/config/config.go`. <!-- sdd-owner: implementation -->
+- [x] 3.2 Implement plugin manifest parsing and schema validation in `internal/plugins/manifest.go` (RED → GREEN). <!-- sdd-owner: implementation -->
+- [x] 3.3 Implement Plugin Manager lifecycle (`Load`, `List`, `Enable`, `Disable`, and tool/skill registry bridge) in `internal/plugins/manager.go`. <!-- sdd-owner: implementation -->
+- [x] 3.4 Implement Webhook HTTP server and endpoint routing in `internal/webhook/server.go`. <!-- sdd-owner: implementation -->
+- [x] 3.5 Implement HMAC-SHA256 signature verification using `crypto/subtle.ConstantTimeCompare` in `internal/webhook/server.go` (RED → GREEN). <!-- sdd-owner: implementation -->
+- [x] 3.6 Implement webhook event ingestion and brain dispatching. <!-- sdd-owner: implementation -->
+- [x] 3.7 Add unit tests under `internal/plugins/` and `internal/webhook/` and verify with `go test ./internal/plugins/... ./internal/webhook/...`. <!-- sdd-owner: implementation -->
+- [x] 3.8 Implement Cobra subcommands `agis plugins` and `agis webhook` in `cmd/agis/plugins.go` and `cmd/agis/webhook.go`. <!-- sdd-owner: implementation -->
 
 ### PR 4: Config Extensions, CLI Subcommands, End-to-End Verification & Docs
 - [ ] 4.1 Perform end-to-end integration testing across gateway, cron, plugins, and webhooks with `go test ./internal/...`. <!-- sdd-owner: implementation -->

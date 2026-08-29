@@ -37,6 +37,10 @@ func main() {
 			os.Exit(RunGatewayCLI(os.Args[2:], os.Stdout, os.Stderr))
 		case "cron":
 			os.Exit(RunCronCLI(os.Args[2:], os.Stdout, os.Stderr))
+		case "plugins":
+			os.Exit(RunPluginsCLI(os.Args[2:], os.Stdout, os.Stderr))
+		case "webhook":
+			os.Exit(RunWebhookCLI(os.Args[2:], os.Stdout, os.Stderr))
 		}
 	}
 
