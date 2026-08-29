@@ -37,3 +37,63 @@ Config MUST support `tools.enabled` (default false — tools are opt-in), `tools
 #### Scenario: Tools off by default
 - GIVEN no tools block in config
 - THEN no tools are registered and the brain streams exactly as before
+
+
+config-loader (MODIFIED)
+
+### Requirement AGIS-M6-CONF-003: Ecosystem Configuration Schema (Gateway, Cron, Plugins, Webhook)
+The configuration loader in `internal/config/config.go` MUST support the following optional root configuration blocks:
+
+```yaml
+gateway:
+  enabled: false
+  telegram:
+    enabled: false
+    token: ""
+    allowlist: []
+  discord:
+    enabled: false
+    token: ""
+    allowlist: []
+
+cron:
+  enabled: false
+  jobs:
+    - name: "daily-health"
+      schedule: "@every 1h"
+      prompt: "Check system health"
+      session_id: "cron-health"
+      target:
+        adapter: "telegram"
+        recipient: "123456"
+
+plugins:
+  enabled: false
+  dir: "~/.agis/plugins"
+
+webhook:
+  enabled: false
+  host: "127.0.0.1"
+  port: 8080
+  path: "/webhook"
+  secret: ""
+  default_session_id: "webhook-events"
+  target:
+    adapter: "telegram"
+    recipient: "123456"
+```
+
+- All ecosystem blocks MUST be disabled by default (`enabled: false`).
+- Missing fields MUST inherit documented safe defaults (`host: "127.0.0.1"`, `port: 8080`, `path: "/webhook"`, `plugins.dir: "$AGIS_HOME/plugins"`).
+- Unmarshaling must handle environment variable expansions or missing files without panicking.
+
+#### Scenario: Default configuration disables ecosystem blocks
+- GIVEN an empty or minimal `config.yaml`
+- WHEN `config.Load()` is invoked
+- THEN `cfg.Gateway.Enabled`, `cfg.Cron.Enabled`, `cfg.Plugins.Enabled`, and `cfg.Webhook.Enabled` are all `false`
+
+#### Scenario: Full ecosystem configuration parsed
+- GIVEN a `config.yaml` containing complete `gateway`, `cron`, `plugins`, and `webhook` blocks
+- WHEN `config.Load()` is invoked
+- THEN all struct fields, job lists, allowlists, and secrets are populated accurately
+
