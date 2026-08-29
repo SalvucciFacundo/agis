@@ -97,3 +97,33 @@ webhook:
 - WHEN `config.Load()` is invoked
 - THEN all struct fields, job lists, allowlists, and secrets are populated accurately
 
+
+config-loader (MODIFIED)
+
+### Requirement AGIS-M7-CONF-001: Embeddings Configuration Schema
+The configuration loader in `internal/config/config.go` MUST support the following optional root configuration block:
+
+```yaml
+embeddings:
+  enabled: false
+  provider: "ollama"           # "ollama" | "openai"
+  model: "nomic-embed-text"    # default: nomic-embed-text for ollama, text-embedding-3-small for openai
+  dimensions: 768              # default: 768 for ollama, 1536 for openai
+  batch_size: 100              # maximum sub-batch chunk size (capped at 2048)
+```
+
+- `embeddings.enabled` MUST default to `false` (opt-in).
+- Missing model/dimension fields MUST inherit provider-specific defaults.
+- Absent `embeddings` block MUST preserve backward compatibility.
+
+#### Scenario: Default configuration disables embeddings
+- GIVEN an empty or default `config.yaml`
+- WHEN `config.Load()` is executed
+- THEN `cfg.Embeddings.Enabled` is `false` and defaults are set
+
+#### Scenario: Explicit embeddings configuration loaded
+- GIVEN `config.yaml` with `embeddings.provider: openai` and `embeddings.model: text-embedding-3-small`
+- WHEN `config.Load()` is executed
+- THEN `cfg.Embeddings.Dimensions` defaults to `1536` and `BatchSize` to `100`
+
+
