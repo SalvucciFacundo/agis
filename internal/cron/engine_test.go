@@ -5,7 +5,6 @@ import (
 	"errors"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -401,7 +400,6 @@ func TestEngine_ConcurrentJobs(t *testing.T) {
 	}
 	defer repo.Close()
 
-	var counter atomic.Int32
 	brain := &mockBrain{
 		repo: repo,
 	}
@@ -439,5 +437,4 @@ func TestEngine_ConcurrentJobs(t *testing.T) {
 	if count < 5 {
 		t.Errorf("expected at least 5 step calls across 5 concurrent jobs, got %d", count)
 	}
-	_ = counter
 }
