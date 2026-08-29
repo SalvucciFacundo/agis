@@ -188,14 +188,32 @@ webhook:
 
 Full detail in [docs/roadmap.md](docs/roadmap.md).
 
-## Documentation
+## 📚 Documentation
 
-- [docs/architecture.md](docs/architecture.md) — Hexagonal layout, ports, data flow, ecosystem architecture
-- [docs/configuration.md](docs/configuration.md) — Configuration file, precedence, defaults, security, examples
-- [docs/sessions.md](docs/sessions.md) — Session lifecycle, slash commands, snapshots
-- [docs/permissions.md](docs/permissions.md) — Policy Guard, permission system, audit logging
-- [docs/security.md](docs/security.md) — Threat model, sandbox posture, HMAC verification, allowlists
-- [docs/roadmap.md](docs/roadmap.md) — Milestone history, shipped scopes, verification details
+Detailed technical documentation and subsystem guides:
+
+### Core & Architecture
+- [docs/architecture.md](docs/architecture.md) — Hexagonal layout, domain ports, data flow, unified architecture
+- [docs/configuration.md](docs/configuration.md) — Complete configuration schema, precedence, defaults, and examples
+- [docs/roadmap.md](docs/roadmap.md) — Milestone history, shipped scopes, verification details, post-v1 backlog
+
+### Interfaces & Commands
+- [docs/cli.md](docs/cli.md) — Comprehensive CLI subcommands reference (`gateway`, `cron`, `plugins`, `webhook`, `policy`)
+- [docs/tui-commands.md](docs/tui-commands.md) — Interactive slash commands (`/new`, `/save`, `/restore`, `/snapshot`, `/compress`, `/personality`, `/permisos`) and hotkeys
+
+### Integrations & Ecosystem
+- [docs/gateway.md](docs/gateway.md) — Multi-platform Chat Gateway guide (Telegram & Discord setup, chunking, allowlists)
+- [docs/cron.md](docs/cron.md) — Autonomous Cron Scheduler guide (5-field syntax, interval macros, target delivery)
+- [docs/plugins.md](docs/plugins.md) — External Plugin System guide (`plugin.json` schema, stdio bridge, state management)
+- [docs/webhook.md](docs/webhook.md) — Webhook Event Ingestion guide (HMAC-SHA256 constant-time authentication, dispatch)
+
+### Security, Memory & Persona
+- [docs/permissions.md](docs/permissions.md) — Multi-tier Policy Guard (`sandbox`, `standard`, `full`), permission scopes, audit logging
+- [docs/security.md](docs/security.md) — Threat model, defense-in-depth, prompt injection defense, sandbox invariants
+- [docs/memory.md](docs/memory.md) — SQLite + FTS5 memory substrate, observation curation, session summarization, user model
+- [docs/sessions.md](docs/sessions.md) — Session Manager lifecycle, conversation switching, point-in-time snapshots
+- [docs/persona.md](docs/persona.md) — `SOUL.md` durable identity, dynamic personality overlays, guided evolution
+- [docs/skills.md](docs/skills.md) — Skill Hub discovery, Markdown frontmatter specification, close-time skill distillation
 
 ## Relationship to GAIA and Hermes
 
