@@ -54,14 +54,19 @@ webhook:
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var stdout, stderr bytes.Buffer
+	var stdout, stderr safeBuffer
 	doneCh := make(chan int, 1)
 
 	go func() {
 		doneCh <- runWebhookWithContext(ctx, []string{"run", "--config", configPath}, &stdout, &stderr)
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	for i := 0; i < 100; i++ {
+		if strings.Contains(stdout.String(), "running") {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	cancel()
 
 	select {

@@ -134,6 +134,9 @@ func runCronDaemon(ctx context.Context, cfg *config.Config, stdout, stderr io.Wr
 
 	repo, err := memory.NewRepository(ctx, cfg.DB.Path)
 	if err != nil {
+		if ctx.Err() != nil {
+			return 0
+		}
 		fmt.Fprintf(stderr, "agis cron: opening database: %v\n", err)
 		return 1
 	}
@@ -224,6 +227,9 @@ func runCronDaemon(ctx context.Context, cfg *config.Config, stdout, stderr io.Wr
 			mux.RegisterAdapter(dc)
 		}
 		if err := mux.Start(ctx); err != nil {
+			if ctx.Err() != nil {
+				return 0
+			}
 			fmt.Fprintf(stderr, "agis cron: starting gateway multiplexer for targets: %v\n", err)
 			return 1
 		}
@@ -266,6 +272,12 @@ func runCronDaemon(ctx context.Context, cfg *config.Config, stdout, stderr io.Wr
 	}
 
 	if err := engine.Start(ctx); err != nil {
+		if ctx.Err() != nil {
+			if mux != nil {
+				_ = mux.Stop()
+			}
+			return 0
+		}
 		fmt.Fprintf(stderr, "agis cron: starting engine: %v\n", err)
 		if mux != nil {
 			_ = mux.Stop()

@@ -90,6 +90,9 @@ func runWebhookWithContext(ctx context.Context, args []string, stdout, stderr io
 
 	repo, err := memory.NewRepository(ctx, cfg.DB.Path)
 	if err != nil {
+		if ctx.Err() != nil {
+			return 0
+		}
 		fmt.Fprintf(stderr, "agis webhook: opening database: %v\n", err)
 		return 1
 	}

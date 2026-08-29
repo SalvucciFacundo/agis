@@ -54,14 +54,19 @@ gateway:
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	var stdout, stderr bytes.Buffer
+	var stdout, stderr safeBuffer
 	done := make(chan int, 1)
 	go func() {
 		done <- runGatewayWithContext(ctx, []string{"run", "--config", configPath}, &stdout, &stderr)
 	}()
 
-	// Wait briefly for daemon to initialize, then cancel context to simulate SIGINT
-	time.Sleep(100 * time.Millisecond)
+	// Wait until daemon initializes, then cancel context to simulate SIGINT
+	for i := 0; i < 100; i++ {
+		if strings.Contains(stdout.String(), "running") {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	cancel()
 
 	select {
