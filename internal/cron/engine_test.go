@@ -425,15 +425,20 @@ func TestEngine_ConcurrentJobs(t *testing.T) {
 		t.Fatalf("Start error = %v", err)
 	}
 
-	time.Sleep(60 * time.Millisecond)
+	var count int
+	for i := 0; i < 100; i++ {
+		brain.mu.Lock()
+		count = len(brain.stepCalls)
+		brain.mu.Unlock()
+		if count >= 5 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	if err := engine.Stop(); err != nil {
 		t.Fatalf("Stop error = %v", err)
 	}
-
-	brain.mu.Lock()
-	count := len(brain.stepCalls)
-	brain.mu.Unlock()
 
 	if count < 5 {
 		t.Errorf("expected at least 5 step calls across 5 concurrent jobs, got %d", count)
