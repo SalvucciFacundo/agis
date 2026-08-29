@@ -1,6 +1,6 @@
 # Roadmap
 
-Milestone scopes come from `spec.md` §Milestones. M1, M2, M3, M4, M5, and M6 are shipped. The archived requirements live as synced OpenSpec capability specs under `openspec/specs/` (`config-loader`, `repository-memory`, `llm-provider-port`, `brain-loop`, `minimal-tui`, `memory-curator`, `session-summarizer`, `user-model`, `skill-hub`, `persona`, `policy-guard`, `tools-backends`, `tool-calling`, `session-manager`, `gateway`, `cron`, `plugins`, `webhook`).
+Milestone scopes come from `spec.md` §Milestones. M1, M2, M3, M4, M5, M6, and M7 are shipped. The archived requirements live as synced OpenSpec capability specs under `openspec/specs/` (`config-loader`, `repository-memory`, `llm-provider-port`, `brain-loop`, `minimal-tui`, `memory-curator`, `session-summarizer`, `user-model`, `skill-hub`, `persona`, `policy-guard`, `tools-backends`, `tool-calling`, `session-manager`, `gateway`, `cron`, `plugins`, `webhook`, `embeddings`).
 
 ## M1 — Thinking agent with memory ✅ DONE
 
@@ -90,6 +90,31 @@ Change `m6-ecosystem`, delivered as 4 stacked PRs merged to main (PR #1 gateway 
 - CLI Subcommands (`cmd/agis`): `agis gateway run`, `agis cron [run|list]`, `agis plugins [list|enable|disable|inspect]`, and `agis webhook run`.
 
 **Verification:** full end-to-end integration test suite green across gateway, cron, plugins, and webhooks (`cmd/agis/ecosystem_integration_test.go`); 100% test suite green with race detection (`go test -race ./...`); 0 goroutine leaks under `goleak`. "Done" criteria met: gateway platforms drive the same `Brain` and Repository as the TUI, surfaces stay interchangeable front-ends.
+
+## M7 — Hybrid Search ✅ DONE
+
+Change `m7-hybrid-search`, delivered as 3 stacked PRs merged to main (PR #1 Core Port, Vector Math, Config, Migration 0006 → PR #2 Embedding Adapters for Ollama & OpenAI → PR #3 Reciprocal Rank Fusion, Hybrid Search, Async Indexer, CLI & Docs).
+
+**Shipped:**
+
+- `core.Embedder` Port (`internal/core/port_embedder.go`): `Embed`, `EmbedBatch`, and `Dimension` interface contracts.
+- Embedding Adapters (`internal/adapters/llm/`):
+  - `OllamaEmbedder`: targeting `/api/embed` with automatic fallback to `/api/embeddings`, default `nomic-embed-text`.
+  - `OpenAIEmbedder`: targeting `/v1/embeddings` with sub-batch chunking up to `batch_size`, default `text-embedding-3-small`.
+  - `NewEmbedder` factory with provider resolution and config defaults.
+- Binary Float32 Vector BLOB Storage:
+  - `EncodeVector` / `DecodeVector` with IEEE 754 LittleEndian float32 serialization in pure Go.
+  - SQLite Migration 0006 (`0006_embeddings.sql`): `embeddings` table with UNIQUE(`doc_type`, `doc_id`) index, bumping `user_version` to 6.
+- Pure Go Cosine Similarity (`internal/memory/vector.go`): robust similarity computation with zero-vector handling.
+- Reciprocal Rank Fusion (RRF) (`internal/memory/rrf.go`): $k=60$ rank fusion, deduplication on `(doc_type, doc_id)`, deterministic tie-breaking on `doc_id` ascending.
+- Hybrid Repository Search & Async Indexing (`internal/memory/hybrid.go`, `sqlite.go`):
+  - `NewRepository(ctx, path, WithEmbedder(embedder))`.
+  - `Search(ctx, query, limit)` fuses BM25 FTS5 and dense vector results via RRF.
+  - Transparent graceful fallback to FTS5 on embedder failures or when disabled.
+  - Non-blocking async background embedding worker for observation persistence (`SaveObservations`).
+- Configuration (`internal/config/config.go`): opt-in `embeddings` block.
+
+**Verification:** 100% test pass rate across unit, adapter mock, and concurrency/race integration tests with `go test -race ./...`; zero goroutine leaks under `goleak`. "Done" criteria met: semantic search retrieves meaning matches that BM25 misses, and hybrid ranking outperforms pure lexical search.
 
 ## M1 review follow-ups queued for M2
 

@@ -9,7 +9,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge" alt="License: MIT"></a>
   <a href="https://github.com/SalvucciFacundo/agis/releases"><img src="https://img.shields.io/github/v/release/SalvucciFacundo/agis?style=for-the-badge&logo=github" alt="Release"></a>
   <a href="https://github.com/SalvucciFacundo/agis/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/SalvucciFacundo/agis/ci.yml?style=for-the-badge&label=CI" alt="CI"></a>
-  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/Milestones-M1--M6%20Shipped-brightgreen?style=for-the-badge" alt="Milestones M1-M6 Shipped"></a>
+  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/Milestones-M1--M7%20Shipped-brightgreen?style=for-the-badge" alt="Milestones M1-M7 Shipped"></a>
   <a href="https://github.com/SalvucciFacundo/agis"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=for-the-badge" alt="PRs Welcome"></a>
 </p>
 
@@ -78,7 +78,7 @@ go run ./cmd/agis
 
 - **🧠 Brain Thinking Loop** — `Brain.Step` persists turns, loads history, injects memory & skills, streams model tokens, evaluates tool calls, and handles up to 8 bounded tool rounds.
 - **🔌 Multi-Provider LLM** — Ollama, OpenAI, OpenRouter, and any OpenAI-compatible API over a unified client with streaming SSE.
-- **💾 SQLite + FTS5 Memory** — Pure Go SQLite with full-text search over conversations, messages, observations, and point-in-time snapshots.
+- **💾 SQLite + FTS5 & Hybrid Search** — Pure Go SQLite with full-text search and dense vector embeddings (Ollama / OpenAI) combined via Reciprocal Rank Fusion (RRF).
 - **🔄 Learning & Memory Loop** — Continuous observation extraction (Curator), session summarization, and user model confidence synthesis.
 - **🎭 Skill Hub & Persona** — Agentskills.io-compatible Markdown skill loading, runtime skill distillation, durable `SOUL.md`, and dynamic personality overlays.
 - **🛡️ Policy Guard & Tool Backends** — Multi-tier security postures (`sandbox`, `standard`, `full`), fail-closed approval, audit logging, and Local/Docker/SSH tool backends.
