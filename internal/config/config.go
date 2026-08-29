@@ -44,7 +44,30 @@ type Config struct {
 	Skills  SkillsConfig  `yaml:"skills"`
 	Tools   ToolsConfig   `yaml:"tools"`
 	Gateway GatewayConfig `yaml:"gateway"`
+	Cron    CronConfig    `yaml:"cron"`
 }
+
+// CronConfig gates the M6 cron scheduling subsystem for periodic tasks.
+type CronConfig struct {
+	Enabled bool            `yaml:"enabled"`
+	Jobs    []CronJobConfig `yaml:"jobs"`
+}
+
+// CronJobConfig defines a single scheduled cron job.
+type CronJobConfig struct {
+	Name      string            `yaml:"name"`
+	Schedule  string            `yaml:"schedule"`
+	Prompt    string            `yaml:"prompt"`
+	SessionID string            `yaml:"session_id"`
+	Target    *CronTargetConfig `yaml:"target"`
+}
+
+// CronTargetConfig configures outbound notification target for job results.
+type CronTargetConfig struct {
+	Adapter   string `yaml:"adapter"`
+	Recipient string `yaml:"recipient"`
+}
+
 
 // GatewayConfig gates the M6 gateway subsystem for external chat platforms.
 type GatewayConfig struct {

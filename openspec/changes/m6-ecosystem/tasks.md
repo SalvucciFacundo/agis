@@ -29,12 +29,12 @@ Chain strategy: stacked-to-main
 - [x] 1.8 Implement Cobra subcommand `agis gateway` in `cmd/agis/gateway.go`. <!-- sdd-owner: implementation -->
 
 ### PR 2: Cron Scheduler Engine & Delivery Target
-- [ ] 2.1 Implement config extensions for `cron` in `internal/config/config.go`. <!-- sdd-owner: implementation -->
-- [ ] 2.2 Implement cron expression and duration interval parser with validation in `internal/cron/scheduler.go` (RED → GREEN). <!-- sdd-owner: implementation -->
-- [ ] 2.3 Implement background scheduler engine in `internal/cron/engine.go` executing prompts via `core.Brain.Step` with sandbox policy and session binding. <!-- sdd-owner: implementation -->
-- [ ] 2.4 Implement cron target notification delivery forwarding outputs to the Gateway Multiplexer or logger. <!-- sdd-owner: implementation -->
-- [ ] 2.5 Add unit tests under `internal/cron/` and verify with `go test ./internal/cron/...`. <!-- sdd-owner: implementation -->
-- [ ] 2.6 Implement Cobra subcommands `agis cron run` and `agis cron list` in `cmd/agis/cron.go`. <!-- sdd-owner: implementation -->
+- [x] 2.1 Implement config extensions for `cron` in `internal/config/config.go`. <!-- sdd-owner: implementation -->
+- [x] 2.2 Implement cron expression and duration interval parser with validation in `internal/cron/scheduler.go` (RED → GREEN). <!-- sdd-owner: implementation -->
+- [x] 2.3 Implement background scheduler engine in `internal/cron/engine.go` executing prompts via `core.Brain.Step` with sandbox policy and session binding. <!-- sdd-owner: implementation -->
+- [x] 2.4 Implement cron target notification delivery forwarding outputs to the Gateway Multiplexer or logger. <!-- sdd-owner: implementation -->
+- [x] 2.5 Add unit tests under `internal/cron/` and verify with `go test ./internal/cron/...`. <!-- sdd-owner: implementation -->
+- [x] 2.6 Implement Cobra subcommands `agis cron run` and `agis cron list` in `cmd/agis/cron.go`. <!-- sdd-owner: implementation -->
 
 ### PR 3: Plugin Manager & Webhook Listener (HMAC verification)
 - [ ] 3.1 Implement config extensions for `plugins` and `webhook` in `internal/config/config.go`. <!-- sdd-owner: implementation -->

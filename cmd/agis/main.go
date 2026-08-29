@@ -35,6 +35,8 @@ func main() {
 			os.Exit(policy.RunCLI(os.Args[2:], os.Stdout, os.Stderr))
 		case "gateway":
 			os.Exit(RunGatewayCLI(os.Args[2:], os.Stdout, os.Stderr))
+		case "cron":
+			os.Exit(RunCronCLI(os.Args[2:], os.Stdout, os.Stderr))
 		}
 	}
 
