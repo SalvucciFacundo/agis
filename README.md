@@ -1,49 +1,120 @@
 # AGIS — Autonomous Go Intelligent System
 
-A general-purpose autonomous agent in Go: a single static binary, SQLite persistence, zero external services at runtime. AGIS pairs the functional scope of [Hermes Agent](https://github.com/NousResearch/hermes-agent) (learning loop, multi-provider LLMs, multi-backend tools) with the hexagonal Go architecture of [GAIA](https://github.com/SalvucciFacundo/gaia) — built to run on anything from a $5 VPS to a laptop.
+A general-purpose autonomous agent in Go: a single static binary, SQLite persistence, zero external services at runtime. AGIS pairs the functional scope of [Hermes Agent](https://github.com/NousResearch/hermes-agent) (learning loop, multi-provider LLMs, multi-backend tools, ecosystem integrations) with the hexagonal Go architecture of [GAIA](https://github.com/SalvucciFacundo/gaia) — built to run on anything from a $5 VPS to a laptop.
 
 ## Status
 
-**M1 — Thinking agent with memory: DONE** (archived 2026-08-15). Verified 9/9 requirements, 11/11 scenarios, test suite green (50 test cases across 6 packages). M2–M5 are shipped and archived; M6 is designed in `spec.md` and tracked in [docs/roadmap.md](docs/roadmap.md).
+**Milestones M1–M6: ALL SHIPPED & VERIFIED ✅**
+- **M1 (Skeleton & Memory)**: Hexagonal core, LLM port (Ollama/OpenAI), SQLite+FTS5 memory, Bubbletea TUI.
+- **M2 (Learning Loop)**: Memory curator, nudges, close-time session summarization, user model aggregation.
+- **M3 (Skills & Persona)**: Skill Hub, `SOUL.md` durable identity, personality presets, guided evolution.
+- **M4 (Tools & Policy)**: Tool-calling loop, Local/Docker/SSH backends, Policy Guard, `/permisos` panel.
+- **M5 (Full TUI & Sessions)**: Session Manager, slash commands (`/new`, `/save`, `/list`, `/restore`, `/rename`, `/compress`, `/snapshot`).
+- **M6 (Ecosystem & Integrations)**: Telegram/Discord Gateway, Cron Scheduler, Plugin Manager, HMAC Webhooks, CLI daemons.
 
-## What works (M1)
+Full milestone history in [docs/roadmap.md](docs/roadmap.md).
 
-- **Brain loop** — `Brain.Step` persists your message, loads the conversation tail, streams the provider's reply, and persists it. Tool calls are logged and ignored for now.
-- **LLM provider port** — OpenAI and Ollama adapters over one shared OpenAI-compatible client. Provider and model come from config, no code changes to switch.
-- **Memory** — SQLite (pure Go, no cgo) with FTS5 full-text search over messages and observations, embedded migrations, accent-insensitive search.
-- **Minimal TUI** — Bubbletea viewport + input + spinner, streaming output, restores your latest conversation on startup.
-- **Config** — `~/.agis/config.yaml` with safe defaults and a documented precedence order.
+## Core Capabilities
+
+- **Brain Loop** — `Brain.Step` persists turns, loads history, injects memory & skills, streams model tokens, evaluates tool calls, and persists final assistant turns.
+- **Multi-Provider LLM** — Ollama, OpenAI, and any OpenAI-compatible API over a unified client with streaming SSE.
+- **SQLite + FTS5 Memory** — Pure Go SQLite with full-text search over conversations, messages, observations, and snapshots.
+- **Learning & Memory Loop** — Continuous observation extraction (Curator), session summarization, and user model confidence synthesis.
+- **Skill Hub & Persona** — Agentskills.io-compatible Markdown skill loading, runtime skill creation, durable `SOUL.md`, and dynamic personality overlays.
+- **Policy Guard & Tool Backends** — Multi-tier security postures (`sandbox`, `standard`, `full`), fail-closed approval, audit logging, and Local/Docker/SSH tool backends.
+- **Chat Gateway Multiplexer** — Concurrent Telegram and Discord bot adapters, user allowlists, session multiplexing, and message chunking.
+- **Cron Scheduler Daemon** — Autonomous scheduled tasks with 5-field cron and `@every` duration expressions, sandbox policy, and chat notification delivery.
+- **Plugin Manager** — Dynamic external plugin discovery (`plugin.json`), tool runner bridge, skill extraction, and persistent state management.
+- **HMAC Webhook Server** — HTTP event listener with constant-time HMAC-SHA256 signature verification and brain event dispatching.
 
 ## Quickstart
 
-Requirements: Go 1.26+, and [Ollama](https://ollama.com) running locally (or an OpenAI API key) for the model.
+Requirements: Go 1.26+, and [Ollama](https://ollama.com) running locally (or an OpenAI API key).
 
 ```bash
 # build the binary
 make build
 
-# run (local Ollama, model llama3.2 by default)
+# run interactive TUI (local Ollama, model llama3.2 by default)
 ./bin/agis
 
 # or run directly without building
 go run ./cmd/agis
 ```
 
-The Makefile targets are `build`, `test`, `vet`, `lint`, `fmt`, `tidy`, `clean`. There is no `make run`; run `./bin/agis` or `go run ./cmd/agis`.
+The Makefile targets are `build`, `test`, `vet`, `lint`, `fmt`, `tidy`, `clean`.
 
-On first start AGIS creates `~/.agis/agis.db` and uses the defaults below. Type a message and press Enter; press `Ctrl+C` or `Esc` to quit.
+## CLI Subcommands
+
+AGIS provides modular daemons and management subcommands alongside the default interactive TUI:
+
+```bash
+# 1. Chat Gateway (Telegram & Discord daemon)
+./bin/agis gateway [run] [--config config.yaml]
+
+# 2. Cron Scheduler Daemon
+./bin/agis cron run [--config config.yaml]
+./bin/agis cron list [--config config.yaml]
+
+# 3. External Plugins Management
+./bin/agis plugins list [--dir ~/.agis/plugins]
+./bin/agis plugins enable <plugin_name>
+./bin/agis plugins disable <plugin_name>
+./bin/agis plugins inspect <plugin_name>
+
+# 4. Webhook HTTP Listener
+./bin/agis webhook run [--port 8080] [--host 127.0.0.1] [--path /webhook]
+
+# 5. Policy Guard CLI
+./bin/agis policy show
+./bin/agis policy set <rule>
+./bin/agis policy rm <rule>
+./bin/agis policy tier <sandbox|standard>
+```
 
 ## Configuration
 
-Config lives in `~/.agis/config.yaml`. Defaults: provider `ollama`, model `llama3.2`, database at `~/.agis/agis.db`. See [docs/configuration.md](docs/configuration.md) for the full file format, the `-config` / `AGIS_HOME` / default precedence, and the 0600 permission requirement.
+Config lives in `~/.agis/config.yaml` (or `$AGIS_HOME/config.yaml`). See [docs/configuration.md](docs/configuration.md) for the full specification, defaults, and security guidance.
 
 ```yaml
 llm:
-  provider: ollama      # ollama | openai (anything else maps to the OpenAI-compatible client)
+  provider: ollama      # ollama | openai
   model: llama3.2
-  # api_key: ""          # required for openai, empty for local ollama
+  # api_key: ""         # required for openai, empty for local ollama
+
 db:
   path: /home/you/.agis/agis.db
+
+gateway:
+  enabled: false
+  telegram:
+    enabled: false
+    token: ""
+    allowlist: []
+  discord:
+    enabled: false
+    token: ""
+    allowlist: []
+
+cron:
+  enabled: false
+  jobs:
+    - name: "daily-health"
+      schedule: "@every 1h"
+      prompt: "Check system health"
+      target:
+        adapter: "telegram"
+        recipient: "123456"
+
+plugins:
+  enabled: false
+  dir: "~/.agis/plugins"
+
+webhook:
+  enabled: false
+  port: 8080
+  path: "/webhook"
+  secret: ""
 ```
 
 ## Roadmap
@@ -55,24 +126,23 @@ db:
 | M3 | Skills & persona: skill hub, SOUL.md, persona overlays | **DONE** |
 | M4 | Tools, backends & permissions: Policy Guard, `agis policy`, `/permisos` | **DONE** |
 | M5 | Full TUI: slash commands, session browse, interrupt-and-redirect | **DONE** |
-| M6 | Gateway (Telegram/Discord first) + cron + ecosystem | planned |
+| M6 | Gateway (Telegram/Discord) + cron + plugins + webhooks | **DONE** |
 
 Full detail in [docs/roadmap.md](docs/roadmap.md).
 
 ## Documentation
 
-- [docs/architecture.md](docs/architecture.md) — hexagonal layout, ports, data flow, dependency direction
-- [docs/memory.md](docs/memory.md) — SQLite schema, FTS5, embedded migrations, M2 learning-loop vision
-- [docs/configuration.md](docs/configuration.md) — config file, precedence, defaults, security
-- [docs/sessions.md](docs/sessions.md) — session lifecycle, 7 slash commands, snapshots (implemented in M5)
-- [docs/permissions.md](docs/permissions.md) — permission system (implemented in M4)
-- [docs/security.md](docs/security.md) — threat model and defenses (partially implemented)
-- [docs/roadmap.md](docs/roadmap.md) — M1 shipped scope, M2–M6 plans, M1 review follow-ups
+- [docs/architecture.md](docs/architecture.md) — Hexagonal layout, ports, data flow, ecosystem architecture
+- [docs/configuration.md](docs/configuration.md) — Configuration file, precedence, defaults, security, examples
+- [docs/sessions.md](docs/sessions.md) — Session lifecycle, slash commands, snapshots
+- [docs/permissions.md](docs/permissions.md) — Policy Guard, permission system, audit logging
+- [docs/security.md](docs/security.md) — Threat model, sandbox posture, HMAC verification, allowlists
+- [docs/roadmap.md](docs/roadmap.md) — Milestone history, shipped scopes, verification details
 
 ## Relationship to GAIA and Hermes
 
 - **GAIA** — architectural DNA. Hexagonal layout, Bubbletea TUI, SQLite persistence, skill registry. AGIS is **not** a fork: it is a general-purpose agent with its own codebase, memory DB, and no coding-specific machinery.
-- **Hermes** — functional reference. Learning loop, skills, multi-provider, multi-backend. AGIS reimplements that scope in Go at a fraction of the resource footprint.
+- **Hermes** — functional reference. Learning loop, skills, multi-provider, multi-backend, ecosystem integrations. AGIS reimplements that scope in Go at a fraction of the resource footprint.
 
 ## License
 

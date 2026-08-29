@@ -2,25 +2,30 @@
 
 AGIS is a hexagonal (ports & adapters) Go application, mirroring the structure proven in GAIA. The domain lives in `internal/core` and never depends on an adapter; every implementation plugs in behind a port.
 
-## Package layout (M1)
+## Package Layout
 
 | Package | Role | Depends on |
 |---|---|---|
-| `cmd/agis` | Entrypoint: flag parsing, config load, wiring, TUI launch | everything |
-| `internal/core` | Domain: types, `Provider` port, `Repository` port, `Brain` loop | nothing internal |
-| `internal/config` | YAML loader, defaults, precedence, 0600 check | `gopkg.in/yaml.v3` |
-| `internal/memory` | `Repository` adapter on SQLite + FTS5, embedded migrations | `core` |
+| `cmd/agis` | Entrypoint: flag parsing, subcommands routing (`gateway`, `cron`, `plugins`, `webhook`, `policy`), wiring, TUI launch | everything |
+| `internal/core` | Domain: types, `Provider` port, `Repository` port, `Brain` loop, `ToolRunner` port, `Approver` port | nothing internal |
+| `internal/config` | YAML loader, defaults, precedence, 0600 check, ecosystem blocks | `gopkg.in/yaml.v3` |
+| `internal/memory` | `Repository` adapter on SQLite + FTS5, embedded migrations, summarizer, curator | `core` |
 | `internal/adapters/llm` | `Provider` adapters: OpenAI, Ollama, shared client | `core`, `config` |
-| `internal/adapters/tui` | Bubbletea TUI: viewport, input, spinner, streaming | `core` |
+| `internal/adapters/tui` | Bubbletea TUI: viewport, input, spinner, streaming, slash commands | `core`, `policy`, `session`, `persona` |
+| `internal/gateway` | External chat platform adapters (Telegram, Discord), Multiplexer, Auto-deny approver | `core`, `session` |
+| `internal/cron` | Background job scheduler, cron parser, interval triggers, gateway notification sender | `core`, `config` |
+| `internal/plugins` | External plugin discovery, `plugin.json` manifest parsing, tool/skill registration, state persistence | `core`, `skills` |
+| `internal/webhook` | HTTP webhook ingestion server, HMAC-SHA256 signature verification, Brain event dispatch | `core`, `gateway` |
+| `internal/policy` | Policy Guard: file-backed policy store, sandbox/standard/full postures, audit logging | `core` |
+| `internal/session` | Session Manager: conversation lifecycle, switching, snapshots, renaming, history compression | `core` |
+| `internal/skills` | Skill Hub: Markdown skill discovery, keyword matching, agent skill creation | `core` |
+| `internal/persona` | SOUL.md durable identity, personality overlays, user-model guided evolution | `core` |
 
-Six packages in M1. The layers from `spec.md` (`gateway`, `cron`, `skills`, `policy`, `persona`, …) exist only as designed directories; nothing beyond the six above is shipped yet.
+## Domain Ports
 
-## Ports
+Core ports define the domain boundaries:
 
-Two ports define the domain boundary:
-
-**`core.Provider`** (`internal/core/port_llm.go`) — the LLM port.
-
+**`core.Provider`** (`internal/core/port_llm.go`) — the LLM port:
 ```go
 type Provider interface {
     Chat(ctx context.Context, req ChatRequest) (ChatResponse, error)
@@ -29,53 +34,117 @@ type Provider interface {
 }
 ```
 
-**`core.Repository`** (`internal/core/port_repository.go`) — the persistence port.
-
+**`core.Repository`** (`internal/core/port_repository.go`) — the persistence port:
 ```go
 type Repository interface {
     CreateConversation(ctx context.Context, title string) (*Conversation, error)
     LatestConversation(ctx context.Context) (*Conversation, error)
+    GetConversation(ctx context.Context, id string) (*Conversation, error)
+    ListConversations(ctx context.Context) ([]Conversation, error)
+    RenameConversation(ctx context.Context, id string, title string) error
     AppendMessage(ctx context.Context, convID string, msg Message) error
     Messages(ctx context.Context, convID string, limit int) ([]Message, error)
     Search(ctx context.Context, query string, limit int) ([]SearchResult, error)
+    SaveSkill(ctx context.Context, skill Skill) error
+    ListSkills(ctx context.Context) ([]Skill, error)
     Close() error
 }
 ```
 
-Both ports are interfaces over domain types defined in `internal/core/types.go` — `Message`, `Conversation`, `ChatRequest`, `ChatResponse`, `ModelInfo`, `SearchResult`. Adapters implement the interfaces and import `core`; `core` never imports an adapter.
-
-## Data flow
-
-```
-TUI (Bubbletea) ──input──▶ Brain.Step ──▶ Provider.Stream ──▶ OpenAI / Ollama
-      ▲                          │  │
-      │   streamed tokens        │  ▼
-      └──────────────────────────┘  Repository (SQLite + FTS5)
+**`core.ToolRunner`** (`internal/core/tools.go`) — the tool execution port:
+```go
+type ToolRunner interface {
+    Backend() string
+    Run(ctx context.Context, command string) (string, error)
+}
 ```
 
-1. The user presses Enter in the TUI; `submit()` (`internal/adapters/tui/app.go:188`) clears the input and starts a goroutine that calls `Brain.Step`.
-2. `Brain.Step` (`internal/core/brain.go:47`) ensures a conversation exists, persists the user message, loads the last 50 messages as context, and calls `Provider.Stream`.
-3. Provider tokens flow back through the Brain's `Sink` (`core.WithSink`) into a buffered channel the TUI drains and paints in real time.
-4. When the stream ends, `Step` persists the assistant message. A provider error leaves the user message persisted but writes no assistant reply.
+**`core.Approver`** (`internal/core/guard.go`) — the policy decision callback:
+```go
+type Approver func(ctx context.Context, req GuardRequest) Scope
+```
 
-The stream channel is buffered (64) so a slow update loop back-pressures the provider instead of dropping tokens (`cmd/agis/main.go:53`).
+Adapters implement the interfaces and import `core`; `core` never imports an adapter.
 
-## StreamEvent contract
+## Data Flow & Ecosystem Routing
+
+All external interfaces (TUI, Chat Gateway, Cron Scheduler, Webhooks) drive the exact same `core.Brain` loop and Repository:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          INTERACTION SURFACES                           │
+│                                                                         │
+│  ┌───────────────┐  ┌────────────────────┐  ┌──────────┐  ┌──────────┐  │
+│  │ Bubbletea TUI │  │ Gateway Mux (TG/DC)│  │ Cron Eng │  │ Webhook  │  │
+│  └───────┬───────┘  └─────────┬──────────┘  └────┬─────┘  └────┬─────┘  │
+└──────────┼────────────────────┼──────────────────┼─────────────┼────────┘
+           │                    │                  │             │
+           ▼                    ▼                  ▼             ▼
+      ┌───────────────────────────────────────────────────────────────┐
+      │                           core.Brain                          │
+      │  ┌─────────────────────────────────────────────────────────┐  │
+      │  │ Step(ctx, input)                                        │  │
+      │  │  1. Bind/Restore Conversation ID in Session Manager     │  │
+      │  │  2. Append User Message to Repository                   │  │
+      │  │  3. Inject SOUL.md, Persona, Skills & Long-Term Memory  │  │
+      │  │  4. Stream Provider Turns with Tool Loop (up to 8 rds)  │  │
+      │  │  5. Policy Guard & Approver (Sandbox auto-deny / TUI UI)│  │
+      │  │  6. Execute Local / Docker / SSH / Plugin ToolRunners   │  │
+      │  │  7. Append Assistant Message & Emit to Output Sink      │  │
+      │  └─────────────────────────────────────────────────────────┘  │
+      └───────────────────────────────┬───────────────────────────────┘
+                                      │
+              ┌───────────────────────┴───────────────────────┐
+              ▼                                               ▼
+   ┌───────────────────────┐                     ┌────────────────────────┐
+   │     core.Provider     │                     │    core.Repository     │
+   │  (OpenAI / Ollama)    │                     │    (SQLite + FTS5)     │
+   └───────────────────────┘                     └────────────────────────┘
+```
+
+## Ecosystem Architecture
+
+### 1. Gateway Multiplexer & Adapters (`internal/gateway`)
+The Gateway subsystem coordinates external chat platforms concurrently:
+- **`Adapter` interface**: provides `Name() string`, `Start(ctx) error`, `Stop() error`, and `Send(ctx, target, msg) error`.
+- **Telegram Adapter**: uses Telegram Bot API polling to ingest updates and chunk outbound messages at 4096 characters.
+- **Discord Adapter**: connects via Discord Gateway events and splits outbound messages at 2000 characters.
+- **Multiplexer**: routes events to distinct session IDs (`gateway:<adapter>:<chatID>`), executes `core.Brain.Step`, and transmits replies back via the originating adapter.
+- **Security**: static user ID allowlists (`IsAllowed`) enforce fail-closed access control; `AutoDenyApprover` auto-denies unapproved tool actions (`DecisionAsk`) in non-interactive chat environments.
+
+### 2. Cron Scheduler Engine (`internal/cron`)
+The Cron subsystem schedules background autonomous tasks:
+- **Expression Parsing**: parses standard 5-field cron syntax (`"0 9 * * *"`, `"*/15 * * * *"`, step ranges, macros `@hourly`, `@daily`, `@weekly`, `@monthly`, `@annually`) and duration intervals (`"@every 1h"`).
+- **Execution Loop**: wakes periodically to trigger due jobs, executing prompts via `core.Brain.Step` in isolated (`cron:<name>`) or bound sessions under sandbox policy.
+- **Target Notification**: forwards completed job outputs to the configured `Sender` (`gateway.Multiplexer` adapter/recipient) or logs output.
+
+### 3. Plugin Manager (`internal/plugins`)
+The Plugin subsystem manages modular agent extensions:
+- **Manifest Schema (`plugin.json`)**: validates name regex (`^[a-z0-9-_]+$`), semver version, entrypoints, tools, skills, and permissions.
+- **Lifecycle Management**: dynamically discovers plugins in `$AGIS_HOME/plugins/`, tracks enabled/disabled status in `state.json`, and exposes `Load`, `List`, `Enable`, `Disable`, and `inspect` APIs.
+- **Tool Bridge**: wraps plugin entrypoints as `PluginRunner` (`core.ToolRunner`) with backend identifier `plugin-<name>`.
+- **Skill Hub Integration**: extracts markdown skills declared in manifests into AGIS Skill Hub.
+
+### 4. Webhook Listener Server (`internal/webhook`)
+The Webhook subsystem enables HTTP event ingestion:
+- **HTTP Handler**: listens on configured host/port, routing POST requests at configured path (`/webhook` or `/events`). Non-POST requests return `405 Method Not Allowed`.
+- **HMAC-SHA256 Verification**: verifies incoming signatures in `X-Hub-Signature-256` or `X-Signature` headers using constant-time comparison (`crypto/subtle.ConstantTimeCompare`). Missing or invalid signatures return `401 Unauthorized`.
+- **Dispatch & Target Forwarding**: extracts JSON event types into session keys (`webhook:<event_type>`), triggers `core.Brain.Step`, and forwards responses to chat gateway targets.
+
+## StreamEvent Contract
 
 `Provider.Stream` returns `(<-chan StreamEvent, error)`:
-
 - `StreamEvent{Text}` — one content delta. Text and Err are mutually exclusive.
+- `StreamEvent{ToolCall}` — tool invocation requested by model.
 - `StreamEvent{Err}` — a terminal mid-stream failure.
 - The provider **must** close the channel, including after a terminal error event.
 - An immediate failure (bad request, non-200) is returned as the error result, not on the channel.
 
-`Brain.Step` honors the contract: on a mid-stream error it drains the channel to its close before returning, so a blocked provider goroutine never leaks (`internal/core/brain.go:69`).
+`Brain.Step` honors the contract: on a mid-stream error it drains the channel to its close before returning, preventing goroutine leaks.
 
-The shared OpenAI-compatible client (`internal/adapters/llm/client.go`) implements the wire protocol; `NewOpenAI` points it at `https://api.openai.com/v1` and `NewOllama` at `http://localhost:11434/v1`. `llm.NewProvider` selects the Ollama adapter when `provider` is `ollama`; any other value selects the OpenAI-compatible client — which is how alternative endpoints plug in without code changes.
-
-## Dependency direction
+## Dependency Direction
 
 - `core` imports no internal package — it is the center of the hexagon.
-- `config`, `memory`, and `adapters/*` import `core` (and, where needed, `config`).
-- `cmd/agis` is the only composition root; it constructs the repository, provider, brain, and TUI and wires them together.
-- The TUI's only dependency on `core` is `*core.Brain` and `core.Repository` — the surface never reaches into storage or the provider directly.
+- Adapters, memory, config, gateway, cron, plugins, webhook, and policy import `core`.
+- `cmd/agis` is the composition root; it routes subcommands, instantiates dependencies, and wires subsystems together.
+- Surfaces (TUI, Gateway, Cron, Webhook) interact with storage and LLMs exclusively through domain interfaces.

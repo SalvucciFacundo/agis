@@ -47,6 +47,6 @@ Chain strategy: stacked-to-main
 - [x] 3.8 Implement Cobra subcommands `agis plugins` and `agis webhook` in `cmd/agis/plugins.go` and `cmd/agis/webhook.go`. <!-- sdd-owner: implementation -->
 
 ### PR 4: Config Extensions, CLI Subcommands, End-to-End Verification & Docs
-- [ ] 4.1 Perform end-to-end integration testing across gateway, cron, plugins, and webhooks with `go test ./internal/...`. <!-- sdd-owner: implementation -->
-- [ ] 4.2 Verify binary build and CLI subcommands execution with `go build -o bin/agis ./cmd/agis`. <!-- sdd-owner: implementation -->
-- [ ] 4.3 Clean up documentation and finalize all ecosystem change artifacts. <!-- sdd-owner: implementation -->
+- [x] 4.1 Perform end-to-end integration testing across gateway, cron, plugins, and webhooks with `go test ./...` and `go test -race ./...`. <!-- sdd-owner: implementation -->
+- [x] 4.2 Verify binary build and CLI subcommands execution with `go build -o bin/agis ./cmd/agis`. <!-- sdd-owner: implementation -->
+- [x] 4.3 Update repository documentation and finalize all ecosystem change artifacts. <!-- sdd-owner: implementation -->

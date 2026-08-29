@@ -2,26 +2,31 @@
 
 AGIS reads a single YAML file. The loader lives in `internal/config` and is fully tested (`internal/config/config_test.go`).
 
-## File format
+## File Format
 
 ```yaml
 llm:
-  provider: ollama      # llm provider: ollama | openai
+  provider: ollama      # llm provider: ollama | openai (or any OpenAI-compatible API)
   model: llama3.2       # model name sent to the provider
   api_key: ""           # API key (openai); empty is valid for local ollama
+
 db:
   path: /home/you/.agis/agis.db   # SQLite database file
+
 memory:
   learning_enabled: true          # master switch for the learning loop
   recall_limit: 10                # top-N observations injected per turn
   nudge_every: 10                 # curator runs every N assistant messages
   close_timeout: 30s              # bounded wait for session close on quit
+
 agent:
   personalities: {}               # custom /personality presets (name -> text)
   evolution_enabled: true         # derived persona layer from user model
+
 skills:
   enabled: true                   # skill hub: loading, matching, creation
   dir: ~/.agis/skills             # where skill files live
+
 tools:
   enabled: false                  # master switch: no tools without explicit opt-in
   docker:
@@ -32,13 +37,44 @@ tools:
     host: ""                      # e.g. vps.example
     user: ""                      # remote user
     key_path: ""                  # path to private key
+
+gateway:
+  enabled: false                  # master switch for external chat gateways
+  telegram:
+    enabled: false
+    token: ""                     # bot token from @BotFather
+    allowlist: []                 # permitted Telegram user IDs (fail-closed)
+  discord:
+    enabled: false
+    token: ""                     # bot token from Discord Developer Portal
+    allowlist: []                 # permitted Discord user IDs (fail-closed)
+
+cron:
+  enabled: false                  # master switch for background cron scheduler
+  jobs:
+    - name: "daily-health"
+      schedule: "@every 1h"       # 5-field cron expression or duration interval
+      prompt: "Check system health"
+      session_id: "cron-health"   # optional: binds to persistent session ID
+      target:
+        adapter: "telegram"       # "telegram" | "discord"
+        recipient: "123456789"    # target chat/channel ID
+
+plugins:
+  enabled: false                  # master switch for external plugins
+  dir: ~/.agis/plugins            # plugin root directory (holds <name>/plugin.json)
+
+webhook:
+  enabled: false                  # master switch for webhook HTTP listener
+  host: "127.0.0.1"               # binding address
+  port: 8080                      # binding port
+  path: "/webhook"                # endpoint path for HTTP POST events
+  secret: ""                      # HMAC-SHA256 secret key for signature verification
+  default_session_id: "webhook-events"
+  target:
+    adapter: "telegram"           # optional notification delivery target
+    recipient: "123456789"
 ```
-
-The `llm` and `db` blocks are the M1 core. The `memory` block tunes the learning loop (curator, summarizer, user model, recall).
-
-`provider` selects the adapter at startup: `ollama` picks the local Ollama adapter, and any other value (including `openai`) picks the OpenAI-compatible client (`internal/adapters/llm/provider.go:14`).
-
-`api_key` is intentionally untouched by defaulting: an empty key is a valid value for local backends (`internal/config/config.go:101`).
 
 ## Precedence
 
@@ -74,61 +110,145 @@ A missing file is **not an error**: the loader falls back to built-in defaults. 
 | `tools.ssh.host` | (empty) |
 | `tools.ssh.user` | (empty) |
 | `tools.ssh.key_path` | (empty) |
+| `gateway.enabled` | `false` |
+| `gateway.telegram.enabled` | `false` |
+| `gateway.telegram.token` | (empty) |
+| `gateway.telegram.allowlist` | (empty, fail-closed) |
+| `gateway.discord.enabled` | `false` |
+| `gateway.discord.token` | (empty) |
+| `gateway.discord.allowlist` | (empty, fail-closed) |
+| `cron.enabled` | `false` |
+| `cron.jobs` | `[]` |
+| `plugins.enabled` | `false` |
+| `plugins.dir` | `$AGIS_HOME/plugins` or `~/.agis/plugins` |
+| `webhook.enabled` | `false` |
+| `webhook.host` | `127.0.0.1` |
+| `webhook.port` | `8080` |
+| `webhook.path` | `/webhook` |
+| `webhook.secret` | (empty) |
+| `webhook.default_session_id` | `webhook-events` |
 
-Defaults apply per-field: a config file that sets only `llm.model` keeps the default provider and database path (`applyDefaults`, `internal/config/config.go:102`).
+Defaults apply per-field: partial configuration retains safe defaults for omitted fields.
 
-## Memory block
+---
 
-The learning loop runs by default. When `learning_enabled: false`, the brain is built without curator and summarizer: no recall injection, no periodic curation, no close-time summarization (`cmd/agis/main.go`). The TUI still closes sessions, but with no closer wired it is a fast no-op.
+## Ecosystem Configuration Blocks
 
-| Field | Semantics |
-|---|---|
-| `learning_enabled` | Master switch for the whole loop |
-| `recall_limit` | Top-N observations prepended as a system message each turn; zero or negative restores the default |
-| `nudge_every` | Curator fires every N assistant messages; an explicit `0` disables nudging and survives defaulting on purpose |
-| `close_timeout` | How long quitting waits for the summarizer before giving up (Go duration string, e.g. `30s`, `1m`) |
+### 1. Gateway (`gateway`)
+The `gateway` block configures chat platform adapters:
+- `gateway.enabled`: Master switch. Must be `true` for `agis gateway` to run.
+- `telegram.token` / `discord.token`: Platform bot API authentication tokens.
+- `telegram.allowlist` / `discord.allowlist`: Static user ID lists. Messages from unlisted IDs are rejected and logged before any session allocation or LLM invocation.
 
-Several values are intentionally exempt from defaulting because their zero/false forms are meaningful — `learning_enabled: false`, `nudge_every: 0`, `agent.evolution_enabled: false`, and `skills.enabled: false`. Keys absent from the file always keep their defaults, so a partial block such as `memory: {recall_limit: 5}` leaves every other default intact.
+### 2. Cron (`cron`)
+The `cron` block configures scheduled background automations:
+- `cron.enabled`: Master switch. Must be `true` for `agis cron run` daemon.
+- `jobs`: List of scheduled job entries:
+  - `name`: Unique alphanumeric identifier (e.g. `"daily-summary"`).
+  - `schedule`: Standard 5-field cron expression (`"0 9 * * 1-5"`, `"*/30 * * * *"`, `@daily`, `@hourly`) or duration interval (`"@every 2h30m"`).
+  - `prompt`: Autonomous instruction passed to `core.Brain.Step`.
+  - `session_id` (optional): Bound session identifier (defaults to `cron:<name>`).
+  - `target` (optional): Outbound notification destination containing `adapter` (`"telegram"` or `"discord"`) and `recipient` (chat/channel ID).
 
-On quit (CtrlC/Esc) the TUI shows a `closing...` status and waits up to `close_timeout` for the session summary to finish before exiting. While streaming, the first press cancels the stream and commits the partial reply; the second force-quits without closing.
+### 3. Plugins (`plugins`)
+The `plugins` block configures external plugin discovery:
+- `plugins.enabled`: Master switch for dynamic tool and skill registration.
+- `plugins.dir`: Directory containing plugin subdirectories (each containing a `plugin.json` manifest).
 
-## Security: 0600
+### 4. Webhook (`webhook`)
+The `webhook` block configures the HTTP event listener:
+- `webhook.enabled`: Master switch for `agis webhook run` listener.
+- `host` & `port`: Network interface and port to bind (defaults to `127.0.0.1:8080`).
+- `path`: HTTP endpoint path for POST events (defaults to `/webhook`).
+- `secret`: Secret key used for HMAC-SHA256 signature verification via `X-Hub-Signature-256` or `X-Signature`.
+- `default_session_id`: Default session prefix for incoming events (e.g. `webhook:<event_type>`).
+- `target` (optional): Outbound chat destination to forward brain responses.
 
-The config file may hold an API key, so it is **expected to be mode `0600`**. If the file grants any permission to group or other, the loader emits a warning on stderr (or the `WithWarnWriter` writer in tests):
+---
+
+## Security: 0600 Permissions
+
+The config file may hold API tokens, SSH keys, or HMAC webhook secrets, so it is **expected to be mode `0600`**. If the file grants any permission to group or other, the loader emits a warning on stderr:
 
 ```
 agis: warning: /home/you/.agis/config.yaml has permissions 0644; expected 0600
 ```
 
-The check is advisory in M1 — it warns, it does not refuse to start. See [docs/security.md](docs/security.md) for the security context. Fix a loose file with:
-
+Fix file permissions with:
 ```bash
 chmod 600 ~/.agis/config.yaml
 ```
 
-## Practical examples
+---
 
-Switch to OpenAI:
+## Practical Examples
+
+### Telegram & Discord Chatbot Daemon
 
 ```yaml
 llm:
   provider: openai
-  model: gpt-4o-mini
-  api_key: sk-...   # then: chmod 600 ~/.agis/config.yaml
+  model: gpt-4o
+  api_key: sk-...
+
+gateway:
+  enabled: true
+  telegram:
+    enabled: true
+    token: "123456789:ABCDefghIJKlmnoPQRstuvWXYZ"
+    allowlist:
+      - "987654321"
+  discord:
+    enabled: true
+    token: "MTAwMjAwMzAwNDAwNTAwNjAw.xxxxxx.yyyyyy"
+    allowlist:
+      - "112233445566778899"
 ```
 
-Point at any other OpenAI-compatible endpoint by treating it as a stand-in for the OpenAI adapter (the provider value `openai` is a catch-all, `internal/adapters/llm/provider.go:14`):
-
+Start the gateway:
 ```bash
-AGIS_HOME=/srv/agis ./bin/agis -config /srv/agis/config.yaml
+./bin/agis gateway run
 ```
 
-`AGIS_HOME` also relocates the database — useful for a portable or multi-instance setup without touching the file.
+### Scheduled Maintenance with Telegram Notifications
 
-## Tools
+```yaml
+cron:
+  enabled: true
+  jobs:
+    - name: "morning-digest"
+      schedule: "0 8 * * 1-5"
+      prompt: "Summarize pending high-priority items and today's schedule"
+      target:
+        adapter: "telegram"
+        recipient: "987654321"
+```
 
-Tools are **opt-in**: set `tools.enabled: true` and enable the backends you want. Missing binaries degrade gracefully with a warning at startup. Every tool call is evaluated by the Policy Guard; see [permissions.md](permissions.md) for the `agis policy` CLI and `/permisos` panel.
+Start the cron daemon:
+```bash
+./bin/agis cron run
+```
 
-## Not yet implemented
+List configured jobs:
+```bash
+./bin/agis cron list
+```
 
-`agis config set/get` and `agis model` remain designed in `spec.md` but not yet implemented. Gateway and cron surfaces are M6.
+### Webhook Event Listener with HMAC Authentication
+
+```yaml
+webhook:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8080
+  path: "/events"
+  secret: "super-secure-webhook-secret"
+  target:
+    adapter: "telegram"
+    recipient: "987654321"
+```
+
+Start the webhook daemon:
+```bash
+./bin/agis webhook run --port 8080
+```
