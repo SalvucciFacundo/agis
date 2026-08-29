@@ -103,3 +103,26 @@ From the M1 review, deferred deliberately:
 - **`tui.New` signature drift** — the TUI constructor takes `(*core.Brain, core.Repository, chan string)`; revisit when the surface contract stabilizes.
 
 These six are the M1 review debt; the next milestone (M2) should close the first three at minimum.
+
+---
+
+## Future Horizons (Post-v1 / v2 Backlog)
+
+Future capabilities identified for post-v1 expansion:
+
+### 1. Automated CI/CD & Cross-Platform Releases
+- GitHub Actions CI pipeline running `go test -race ./...`, `go vet ./...`, and build checks on pull requests.
+- Multi-platform binary release pipeline via GitHub Actions for Linux (`amd64`, `arm64`), macOS (`amd64`, `arm64`), and Windows (`amd64`).
+- Quickstart single-command install scripts (`install.sh` for Unix/macOS, `install.ps1` for Windows).
+
+### 2. Hybrid Search (Vector Embeddings via Ollama)
+- Complement BM25 / FTS5 lexical full-text search with local dense vector embeddings (`nomic-embed-text` via Ollama or `sqlite-vec`).
+- Combine lexical keyword scores and cosine similarity behind the domain `Repository.Search` port without breaking single-binary ergonomics.
+
+### 3. Model Context Protocol (MCP) Client
+- Implement an MCP client adapter in `internal/mcp` to dynamically connect AGIS to community MCP servers (database explorers, web browsers, GitHub tools, custom APIs) without writing bespoke plugins.
+
+### 4. Multimodal Ingestion (Vision & Audio)
+- Extend `core.ChatRequest` and gateway message event pipelines to accept image and audio attachments.
+- Route image payloads to multimodal LLMs (e.g. `llama3.2-vision`, `gpt-4o`) and audio to local Whisper/Ollama transcription endpoints.
+

@@ -7,6 +7,8 @@
 <p align="center">
   <a href="https://go.dev"><img src="https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go" alt="Go Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://github.com/SalvucciFacundo/agis/releases"><img src="https://img.shields.io/github/v/release/SalvucciFacundo/agis?logo=github" alt="Release"></a>
+  <a href="https://github.com/SalvucciFacundo/agis/actions/workflows/ci.yml"><img src="https://github.com/SalvucciFacundo/agis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/Milestones-M1--M6%20Shipped-brightgreen" alt="Milestones M1-M6 Shipped"></a>
   <a href="https://github.com/SalvucciFacundo/agis"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome"></a>
 </p>
@@ -40,10 +42,26 @@ Full milestone history in [docs/roadmap.md](docs/roadmap.md).
 
 ## Quickstart
 
+### Linux & macOS (One-line installer)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SalvucciFacundo/agis/main/install.sh | bash
+```
+
+### Windows (PowerShell)
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/SalvucciFacundo/agis/main/install.ps1 | iex
+```
+
+### Build from Source
+
 Requirements: Go 1.26+, and [Ollama](https://ollama.com) running locally (or an OpenAI API key).
 
 ```bash
-# build the binary
+# clone and build the binary
+git clone https://github.com/SalvucciFacundo/agis.git
+cd agis
 make build
 
 # run interactive TUI (local Ollama, model llama3.2 by default)
