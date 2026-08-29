@@ -8,9 +8,9 @@ AGIS is a hexagonal (ports & adapters) Go application, mirroring the structure p
 |---|---|---|
 | `cmd/agis` | Entrypoint: flag parsing, subcommands routing (`gateway`, `cron`, `plugins`, `webhook`, `policy`), wiring, TUI launch | everything |
 | `internal/core` | Domain: types, `Provider` port, `Repository` port, `Brain` loop, `ToolRunner` port, `Approver` port | nothing internal |
-| `internal/config` | YAML loader, defaults, precedence, 0600 check, ecosystem blocks | `gopkg.in/yaml.v3` |
-| `internal/memory` | `Repository` adapter on SQLite + FTS5, embedded migrations, summarizer, curator | `core` |
-| `internal/adapters/llm` | `Provider` adapters: OpenAI, Ollama, shared client | `core`, `config` |
+| `internal/config` | YAML loader, defaults, precedence, 0600 check, ecosystem blocks, embeddings config | `gopkg.in/yaml.v3` |
+| `internal/memory` | `Repository` adapter on SQLite + FTS5, binary vector storage, RRF hybrid search, embedded migrations, summarizer, curator | `core` |
+| `internal/adapters/llm` | `Provider` adapters (OpenAI, Ollama) & `Embedder` adapters (Ollama, OpenAI) | `core`, `config` |
 | `internal/adapters/tui` | Bubbletea TUI: viewport, input, spinner, streaming, slash commands | `core`, `policy`, `session`, `persona` |
 | `internal/gateway` | External chat platform adapters (Telegram, Discord), Multiplexer, Auto-deny approver | `core`, `session` |
 | `internal/cron` | Background job scheduler, cron parser, interval triggers, gateway notification sender | `core`, `config` |
@@ -62,6 +62,15 @@ type ToolRunner interface {
 **`core.Approver`** (`internal/core/guard.go`) — the policy decision callback:
 ```go
 type Approver func(ctx context.Context, req GuardRequest) Scope
+```
+
+**`core.Embedder`** (`internal/core/port_embedder.go`) — the dense vector embedding port:
+```go
+type Embedder interface {
+    Embed(ctx context.Context, text string) ([]float32, error)
+    EmbedBatch(ctx context.Context, texts []string) ([][]float32, error)
+    Dimension() int
+}
 ```
 
 Adapters implement the interfaces and import `core`; `core` never imports an adapter.

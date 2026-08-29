@@ -132,7 +132,17 @@ func runCronDaemon(ctx context.Context, cfg *config.Config, stdout, stderr io.Wr
 
 	logger := slog.New(slog.NewTextHandler(stderr, nil))
 
-	repo, err := memory.NewRepository(ctx, cfg.DB.Path)
+	var repoOpts []memory.Option
+	if cfg.Embeddings.Enabled {
+		embedder, err := llm.NewEmbedder(cfg.Embeddings, cfg.LLM.APIKey)
+		if err != nil {
+			logger.Warn("embeddings: initializing embedder (falling back to FTS5)", "error", err)
+		} else {
+			repoOpts = append(repoOpts, memory.WithEmbedder(embedder))
+		}
+	}
+
+	repo, err := memory.NewRepository(ctx, cfg.DB.Path, repoOpts...)
 	if err != nil {
 		if ctx.Err() != nil {
 			return 0

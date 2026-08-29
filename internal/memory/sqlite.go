@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SalvucciFacundo/agis/internal/core"
@@ -25,7 +27,16 @@ const timeLayout = "2006-01-02T15:04:05.000000000Z07:00"
 
 // Repository is the SQLite + FTS5 implementation of core.Repository.
 type Repository struct {
-	db *sql.DB
+	db        *sql.DB
+	embedder  core.Embedder
+	logger    *slog.Logger
+
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	embedChan chan embeddingBatchMsg
+	embedMu   sync.Mutex
+	closed    bool
 }
 
 var _ core.Repository = (*Repository)(nil)
@@ -38,7 +49,7 @@ type rowScanner interface {
 // NewRepository opens (or creates) the SQLite database at path, applies the
 // embedded migrations, and returns a ready Repository. The caller owns the
 // returned Repository and must call Close when done.
-func NewRepository(ctx context.Context, path string) (*Repository, error) {
+func NewRepository(ctx context.Context, path string, opts ...Option) (*Repository, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("opening sqlite %s: %w", path, err)
@@ -55,7 +66,26 @@ func NewRepository(ctx context.Context, path string) (*Repository, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	return &Repository{db: db}, nil
+
+	workerCtx, cancel := context.WithCancel(context.Background())
+	r := &Repository{
+		db:        db,
+		logger:    slog.Default(),
+		ctx:       workerCtx,
+		cancel:    cancel,
+		embedChan: make(chan embeddingBatchMsg, 128),
+	}
+
+	for _, opt := range opts {
+		opt(r)
+	}
+
+	if r.embedder != nil {
+		r.wg.Add(1)
+		go r.embeddingWorker()
+	}
+
+	return r, nil
 }
 
 // CreateConversation persists a new conversation and returns it. An empty
@@ -176,16 +206,66 @@ func (r *Repository) Messages(ctx context.Context, convID string, limit int) ([]
 }
 
 // Search returns full-text matches across messages and observations, best
-// matches first. A non-positive limit is unbounded.
+// matches first. When an Embedder is configured, it executes a hybrid search
+// combining BM25 FTS5 keyword results with cosine similarity dense vector
+// results via Reciprocal Rank Fusion (RRF). If the embedder fails or is nil,
+// it falls back transparently to BM25 FTS5. A non-positive limit is unbounded.
 func (r *Repository) Search(ctx context.Context, query string, limit int) ([]core.SearchResult, error) {
 	if strings.TrimSpace(query) == "" {
 		return []core.SearchResult{}, nil
 	}
-	return r.searchMatches(ctx, query, limit)
+
+	// 1. Lexical full-text search (BM25)
+	ftsResults, err := r.searchMatches(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("lexical search: %w", err)
+	}
+
+	// 2. If embedder is not configured, return FTS results directly (transparent fallback)
+	if r.embedder == nil {
+		return ftsResults, nil
+	}
+
+	// 3. Compute vector embedding for query
+	queryVec, err := r.embedder.Embed(ctx, query)
+	if err != nil {
+		r.logger.Warn("hybrid search: embedder failed, falling back to FTS5", "query", query, "error", err)
+		return ftsResults, nil
+	}
+	if len(queryVec) == 0 {
+		return ftsResults, nil
+	}
+
+	// 4. Vector similarity search across candidate embeddings
+	vecResults, err := r.searchVectors(ctx, queryVec, limit)
+	if err != nil {
+		r.logger.Warn("hybrid search: vector search failed, falling back to FTS5", "error", err)
+		return ftsResults, nil
+	}
+
+	// 5. Merge rankings via Reciprocal Rank Fusion
+	merged := ReciprocalRankFusion([][]core.SearchResult{ftsResults, vecResults}, DefaultRRFK)
+	if limit > 0 && len(merged) > limit {
+		merged = merged[:limit]
+	}
+	return merged, nil
 }
 
-// Close releases the underlying database handle.
+// Close releases the underlying database handle and stops background workers.
 func (r *Repository) Close() error {
+	r.embedMu.Lock()
+	if !r.closed {
+		r.closed = true
+		if r.embedChan != nil {
+			close(r.embedChan)
+		}
+	}
+	r.embedMu.Unlock()
+
+	if r.cancel != nil {
+		r.cancel()
+	}
+	r.wg.Wait()
 	return r.db.Close()
 }
 
@@ -208,8 +288,10 @@ func clampImportance(v int) int {
 // topic_key. A re-saved topic keeps its original id and created_at and only
 // bumps updated_at; a new topic gets a fresh UUID. Importance is clamped to
 // [1,5] with 0 defaulting to 3. Each upsert also deletes and re-inserts the
-// observation's FTS row in the same transaction, so replaced content can never
-// haunt search. The whole batch is atomic: one bad row rolls back everything.
+// observation's FTS row and invalidates old embeddings in the same transaction,
+// so replaced content can never haunt search. The whole batch is atomic: one bad
+// row rolls back everything. When an Embedder is active, embedding jobs are
+// queued asynchronously so persistence latency is decoupled from LLM inference.
 func (r *Repository) SaveObservations(ctx context.Context, convID string, obs []core.Observation) error {
 	if len(obs) == 0 {
 		return nil
@@ -222,22 +304,42 @@ func (r *Repository) SaveObservations(ctx context.Context, convID string, obs []
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	jobs := make([]embeddingJob, 0, len(obs))
 	for _, o := range obs {
-		if err := r.upsertObservation(ctx, tx, convID, o, now); err != nil {
+		id, err := r.upsertObservation(ctx, tx, convID, o, now)
+		if err != nil {
 			return err
 		}
+		jobs = append(jobs, embeddingJob{
+			docType: docTypeObservation,
+			docID:   id,
+			content: o.Content,
+		})
 	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("committing observations: %w", err)
 	}
+
+	if r.embedder != nil && len(jobs) > 0 {
+		r.embedMu.Lock()
+		if !r.closed {
+			select {
+			case r.embedChan <- embeddingBatchMsg{jobs: jobs}:
+			default:
+				r.logger.Warn("memory: embedding queue full, dropping background job", "count", len(jobs))
+			}
+		}
+		r.embedMu.Unlock()
+	}
+
 	return nil
 }
 
 // upsertObservation writes one observation inside tx, upserting on topic_key.
-func (r *Repository) upsertObservation(ctx context.Context, tx *sql.Tx, convID string, o core.Observation, now time.Time) error {
+func (r *Repository) upsertObservation(ctx context.Context, tx *sql.Tx, convID string, o core.Observation, now time.Time) (string, error) {
 	if strings.TrimSpace(o.TopicKey) == "" {
-		return fmt.Errorf("observation has empty topic_key")
+		return "", fmt.Errorf("observation has empty topic_key")
 	}
 
 	importance := clampImportance(o.Importance)
@@ -253,10 +355,10 @@ func (r *Repository) upsertObservation(ctx context.Context, tx *sql.Tx, convID s
 			`INSERT INTO observations (id, topic_key, type, content, importance, created_at, updated_at, source_ref)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			id, o.TopicKey, o.Type, o.Content, importance, nowStr, nowStr, convID); err != nil {
-			return fmt.Errorf("inserting observation %q: %w", o.TopicKey, err)
+			return "", fmt.Errorf("inserting observation %q: %w", o.TopicKey, err)
 		}
 	case err != nil:
-		return fmt.Errorf("looking up observation %q: %w", o.TopicKey, err)
+		return "", fmt.Errorf("looking up observation %q: %w", o.TopicKey, err)
 	default:
 		// Re-save: preserve id and created_at, bump updated_at.
 		if _, err := tx.ExecContext(ctx,
@@ -264,18 +366,23 @@ func (r *Repository) upsertObservation(ctx context.Context, tx *sql.Tx, convID s
 			 SET type = ?, content = ?, importance = ?, source_ref = ?, updated_at = ?
 			 WHERE id = ?`,
 			o.Type, o.Content, importance, convID, nowStr, id); err != nil {
-			return fmt.Errorf("updating observation %q: %w", o.TopicKey, err)
+			return "", fmt.Errorf("updating observation %q: %w", o.TopicKey, err)
 		}
+	}
+
+	// Invalidate stale embedding vector
+	if _, err := tx.ExecContext(ctx, `DELETE FROM embeddings WHERE doc_type = ? AND doc_id = ?`, docTypeObservation, id); err != nil {
+		return "", fmt.Errorf("deleting observation embedding: %w", err)
 	}
 
 	// Replace the FTS row so stale content cannot survive an upsert.
 	if err := deleteFTSRow(ctx, tx, docTypeObservation, id); err != nil {
-		return fmt.Errorf("deleting observation FTS row: %w", err)
+		return "", fmt.Errorf("deleting observation FTS row: %w", err)
 	}
 	if err := insertFTSRow(ctx, tx, docTypeObservation, id, o.Content); err != nil {
-		return fmt.Errorf("indexing observation: %w", err)
+		return "", fmt.Errorf("indexing observation: %w", err)
 	}
-	return nil
+	return id, nil
 }
 
 // Observations returns the most recently updated observations, newest first. A

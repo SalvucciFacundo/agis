@@ -74,6 +74,13 @@ webhook:
   target:
     adapter: "telegram"           # optional notification delivery target
     recipient: "123456789"
+
+embeddings:
+  enabled: false                  # master switch for dense vector embeddings and hybrid search
+  provider: "ollama"              # "ollama" | "openai"
+  model: "nomic-embed-text"       # default: "nomic-embed-text" (ollama) or "text-embedding-3-small" (openai)
+  dimensions: 768                 # vector dimensions (0 for auto-detected)
+  batch_size: 100                 # maximum items per embedding batch request (capped to 2048)
 ```
 
 ## Precedence

@@ -34,9 +34,9 @@ Chain strategy: stacked-to-main
 
 ### PR 3: Reciprocal Rank Fusion (RRF), Hybrid Search, Async Indexer, CLI & Docs
 
-- [ ] 3.1 RRF implementation: Implement `ReciprocalRankFusion` helper in `internal/memory/rrf.go` with $k = 60$ and deduplication by `(doc_type, doc_id)` (RED → GREEN). <!-- sdd-owner: implementation -->
-- [ ] 3.2 Hybrid repository search: Extend `Search` in `internal/memory/sqlite.go` to compute embeddings, query vectors, calculate cosine similarities, and merge with FTS5 BM25 via RRF. <!-- sdd-owner: implementation -->
-- [ ] 3.3 Graceful fallback: Verify and implement seamless fallback to 100% BM25 FTS5 when embeddings are disabled, offline, or fail. <!-- sdd-owner: implementation -->
-- [ ] 3.4 Async embedding worker: Implement non-blocking background embedding generation for observations on `SaveObservations`. <!-- sdd-owner: implementation -->
-- [ ] 3.5 Integration tests in `internal/memory/hybrid_test.go` & `cmd/agis/` with race detector (`go test -race ./...`) and goroutine leak validation (`goleak`). <!-- sdd-owner: implementation -->
-- [ ] 3.6 Documentation updates: `docs/roadmap.md`, `docs/architecture.md`, `docs/configuration.md`, `README.md`. <!-- sdd-owner: implementation -->
+- [x] 3.1 RRF implementation: Implement `ReciprocalRankFusion` helper in `internal/memory/rrf.go` with $k = 60$ and deduplication by `(doc_type, doc_id)` (RED → GREEN). <!-- sdd-owner: implementation -->
+- [x] 3.2 Hybrid repository search: Extend `Search` in `internal/memory/sqlite.go` to compute embeddings, query vectors, calculate cosine similarities, and merge with FTS5 BM25 via RRF. <!-- sdd-owner: implementation -->
+- [x] 3.3 Graceful fallback: Verify and implement seamless fallback to 100% BM25 FTS5 when embeddings are disabled, offline, or fail. <!-- sdd-owner: implementation -->
+- [x] 3.4 Async embedding worker: Implement non-blocking background embedding generation for observations on `SaveObservations`. <!-- sdd-owner: implementation -->
+- [x] 3.5 Integration tests in `internal/memory/hybrid_test.go` & `cmd/agis/` with race detector (`go test -race ./...`) and goroutine leak validation (`goleak`). <!-- sdd-owner: implementation -->
+- [x] 3.6 Documentation updates: `docs/roadmap.md`, `docs/architecture.md`, `docs/configuration.md`, `README.md`. <!-- sdd-owner: implementation -->

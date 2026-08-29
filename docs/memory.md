@@ -21,6 +21,7 @@ Applied by the embedded migration `0001_init.sql`:
 | `user_model` | `id` (UUID), `key` (unique), `value`, `confidence`, `updated_at` — aggregated user facts keyed by the source observation's `topic_key` |
 | `session_events` | `id` (autoinc), `session_id`, `kind` (`nudge`\|`summary`\|`skill`), `payload`, `created_at` — observability for learning-loop activity |
 | `memory_fts` | standalone FTS5 virtual table — see below |
+| `embeddings` | `id` (UUID), `doc_type`, `doc_id`, `dimension`, `vector` (BLOB), `created_at`, `updated_at`, UNIQUE(`doc_type`, `doc_id`) — see Hybrid Search below |
 
 ## Full-text search: one FTS5 table, `doc_type` discriminator
 
@@ -68,14 +69,35 @@ There are no hidden triggers; the FTS row is written explicitly. Consequences:
 
 `Observations` is the recall read path, returning the most recently updated observations newest first. `UpdateConversationSummary` writes a summary without bumping `conversations.updated_at`, keeping `LatestConversation` ordering stable. `UpsertUserModel` upserts on the unique `key`, and `RecordSessionEvent` appends a `session_events` row for learning-loop observability.
 
-## M2 learning loop (in progress)
+## Hybrid Search (Lexical BM25 + Semantic Dense Vectors)
 
-The repository substrate is in place; the loop components land across the remaining M2 PRs:
+AGIS combines full-text keyword search (BM25 via FTS5) with semantic dense vector search (via `core.Embedder`) using Reciprocal Rank Fusion (RRF).
 
-- **Curator + nudges** (PR2) — the agent periodically decides what to persist as observations.
-- **Session summarization** (PR2) — at session end the LLM compresses the session into `conversations.summary`.
-- **User model** (PR2) — observations about the user aggregate into `user_model` rows with confidence.
-- **Recall + close hook** (PR2/PR3) — top-N observations injected into `Brain.Step`; TUI quit triggers `CloseSession`.
-- **Skills as procedural memory** (M3) — after complex tasks the agent writes a skill into a skills directory.
+### 1. Pure Go Binary Vector BLOB Storage
+Dense float32 vectors are serialized to and from binary SQLite `BLOB`s without external extensions (such as `sqlite-vss` or `sqlite-vec`), preserving zero-dependency single-binary portability:
+- Stored as IEEE 754 32-bit floats in LittleEndian format (`len(vector) * 4` bytes).
+- Managed in the associative `embeddings` table partitioned by `(doc_type, doc_id)`.
 
-Semantic search is a deliberate non-goal: the Repository port keeps the option to bolt on embeddings (e.g. `sqlite-vec`) later without touching domain logic.
+### 2. Pure Go Cosine Similarity
+Vector similarity is computed in pure Go:
+$$\text{CosineSimilarity}(\vec{u}, \vec{v}) = \frac{\sum_{i=1}^n u_i \cdot v_i}{\sqrt{\sum_{i=1}^n u_i^2} \cdot \sqrt{\sum_{i=1}^n v_i^2}}$$
+- Non-matching dimensions evaluate to `0.0`.
+- Zero-magnitude vectors evaluate to `0.0`.
+
+### 3. Reciprocal Rank Fusion (RRF)
+Search results from BM25 FTS5 and vector similarity rankings are fused using RRF ($k = 60$):
+$$\text{RRF\_Score}(d) = \sum_{m \in \{\text{fts}, \text{vec}\}} \frac{1}{60 + \text{rank}_m(d)}$$
+where $\text{rank}_m(d) \ge 1$ is the 1-based index in ranking list $m$.
+- Documents appearing in only one ranking list contribute $0$ for the missing list.
+- Results are deduplicated by `(doc_type, doc_id)` and ordered by `RRF_Score` descending.
+- Ties in `RRF_Score` are broken deterministically by `doc_id` ascending.
+
+### 4. Asynchronous Background Embedding Pipeline
+When observations are saved in `SaveObservations`:
+- The SQLite base table and FTS index updates commit immediately in a synchronous transaction.
+- Stale vector embeddings are invalidated.
+- Embedding generation tasks are queued to a background worker pool, decoupling LLM provider network latency from agent memory transactions.
+
+### 5. Resilient Graceful Degradation & Fallback
+- If `embeddings.enabled` is `false` or `Embedder` is `nil`, `Repository.Search` executes standard BM25 FTS5 keyword matching.
+- If the embedding provider fails (e.g. Ollama daemon offline, OpenAI rate limit, network timeout), `Repository.Search` logs a warning and returns BM25 FTS5 results without failing or returning an error to the caller.

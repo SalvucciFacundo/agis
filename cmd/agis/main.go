@@ -62,7 +62,17 @@ func main() {
 
 	ctx := context.Background()
 
-	repo, err := memory.NewRepository(ctx, cfg.DB.Path)
+	var repoOpts []memory.Option
+	if cfg.Embeddings.Enabled {
+		embedder, err := llm.NewEmbedder(cfg.Embeddings, cfg.LLM.APIKey)
+		if err != nil {
+			slog.Warn("embeddings: initializing embedder (falling back to FTS5)", "error", err)
+		} else {
+			repoOpts = append(repoOpts, memory.WithEmbedder(embedder))
+		}
+	}
+
+	repo, err := memory.NewRepository(ctx, cfg.DB.Path, repoOpts...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "agis: %v\n", err)
 		os.Exit(1)
