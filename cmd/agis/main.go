@@ -29,8 +29,13 @@ import (
 func main() {
 	// Subcommands route before any flag parsing (design D9): the interactive
 	// TUI is the default surface, everything else is a managed subcommand.
-	if len(os.Args) > 1 && os.Args[1] == "policy" {
-		os.Exit(policy.RunCLI(os.Args[2:], os.Stdout, os.Stderr))
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "policy":
+			os.Exit(policy.RunCLI(os.Args[2:], os.Stdout, os.Stderr))
+		case "gateway":
+			os.Exit(RunGatewayCLI(os.Args[2:], os.Stdout, os.Stderr))
+		}
 	}
 
 	fs := flag.NewFlagSet("agis", flag.ExitOnError)

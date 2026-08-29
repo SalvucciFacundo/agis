@@ -329,3 +329,112 @@ func TestLoad_ToolsDefaultsAndExplicit(t *testing.T) {
 		t.Errorf("ssh config = %+v, want enabled remote host", cfg.Tools.SSH)
 	}
 }
+
+func TestLoad_GatewayDefaultsAndExplicit(t *testing.T) {
+	tests := []struct {
+		name       string
+		yaml       string
+		wantGtw    bool
+		wantTg     bool
+		wantTgTok  string
+		wantTgLen  int
+		wantDc     bool
+		wantDcTok  string
+		wantDcLen  int
+	}{
+		{
+			name:    "empty config uses defaults",
+			yaml:    "",
+			wantGtw: false,
+			wantTg:  false,
+			wantDc:  false,
+		},
+		{
+			name: "gateway block present but disabled",
+			yaml: `gateway:
+  enabled: false
+  telegram:
+    enabled: false
+`,
+			wantGtw: false,
+			wantTg:  false,
+			wantDc:  false,
+		},
+		{
+			name: "gateway and telegram enabled only",
+			yaml: `gateway:
+  enabled: true
+  telegram:
+    enabled: true
+    token: "tg-only"
+    allowlist: ["111"]
+`,
+			wantGtw:   true,
+			wantTg:    true,
+			wantTgTok: "tg-only",
+			wantTgLen: 1,
+			wantDc:    false,
+		},
+		{
+			name: "full gateway config",
+			yaml: `gateway:
+  enabled: true
+  telegram:
+    enabled: true
+    token: "tg-token-123"
+    allowlist:
+      - "12345"
+      - "67890"
+  discord:
+    enabled: true
+    token: "dc-token-456"
+    allowlist:
+      - "98765"
+`,
+			wantGtw:   true,
+			wantTg:    true,
+			wantTgTok: "tg-token-123",
+			wantTgLen: 2,
+			wantDc:    true,
+			wantDcTok: "dc-token-456",
+			wantDcLen: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+			if tt.yaml != "" {
+				writeConfig(t, home, tt.yaml, 0o600)
+			}
+
+			cfg, err := Load("")
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if cfg.Gateway.Enabled != tt.wantGtw {
+				t.Errorf("Gateway.Enabled = %v, want %v", cfg.Gateway.Enabled, tt.wantGtw)
+			}
+			if cfg.Gateway.Telegram.Enabled != tt.wantTg {
+				t.Errorf("Gateway.Telegram.Enabled = %v, want %v", cfg.Gateway.Telegram.Enabled, tt.wantTg)
+			}
+			if cfg.Gateway.Telegram.Token != tt.wantTgTok {
+				t.Errorf("Gateway.Telegram.Token = %q, want %q", cfg.Gateway.Telegram.Token, tt.wantTgTok)
+			}
+			if len(cfg.Gateway.Telegram.Allowlist) != tt.wantTgLen {
+				t.Errorf("len(Gateway.Telegram.Allowlist) = %d, want %d", len(cfg.Gateway.Telegram.Allowlist), tt.wantTgLen)
+			}
+			if cfg.Gateway.Discord.Enabled != tt.wantDc {
+				t.Errorf("Gateway.Discord.Enabled = %v, want %v", cfg.Gateway.Discord.Enabled, tt.wantDc)
+			}
+			if cfg.Gateway.Discord.Token != tt.wantDcTok {
+				t.Errorf("Gateway.Discord.Token = %q, want %q", cfg.Gateway.Discord.Token, tt.wantDcTok)
+			}
+			if len(cfg.Gateway.Discord.Allowlist) != tt.wantDcLen {
+				t.Errorf("len(Gateway.Discord.Allowlist) = %d, want %d", len(cfg.Gateway.Discord.Allowlist), tt.wantDcLen)
+			}
+		})
+	}
+}
+

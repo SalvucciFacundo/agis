@@ -24,3 +24,5 @@ coverage.txt
 .env
 .env.*
 !.env.example
+# Local Pi runtime state
+.atl/

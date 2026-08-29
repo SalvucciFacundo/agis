@@ -37,12 +37,34 @@ const (
 
 // Config is the root AGIS configuration.
 type Config struct {
-	LLM    LLMConfig    `yaml:"llm"`
-	DB     DBConfig     `yaml:"db"`
-	Memory MemoryConfig `yaml:"memory"`
-	Agent  AgentConfig  `yaml:"agent"`
-	Skills SkillsConfig `yaml:"skills"`
-	Tools  ToolsConfig  `yaml:"tools"`
+	LLM     LLMConfig     `yaml:"llm"`
+	DB      DBConfig      `yaml:"db"`
+	Memory  MemoryConfig  `yaml:"memory"`
+	Agent   AgentConfig   `yaml:"agent"`
+	Skills  SkillsConfig  `yaml:"skills"`
+	Tools   ToolsConfig   `yaml:"tools"`
+	Gateway GatewayConfig `yaml:"gateway"`
+}
+
+// GatewayConfig gates the M6 gateway subsystem for external chat platforms.
+type GatewayConfig struct {
+	Enabled  bool           `yaml:"enabled"`
+	Telegram TelegramConfig `yaml:"telegram"`
+	Discord  DiscordConfig  `yaml:"discord"`
+}
+
+// TelegramConfig configures the Telegram chat gateway adapter.
+type TelegramConfig struct {
+	Enabled   bool     `yaml:"enabled"`
+	Token     string   `yaml:"token"`
+	Allowlist []string `yaml:"allowlist"`
+}
+
+// DiscordConfig configures the Discord chat gateway adapter.
+type DiscordConfig struct {
+	Enabled   bool     `yaml:"enabled"`
+	Token     string   `yaml:"token"`
+	Allowlist []string `yaml:"allowlist"`
 }
 
 // ToolsConfig gates the M4 execution subsystem. Disabled by default: tools
