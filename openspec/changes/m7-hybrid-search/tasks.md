@@ -28,9 +28,9 @@ Chain strategy: stacked-to-main
 
 ### PR 2: Embedding Adapters (Ollama & OpenAI)
 
-- [ ] 2.1 Ollama adapter: Implement `internal/adapters/llm/ollama_embed.go` targeting `/api/embed` with fallback support and timeout handling (RED → GREEN). <!-- sdd-owner: implementation -->
-- [ ] 2.2 OpenAI adapter: Implement `internal/adapters/llm/openai_embed.go` targeting `/v1/embeddings` with sub-batch chunking up to `batch_size` (RED → GREEN). <!-- sdd-owner: implementation -->
-- [ ] 2.3 Unit & mock tests in `internal/adapters/llm/embed_test.go` verifying single embedding, batch embedding, context cancellation, and error handling. <!-- sdd-owner: implementation -->
+- [x] 2.1 Ollama adapter: Implement `internal/adapters/llm/ollama_embed.go` targeting `/api/embed` with fallback support and timeout handling (RED → GREEN). <!-- sdd-owner: implementation -->
+- [x] 2.2 OpenAI adapter: Implement `internal/adapters/llm/openai_embed.go` targeting `/v1/embeddings` with sub-batch chunking up to `batch_size` (RED → GREEN). <!-- sdd-owner: implementation -->
+- [x] 2.3 Unit & mock tests in `internal/adapters/llm/embed_test.go` verifying single embedding, batch embedding, context cancellation, and error handling. <!-- sdd-owner: implementation -->
 
 ### PR 3: Reciprocal Rank Fusion (RRF), Hybrid Search, Async Indexer, CLI & Docs
 
