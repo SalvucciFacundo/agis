@@ -55,7 +55,7 @@ archives:
       - LICENSE
       - docs/*
 
-nfps:
+nfpms:
   - id: packages
     builds:
       - agis
