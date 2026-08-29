@@ -155,6 +155,10 @@ Full detail in [docs/roadmap.md](docs/roadmap.md).
 - **GAIA** — architectural DNA. Hexagonal layout, Bubbletea TUI, SQLite persistence, skill registry. AGIS is **not** a fork: it is a general-purpose agent with its own codebase, memory DB, and no coding-specific machinery.
 - **Hermes** — functional reference. Learning loop, skills, multi-provider, multi-backend, ecosystem integrations. AGIS reimplements that scope in Go at a fraction of the resource footprint.
 
+## Contributing
+
+Contributions, issues, and feature requests are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
+
 ## License
 
-No license file has been added yet. Contact the maintainers before redistributing.
+This project is licensed under the [MIT License](LICENSE) - see the [LICENSE](LICENSE) file for details.
