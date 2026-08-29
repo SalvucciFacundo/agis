@@ -1,6 +1,6 @@
 # Roadmap
 
-Milestone scopes come from `spec.md` §Milestones. M1, M2, M3, M4 and M5 are shipped; M6 is planned. The archived requirements live as synced OpenSpec capability specs under `openspec/specs/` (`config-loader`, `repository-memory`, `llm-provider-port`, `brain-loop`, `minimal-tui`, `memory-curator`, `session-summarizer`, `user-model`, `skill-hub`, `persona`, `policy-guard`, `tools-backends`, `tool-calling`, `session-manager`).
+Milestone scopes come from `spec.md` §Milestones. M1, M2, M3, M4, M5, and M6 are shipped. The archived requirements live as synced OpenSpec capability specs under `openspec/specs/` (`config-loader`, `repository-memory`, `llm-provider-port`, `brain-loop`, `minimal-tui`, `memory-curator`, `session-summarizer`, `user-model`, `skill-hub`, `persona`, `policy-guard`, `tools-backends`, `tool-calling`, `session-manager`, `gateway`, `cron`, `plugins`, `webhook`).
 
 ## M1 — Thinking agent with memory ✅ DONE
 
@@ -75,11 +75,21 @@ Change `m5-full-tui`, archived **2026-08-26**, delivered as 3 stacked PRs merged
 
 **Verification:** independent bounded reviews approved per slice; full suite green under `goleak`. "Done" means every slash command in `docs/sessions.md` is wired and the manager is surface-agnostic.
 
-## M6 — Gateway + cron + ecosystem
+## M6 — Gateway + cron + ecosystem ✅ DONE
 
-- Telegram/Discord gateway first (WhatsApp, Signal, Slack, Email adapters follow), scheduled automations, plugin manager, webhook listener.
+Change `m6-ecosystem`, delivered as 4 stacked PRs merged to main (PR #1 gateway substrate & adapters → #2 cron scheduler engine → #3 plugin manager & webhook listener → #4 integration tests & documentation).
 
-"Done" for M6 means one gateway platform is live and it drives the same `Brain` and Repository as the TUI — surfaces stay interchangeable front-ends, never parallel agent paths.
+**Shipped:**
+
+- Gateway Substrate & Multiplexer (`internal/gateway`): concurrent chat adapter orchestration, graceful shutdown via `context.Context`, session routing via `session.Manager` mapping (`gateway:<adapter>:<chatID>`), non-interactive `AutoDenyApprover` fail-safe for sandbox policy, and fail-closed static user ID allowlists.
+- Telegram Adapter (`internal/gateway/telegram.go`): Telegram Bot API integration with polling updates, 4096-character outbound chunking, and session isolation.
+- Discord Adapter (`internal/gateway/discord.go`): Discord Gateway integration with channel/DM listeners, 2000-character message splitting, and session isolation.
+- Cron Scheduler Engine (`internal/cron`): background cron engine supporting 5-field cron syntax (`"0 9 * * *"`, `"*/15 * * * *"`, step intervals, macros) and duration intervals (`"@every 1h"`), non-interactive `core.Brain.Step` execution under sandbox policy, and notification forwarding to Gateway targets or logs.
+- Plugin Manager (`internal/plugins`): dynamic discovery and lifecycle (`Load`, `List`, `Enable`, `Disable`, `inspect`) from `$AGIS_HOME/plugins/`, JSON schema manifest validation (`plugin.json`), persistent status in `state.json`, `core.ToolRunner` bridge execution, and skill extraction into Skill Hub.
+- Webhook Listener Server (`internal/webhook`): HTTP server with constant-time HMAC-SHA256 signature verification (`X-Hub-Signature-256`), JSON event extraction, `core.Brain.Step` dispatch, and Gateway target forwarding.
+- CLI Subcommands (`cmd/agis`): `agis gateway run`, `agis cron [run|list]`, `agis plugins [list|enable|disable|inspect]`, and `agis webhook run`.
+
+**Verification:** full end-to-end integration test suite green across gateway, cron, plugins, and webhooks (`cmd/agis/ecosystem_integration_test.go`); 100% test suite green with race detection (`go test -race ./...`); 0 goroutine leaks under `goleak`. "Done" criteria met: gateway platforms drive the same `Brain` and Repository as the TUI, surfaces stay interchangeable front-ends.
 
 ## M1 review follow-ups queued for M2
 

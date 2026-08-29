@@ -1,12 +1,12 @@
 # Apply Progress: m6-ecosystem
 
-## PR Slice: PR 3 — Plugin Manager & Webhook Listener (HMAC verification)
+## Final Apply Report: Milestone 6 — Ecosystem
 
 ### Status
 - Mode: auto-chain
 - Strategy: stacked-to-main
-- Current PR: PR 3 (Plugin Manager & Webhook Listener with HMAC verification)
-- Work Unit: Tasks 3.1 - 3.8
+- PR Slices: PR 1 (Gateway), PR 2 (Cron), PR 3 (Plugins & Webhook), PR 4 (End-to-End Integration & Documentation)
+- Work Unit: Tasks 1.1 - 4.3 (All Tasks 100% Completed & Verified)
 - Outcome: Completed & Verified
 
 ---
@@ -40,6 +40,11 @@
 - [x] 3.6 Implement webhook event ingestion and brain dispatching.
 - [x] 3.7 Add unit tests under `internal/plugins/` and `internal/webhook/` and verify with `go test ./internal/plugins/... ./internal/webhook/...`.
 - [x] 3.8 Implement Cobra subcommands `agis plugins` and `agis webhook` in `cmd/agis/plugins.go` and `cmd/agis/webhook.go`.
+
+#### PR 4 (End-to-End Integration, CLI Verification & Documentation)
+- [x] 4.1 Perform end-to-end integration testing across gateway, cron, plugins, and webhooks with `go test ./...` and `go test -race ./...`.
+- [x] 4.2 Verify binary build and CLI subcommands execution with `go build -o bin/agis ./cmd/agis`.
+- [x] 4.3 Update repository documentation (`docs/roadmap.md`, `docs/architecture.md`, `docs/configuration.md`, `README.md`).
 
 ---
 
@@ -83,44 +88,37 @@
 | `internal/webhook/edge_cases` | TRIANGULATE | `TestWebhookServer_EdgeCases`, `goleak.VerifyTestMain` | PASS | 0 leaks, unstarted server stop safety, error sender handling, missing repo fallback |
 | `cmd/agis/plugins` & `cmd/agis/webhook` | RED | `TestPluginsCLI_Help`, `TestPluginsCLI_ListEnableDisableInspect`, `TestWebhookCLI_Help`, `TestWebhookCLI_DisabledWebhook`, `TestWebhookCLI_RunWithContextCancel` | FAIL | `RunPluginsCLI`, `RunWebhookCLI` undefined |
 | `cmd/agis/plugins` & `cmd/agis/webhook` | GREEN | `TestPluginsCLI_Help`, `TestPluginsCLI_ListEnableDisableInspect`, `TestWebhookCLI_Help`, `TestWebhookCLI_DisabledWebhook`, `TestWebhookCLI_RunWithContextCancel` | PASS | `agis plugins [list|enable|disable|inspect]` and `agis webhook [run]` wired to `cmd/agis/main.go` |
+| `cmd/agis/ecosystem_integration` (PR4) | RED | `TestEcosystem_EndToEnd_CrossComponentIntegration` | FAIL | Cross-ecosystem end-to-end integration test scaffolded |
+| `cmd/agis/ecosystem_integration` (PR4) | GREEN | `TestEcosystem_EndToEnd_CrossComponentIntegration` | PASS | Full flow verified: Webhook with HMAC -> Brain -> Plugin tool -> Gateway Telegram notification; Cron trigger -> Brain -> Gateway Discord notification; Inbound Gateway Telegram message -> Brain -> Reply; Graceful shutdown under race detector |
 
 ---
 
-### Files Changed (PR 3)
-- `internal/config/config.go` (Modified: Added `PluginsConfig`, `WebhookConfig`, `WebhookTargetConfig`)
-- `internal/config/config_test.go` (Modified: Added plugins and webhook config tests)
-- `internal/plugins/manifest.go` (New: `Manifest`, `Tool`, `ParseManifest`, `ParseManifestFile`, `Validate`)
-- `internal/plugins/manifest_test.go` (New: Manifest parsing and validation unit tests)
-- `internal/plugins/manager.go` (New: Plugin `Manager`, `PluginInfo`, `PluginRunner`, `state.json` persistence, skill extraction)
-- `internal/plugins/manager_test.go` (New: Lifecycle, state persistence, tool runners, and skills unit tests)
-- `internal/plugins/edge_cases_test.go` (New: Goleak verification and edge case tests)
-- `internal/webhook/server.go` (New: Webhook HTTP `Server`, HMAC-SHA256 verification, event ingestion, `Brain.Step` dispatch, target delivery)
-- `internal/webhook/server_test.go` (New: Webhook handler, signature verification, and lifecycle unit tests)
-- `internal/webhook/edge_cases_test.go` (New: Webhook edge case and error handling tests)
-- `cmd/agis/plugins.go` (New: `agis plugins [list|enable|disable|inspect]` CLI subcommand)
-- `cmd/agis/plugins_test.go` (New: Plugins CLI unit tests)
-- `cmd/agis/webhook.go` (New: `agis webhook [run]` CLI subcommand)
-- `cmd/agis/webhook_test.go` (New: Webhook CLI unit tests)
-- `cmd/agis/main.go` (Modified: Wired `plugins` and `webhook` subcommands router)
-- `openspec/changes/m6-ecosystem/tasks.md` (Modified: Checked off tasks 3.1 - 3.8)
-- `openspec/changes/m6-ecosystem/apply-progress.md` (Modified: Merged progress report for PR 1, PR 2, and PR 3)
+### Files Changed (PR 4)
+- `cmd/agis/ecosystem_integration_test.go` (New: Cross-component end-to-end integration tests for Gateway, Cron, Plugins, and Webhook)
+- `docs/roadmap.md` (Modified: Marked Milestone 6 as completed and documented shipped capabilities)
+- `docs/architecture.md` (Modified: Documented Gateway, Cron, Plugins, Webhook architecture, package layout, domain ports, and data flow)
+- `docs/configuration.md` (Modified: Documented ecosystem config blocks `gateway`, `cron`, `plugins`, `webhook` with defaults and practical examples)
+- `README.md` (Modified: Updated status, core capabilities, roadmap table, CLI subcommands list, and documentation links)
+- `openspec/changes/m6-ecosystem/tasks.md` (Modified: Marked all PR 4 tasks as completed)
+- `openspec/changes/m6-ecosystem/apply-progress.md` (Modified: Generated complete final apply progress report)
 
 ---
 
 ### Verification Commands & Results
-- `go test ./internal/plugins/...` -> PASS (ok 0.003s)
-- `go test ./internal/webhook/...` -> PASS (ok 0.057s)
-- `go test ./cmd/agis/...` -> PASS (ok 0.309s)
-- `go test -race -count=1 ./...` -> PASS (all packages ok, 0 data races, 0 goroutine leaks)
+- `go test -race -count=1 ./...` -> PASS (16 packages passed, 0 data races, 0 goroutine leaks)
+- `go build -o bin/agis ./cmd/agis` -> PASS (compiled binary successfully)
+- `./bin/agis --help` -> PASS
+- `./bin/agis gateway --help` -> PASS
+- `./bin/agis cron --help` -> PASS
+- `./bin/agis plugins --help` -> PASS
+- `./bin/agis webhook --help` -> PASS
 
 ---
 
 ### Deviations from Design
-None. Followed ADR D5 (Plugin Discovery), D6 (Webhook Security & HMAC), D7 (Config Extensions), and D8 (Subcommand Wiring) precisely.
+None. Followed ADRs D1-D8 precisely.
 
 ---
 
-### Remaining Tasks (PR 4)
-- [ ] 4.1 Perform end-to-end integration testing across gateway, cron, plugins, and webhooks with `go test ./internal/...`. <!-- sdd-owner: implementation -->
-- [ ] 4.2 Verify binary build and CLI subcommands execution with `go build -o bin/agis ./cmd/agis`. <!-- sdd-owner: implementation -->
-- [ ] 4.3 Clean up documentation and finalize all ecosystem change artifacts. <!-- sdd-owner: implementation -->
+### Remaining Tasks
+None. All tasks in `tasks.md` (PR 1 through PR 4) are 100% completed.
