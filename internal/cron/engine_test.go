@@ -211,22 +211,23 @@ func TestEngine_TriggerExecution_EphemeralSession(t *testing.T) {
 
 	// Verify sender received target notification
 	sender.mu.Lock()
-	sendCount := len(sender.sendCalls)
-	var firstCall struct {
+	var foundCall bool
+	for _, call := range sender.sendCalls {
+		if call.adapter == "telegram" && call.target == "998877" && call.msg == "Summary of system status: all good" {
+			foundCall = true
+			break
+		}
+	}
+	sendCallsCopy := make([]struct {
 		adapter string
 		target  string
 		msg     string
-	}
-	if sendCount > 0 {
-		firstCall = sender.sendCalls[0]
-	}
+	}, len(sender.sendCalls))
+	copy(sendCallsCopy, sender.sendCalls)
 	sender.mu.Unlock()
 
-	if sendCount == 0 {
-		t.Fatal("expected sender.Send to be called, got 0 calls")
-	}
-	if firstCall.adapter != "telegram" || firstCall.target != "998877" || firstCall.msg != "Summary of system status: all good" {
-		t.Errorf("unexpected sendCall: %+v", firstCall)
+	if !foundCall {
+		t.Errorf("expected target notification to be delivered, got calls: %+v", sendCallsCopy)
 	}
 }
 

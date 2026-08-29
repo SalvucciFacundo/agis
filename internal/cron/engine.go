@@ -350,8 +350,12 @@ func (e *Engine) executeJob(ctx context.Context, job Job) {
 		}
 	}
 
+	if ctx.Err() != nil {
+		return
+	}
+
 	if job.Target != nil && job.Target.Adapter != "" && job.Target.Recipient != "" {
-		if e.sender != nil {
+		if e.sender != nil && replyText != "" {
 			if err := e.sender.Send(ctx, job.Target.Adapter, job.Target.Recipient, replyText); err != nil {
 				e.logger.Error("cron: target notification send failed",
 					"job", job.Name,
@@ -366,7 +370,7 @@ func (e *Engine) executeJob(ctx context.Context, job Job) {
 				"adapter", job.Target.Adapter,
 				"recipient", job.Target.Recipient,
 			)
-		} else {
+		} else if e.sender == nil {
 			e.logger.Warn("cron: notification target configured but no sender wired", "job", job.Name)
 		}
 	} else {

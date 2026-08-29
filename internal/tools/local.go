@@ -37,6 +37,7 @@ func (l *Local) Run(ctx context.Context, command string) (string, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd.WaitDelay = 100 * time.Millisecond
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return string(out), fmt.Errorf("local command failed: %w", err)
