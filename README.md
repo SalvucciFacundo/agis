@@ -5,86 +5,58 @@
 </p>
 
 <p align="center">
-  <a href="https://go.dev"><img src="https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go" alt="Go Version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
-  <a href="https://github.com/SalvucciFacundo/agis/releases"><img src="https://img.shields.io/github/v/release/SalvucciFacundo/agis?logo=github" alt="Release"></a>
-  <a href="https://github.com/SalvucciFacundo/agis/actions/workflows/ci.yml"><img src="https://github.com/SalvucciFacundo/agis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/Milestones-M1--M6%20Shipped-brightgreen" alt="Milestones M1-M6 Shipped"></a>
-  <a href="https://github.com/SalvucciFacundo/agis"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome"></a>
+  <a href="https://go.dev"><img src="https://img.shields.io/badge/Go-1.26+-00ADD8?style=for-the-badge&logo=go" alt="Go Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge" alt="License: MIT"></a>
+  <a href="https://github.com/SalvucciFacundo/agis/releases"><img src="https://img.shields.io/github/v/release/SalvucciFacundo/agis?style=for-the-badge&logo=github" alt="Release"></a>
+  <a href="https://github.com/SalvucciFacundo/agis/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/SalvucciFacundo/agis/ci.yml?style=for-the-badge&label=CI" alt="CI"></a>
+  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/Milestones-M1--M6%20Shipped-brightgreen?style=for-the-badge" alt="Milestones M1-M6 Shipped"></a>
+  <a href="https://github.com/SalvucciFacundo/agis"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=for-the-badge" alt="PRs Welcome"></a>
 </p>
 
-A general-purpose autonomous agent in Go: a single static binary, SQLite persistence, zero external services at runtime. AGIS pairs the functional scope of [Hermes Agent](https://github.com/NousResearch/hermes-agent) (learning loop, multi-provider LLMs, multi-backend tools, ecosystem integrations) with the hexagonal Go architecture of [GAIA](https://github.com/SalvucciFacundo/gaia) — built to run on anything from a $5 VPS to a laptop.
-
-## Status
-
-**Milestones M1–M6: ALL SHIPPED & VERIFIED ✅**
-- **M1 (Skeleton & Memory)**: Hexagonal core, LLM port (Ollama/OpenAI), SQLite+FTS5 memory, Bubbletea TUI.
-- **M2 (Learning Loop)**: Memory curator, nudges, close-time session summarization, user model aggregation.
-- **M3 (Skills & Persona)**: Skill Hub, `SOUL.md` durable identity, personality presets, guided evolution.
-- **M4 (Tools & Policy)**: Tool-calling loop, Local/Docker/SSH backends, Policy Guard, `/permisos` panel.
-- **M5 (Full TUI & Sessions)**: Session Manager, slash commands (`/new`, `/save`, `/list`, `/restore`, `/rename`, `/compress`, `/snapshot`).
-- **M6 (Ecosystem & Integrations)**: Telegram/Discord Gateway, Cron Scheduler, Plugin Manager, HMAC Webhooks, CLI daemons.
-
-Full milestone history in [docs/roadmap.md](docs/roadmap.md).
-
-## Core Capabilities
-
-- **Brain Loop** — `Brain.Step` persists turns, loads history, injects memory & skills, streams model tokens, evaluates tool calls, and persists final assistant turns.
-- **Multi-Provider LLM** — Ollama, OpenAI, and any OpenAI-compatible API over a unified client with streaming SSE.
-- **SQLite + FTS5 Memory** — Pure Go SQLite with full-text search over conversations, messages, observations, and snapshots.
-- **Learning & Memory Loop** — Continuous observation extraction (Curator), session summarization, and user model confidence synthesis.
-- **Skill Hub & Persona** — Agentskills.io-compatible Markdown skill loading, runtime skill creation, durable `SOUL.md`, and dynamic personality overlays.
-- **Policy Guard & Tool Backends** — Multi-tier security postures (`sandbox`, `standard`, `full`), fail-closed approval, audit logging, and Local/Docker/SSH tool backends.
-- **Chat Gateway Multiplexer** — Concurrent Telegram and Discord bot adapters, user allowlists, session multiplexing, and message chunking.
-- **Cron Scheduler Daemon** — Autonomous scheduled tasks with 5-field cron and `@every` duration expressions, sandbox policy, and chat notification delivery.
-- **Plugin Manager** — Dynamic external plugin discovery (`plugin.json`), tool runner bridge, skill extraction, and persistent state management.
-- **HMAC Webhook Server** — HTTP event listener with constant-time HMAC-SHA256 signature verification and brain event dispatching.
-
-## 🚀 Installation
-
-AGIS is distributed as a single static binary with zero external runtime dependencies. Choose your preferred installation method:
-
-### 1. Automatic One-Line Installer (Recommended)
-
-**Linux & macOS (Bash/Zsh):**
-```bash
-curl -fsSL https://raw.githubusercontent.com/SalvucciFacundo/agis/main/install.sh | bash
-```
-*Auto-detects Debian, Ubuntu, Arch, Fedora, Alpine, CentOS, openSUSE, and macOS (Intel & Apple Silicon).*
-
-**Windows (PowerShell 5.1 / 7+):**
-```powershell
-iwr -useb https://raw.githubusercontent.com/SalvucciFacundo/agis/main/install.ps1 | iex
-```
+<p align="center">
+  <b>General-Purpose Autonomous AI Agent & Cognitive Engine built in pure Go.</b><br>
+  <i>Single static binary, SQLite + FTS5 persistent memory, skills & persona evolution, policy guard, and multi-surface chat gateways.</i>
+</p>
 
 ---
 
-### 2. Go Install (Cross-Platform)
+## 🏷️ Topics & Keywords
+`golang` • `ai-agent` • `autonomous-agents` • `llm` • `ollama` • `openai` • `bubbletea` • `tui` • `sqlite` • `fts5` • `telegram-bot` • `discord-bot` • `cron` • `plugins` • `webhooks` • `hexagonal-architecture` • `hermes-agent` • `spec-driven-development`
 
-If you have Go installed on your machine:
+---
+
+## 🚀 Quick Start & Installation
+
+AGIS is distributed as a single static binary with zero external runtime dependencies. Choose your preferred installation method:
+
+### 1. Automatic One-Line Installer (Linux & macOS)
+```bash
+curl -fsSL https://raw.githubusercontent.com/SalvucciFacundo/agis/main/install.sh | bash
+```
+*Auto-detects Debian, Ubuntu, Arch, Fedora, Alpine, CentOS, Rocky Linux, openSUSE, and macOS (Apple Silicon & Intel).*
+
+### 2. Windows (PowerShell Installer)
+```powershell
+iwr -useb https://raw.githubusercontent.com/SalvucciFacundo/agis/main/install.ps1 | iex
+```
+*Compatible with PowerShell 5.1 and PowerShell 7+ (pwsh).*
+
+### 3. 🐧 Linux Native Packages & Prebuilt Binaries
+Download native packages directly from [GitHub Releases](https://github.com/SalvucciFacundo/agis/releases):
+
+- **Debian / Ubuntu / Mint / Pop!_OS (`.deb`):** `sudo dpkg -i agis_*_linux_amd64.deb`
+- **Fedora / RHEL / CentOS / Rocky (`.rpm`):** `sudo rpm -ivh agis_*_linux_amd64.rpm`
+- **Alpine Linux (`.apk`):** `sudo apk add --allow-untrusted agis_*_linux_amd64.apk`
+- **Arch Linux / Manjaro (`.pkg.tar.zst`):** `sudo pacman -U agis_*.pkg.tar.zst`
+- **macOS Universal Binary:** Standalone `tar.gz` for both Apple Silicon (M1/M2/M3/M4) and Intel
+- **Windows Executable:** `agis_*_windows_amd64.zip`
+
+### 4. 🐹 Install via Go (Go 1.24+)
 ```bash
 go install github.com/SalvucciFacundo/agis/cmd/agis@latest
 ```
 
----
-
-### 3. Prebuilt Packages & Binaries (GitHub Releases)
-
-Download precompiled standalone binaries, `.deb`, `.rpm`, `.apk`, `.tar.gz`, or `.zip` archives directly from [GitHub Releases](https://github.com/SalvucciFacundo/agis/releases):
-
-- **Debian / Ubuntu / Mint / Pop!_OS:** `sudo dpkg -i agis_*_linux_amd64.deb`
-- **Fedora / RHEL / CentOS / Rocky:** `sudo rpm -ivh agis_*_linux_amd64.rpm`
-- **Alpine Linux:** `sudo apk add --allow-untrusted agis_*_linux_amd64.apk`
-- **Arch Linux:** Standalone binary or install via script
-- **macOS Universal Binary:** Standalone `tar.gz` for both Apple Silicon (M1/M2/M3/M4) and Intel
-- **Windows Executable:** `agis_*_windows_amd64.zip`
-
----
-
-### 4. Build from Source
-
-Requirements: Go 1.26+ (or 1.24+).
-
+### 5. 🛠️ Build from Source
 ```bash
 # Clone the repository
 git clone https://github.com/SalvucciFacundo/agis.git
@@ -100,9 +72,45 @@ make build
 go run ./cmd/agis
 ```
 
-The `Makefile` targets are: `build`, `test`, `vet`, `lint`, `fmt`, `tidy`, `clean`.
+---
 
-## CLI Subcommands
+## ✨ Core Capabilities & Architectural Pillars
+
+- **🧠 Brain Thinking Loop** — `Brain.Step` persists turns, loads history, injects memory & skills, streams model tokens, evaluates tool calls, and handles up to 8 bounded tool rounds.
+- **🔌 Multi-Provider LLM** — Ollama, OpenAI, OpenRouter, and any OpenAI-compatible API over a unified client with streaming SSE.
+- **💾 SQLite + FTS5 Memory** — Pure Go SQLite with full-text search over conversations, messages, observations, and point-in-time snapshots.
+- **🔄 Learning & Memory Loop** — Continuous observation extraction (Curator), session summarization, and user model confidence synthesis.
+- **🎭 Skill Hub & Persona** — Agentskills.io-compatible Markdown skill loading, runtime skill distillation, durable `SOUL.md`, and dynamic personality overlays.
+- **🛡️ Policy Guard & Tool Backends** — Multi-tier security postures (`sandbox`, `standard`, `full`), fail-closed approval, audit logging, and Local/Docker/SSH tool backends.
+- **💬 Chat Gateway Multiplexer** — Concurrent Telegram and Discord bot adapters, user allowlists, session multiplexing, and message chunking.
+- **⏱️ Cron Scheduler Daemon** — Autonomous scheduled tasks with 5-field cron and `@every` duration expressions, sandbox policy, and chat notification delivery.
+- **🧩 Plugin Manager** — Dynamic external plugin discovery (`plugin.json`), stdio tool runner bridge, skill extraction, and persistent state management.
+- **🔗 HMAC Webhook Server** — HTTP event listener with constant-time HMAC-SHA256 signature verification and brain event dispatching.
+
+---
+
+## 🖥️ Interactive TUI & Slash Commands
+
+Launch the terminal interface with `./bin/agis`. You can manage sessions, switch personas, and inspect security rules using slash commands:
+
+| Command | Category | Description |
+|---|---|---|
+| `/new` or `/reset` | Sessions | Starts a fresh session, resetting turn state while preserving database history. |
+| `/save` | Sessions | Explicitly persists the active conversation session in SQLite. |
+| `/list` | Sessions | Browses recent conversations with IDs, creation timestamps, and message counts. |
+| `/restore <id>` | Sessions | Restores a previous session by ID and reloads conversation history into view. |
+| `/rename <title>` | Sessions | Renames the current conversation title (prompt-injection safe). |
+| `/snapshot` | Sessions | Takes an immutable point-in-time copy of conversation history. |
+| `/compress` | Sessions | Triggers early context summarization on long conversations. |
+| `/personality <preset>` | Persona | Switches session voice (`concise`, `teacher`, `technical`, `creative`, custom). |
+| `/persona status` | Persona | Displays active persona, `SOUL.md` identity, and evolution status. |
+| `/permisos` | Security | Opens the interactive Policy Guard panel (toggle rules, change postures, audit trail). |
+
+Full command guide in [docs/tui-commands.md](docs/tui-commands.md).
+
+---
+
+## 🌐 CLI Subcommands & Daemons
 
 AGIS provides modular daemons and management subcommands alongside the default interactive TUI:
 
@@ -130,9 +138,13 @@ AGIS provides modular daemons and management subcommands alongside the default i
 ./bin/agis policy tier <sandbox|standard>
 ```
 
-## Configuration
+Full CLI reference in [docs/cli.md](docs/cli.md).
 
-Config lives in `~/.agis/config.yaml` (or `$AGIS_HOME/config.yaml`). See [docs/configuration.md](docs/configuration.md) for the full specification, defaults, and security guidance.
+---
+
+## ⚙️ Configuration Reference
+
+Configuration lives in `~/.agis/config.yaml` (or `$AGIS_HOME/config.yaml`). Precedence: `-config <path>` > `AGIS_HOME` > `~/.agis/config.yaml`.
 
 ```yaml
 llm:
@@ -142,6 +154,31 @@ llm:
 
 db:
   path: /home/you/.agis/agis.db
+
+memory:
+  learning_enabled: true
+  recall_limit: 10
+  nudge_every: 10
+  close_timeout: 30s
+
+agent:
+  personalities: {}
+  evolution_enabled: true
+
+skills:
+  enabled: true
+  dir: ~/.agis/skills
+
+tools:
+  enabled: false
+  docker:
+    enabled: false
+    image: alpine:3
+  ssh:
+    enabled: false
+    host: ""
+    user: ""
+    key_path: ""
 
 gateway:
   enabled: false
@@ -175,18 +212,9 @@ webhook:
   secret: ""
 ```
 
-## Roadmap
+Full configuration specification in [docs/configuration.md](docs/configuration.md).
 
-| Milestone | Scope | State |
-|---|---|---|
-| M1 | Brain loop, LLM port, SQLite+FTS5 memory, minimal TUI, config | **DONE** |
-| M2 | Learning loop: curator, nudges, session summarization, user model | **DONE** |
-| M3 | Skills & persona: skill hub, SOUL.md, persona overlays | **DONE** |
-| M4 | Tools, backends & permissions: Policy Guard, `agis policy`, `/permisos` | **DONE** |
-| M5 | Full TUI: slash commands, session browse, interrupt-and-redirect | **DONE** |
-| M6 | Gateway (Telegram/Discord) + cron + plugins + webhooks | **DONE** |
-
-Full detail in [docs/roadmap.md](docs/roadmap.md).
+---
 
 ## 📚 Documentation
 
@@ -215,15 +243,36 @@ Detailed technical documentation and subsystem guides:
 - [docs/persona.md](docs/persona.md) — `SOUL.md` durable identity, dynamic personality overlays, guided evolution
 - [docs/skills.md](docs/skills.md) — Skill Hub discovery, Markdown frontmatter specification, close-time skill distillation
 
-## Relationship to GAIA and Hermes
+---
+
+## 🗺️ Roadmap & Shipped Milestones
+
+| Milestone | Scope | State |
+|---|---|---|
+| **M1** | Brain loop, LLM port, SQLite+FTS5 memory, minimal TUI, config | **DONE ✅** |
+| **M2** | Learning loop: curator, nudges, session summarization, user model | **DONE ✅** |
+| **M3** | Skills & persona: skill hub, SOUL.md, persona overlays & evolution | **DONE ✅** |
+| **M4** | Tools, backends & permissions: Policy Guard, `agis policy`, `/permisos` | **DONE ✅** |
+| **M5** | Full TUI: slash commands, session browse, interrupt-and-redirect | **DONE ✅** |
+| **M6** | Gateway (Telegram/Discord) + cron + plugins + webhooks | **DONE ✅** |
+
+Full detail and post-v1 backlog in [docs/roadmap.md](docs/roadmap.md).
+
+---
+
+## 🤝 Relationship to GAIA and Hermes
 
 - **GAIA** — architectural DNA. Hexagonal layout, Bubbletea TUI, SQLite persistence, skill registry. AGIS is **not** a fork: it is a general-purpose agent with its own codebase, memory DB, and no coding-specific machinery.
 - **Hermes** — functional reference. Learning loop, skills, multi-provider, multi-backend, ecosystem integrations. AGIS reimplements that scope in Go at a fraction of the resource footprint.
 
-## Contributing
+---
+
+## 🤝 Contributing
 
 Contributions, issues, and feature requests are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
-## License
+---
+
+## 📄 License
 
 This project is licensed under the [MIT License](LICENSE) - see the [LICENSE](LICENSE) file for details.
