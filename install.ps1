@@ -1,52 +1,92 @@
-# AGIS Installer for Windows
+# AGIS Installer for Windows (PowerShell 5.1 & PowerShell 7+)
 # Usage: iwr -useb https://raw.githubusercontent.com/SalvucciFacundo/agis/main/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 $Repo = "SalvucciFacundo/agis"
-$BinaryName = "agis-windows-amd64.exe"
 $InstallDir = "$env:LOCALAPPDATA\Programs\agis"
 
 Write-Host "🚀 Installing AGIS (Autonomous Go Intelligent System)..." -ForegroundColor Cyan
 
-# 1. Determine download URL from latest GitHub release
+# 1. Determine architecture
+$Arch = "amd64"
+if ([System.Environment]::Is64BitOperatingSystem) {
+    if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
+        $Arch = "arm64"
+    } else {
+        $Arch = "amd64"
+    }
+} else {
+    $Arch = "386"
+}
+
+Write-Host "🔍 Detected Platform: windows/$Arch" -ForegroundColor Gray
+
+# 2. Query latest release
 $LatestRelease = ""
 try {
     $ReleaseInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing
     $LatestRelease = $ReleaseInfo.tag_name
 } catch {
-    Write-Host "⚠️ Unable to fetch release tag via API, using latest download endpoint..." -ForegroundColor Yellow
+    Write-Host "⚠️ Unable to query latest release tag from GitHub API..." -ForegroundColor Yellow
 }
 
-if ($LatestRelease) {
-    $DownloadUrl = "https://github.com/$Repo/releases/download/$LatestRelease/$BinaryName"
-    Write-Host "📦 Downloading AGIS release $LatestRelease..." -ForegroundColor Green
-} else {
-    $DownloadUrl = "https://github.com/$Repo/releases/latest/download/$BinaryName"
-}
+$TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 
-# 2. Download binary
 if (!(Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
 $DestPath = Join-Path $InstallDir "agis.exe"
-$DownloadSuccess = $false
+$Success = $false
 
-try {
-    Invoke-WebRequest -Uri $DownloadUrl -OutFile $DestPath -UseBasicParsing
-    $DownloadSuccess = $true
-} catch {
-    Write-Host "⚠️ Direct binary download failed. Checking if Go compiler is available..." -ForegroundColor Yellow
+if ($LatestRelease) {
+    $CleanVer = $LatestRelease.TrimStart('v')
+    $ZipName = "agis_${CleanVer}_windows_${Arch}.zip"
+    $ZipUrl = "https://github.com/$Repo/releases/download/$LatestRelease/$ZipName"
+    $ExeUrl = "https://github.com/$Repo/releases/download/$LatestRelease/agis-windows-$Arch.exe"
+
+    Write-Host "📦 Attempting download for release $LatestRelease..." -ForegroundColor Green
+
+    # Try Zip archive first
+    try {
+        $ZipPath = Join-Path $TempDir "agis.zip"
+        Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath -UseBasicParsing
+        Expand-Archive -Path $ZipPath -DestinationPath $TempDir -Force
+        $ExtractedExe = Join-Path $TempDir "agis.exe"
+        if (Test-Path $ExtractedExe) {
+            Move-Item -Path $ExtractedExe -Destination $DestPath -Force
+            $Success = $true
+        }
+    } catch {
+        # Fallback to direct exe
+        try {
+            Invoke-WebRequest -Uri $ExeUrl -OutFile $DestPath -UseBasicParsing
+            $Success = $true
+        } catch {}
+    }
+}
+
+if (-not $Success) {
+    Write-Host "⚠️ Prebuilt release binary download not available." -ForegroundColor Yellow
     if (Get-Command go -ErrorAction SilentlyContinue) {
-        Write-Host "🔨 Building and installing from source via 'go install'..." -ForegroundColor Cyan
-        go install "github.com/$Repo/cmd/agis@latest"
-        Write-Host "✅ AGIS installed successfully via 'go install'!" -ForegroundColor Green
-        exit 0
+        Write-Host "🔨 Building and installing from source via 'go install github.com/$Repo/cmd/agis@latest'..." -ForegroundColor Cyan
+        try {
+            & go install "github.com/$Repo/cmd/agis@latest"
+            Write-Host "✅ AGIS installed successfully via 'go install'!" -ForegroundColor Green
+            Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+            exit 0
+        } catch {
+            Write-Error "❌ go install failed."
+        }
     } else {
-        Write-Error "❌ Failed to download binary and Go compiler is not installed."
+        Write-Error "❌ Could not download release binary and Go compiler is not installed."
+        Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
         exit 1
     }
 }
+
+Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # 3. Add to user PATH if not present
 $UserPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
@@ -58,4 +98,4 @@ if ($UserPath -notlike "*$InstallDir*") {
 
 Write-Host "✅ AGIS installed successfully at $DestPath!" -ForegroundColor Green
 Write-Host ""
-Write-Host "Type 'agis' in a new PowerShell window to start." -ForegroundColor Cyan
+Write-Host "🚀 Type 'agis' in a new PowerShell window to start!" -ForegroundColor Cyan

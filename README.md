@@ -40,38 +40,67 @@ Full milestone history in [docs/roadmap.md](docs/roadmap.md).
 - **Plugin Manager** — Dynamic external plugin discovery (`plugin.json`), tool runner bridge, skill extraction, and persistent state management.
 - **HMAC Webhook Server** — HTTP event listener with constant-time HMAC-SHA256 signature verification and brain event dispatching.
 
-## Quickstart
+## 🚀 Installation
 
-### Linux & macOS (One-line installer)
+AGIS is distributed as a single static binary with zero external runtime dependencies. Choose your preferred installation method:
 
+### 1. Automatic One-Line Installer (Recommended)
+
+**Linux & macOS (Bash/Zsh):**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/SalvucciFacundo/agis/main/install.sh | bash
 ```
+*Auto-detects Debian, Ubuntu, Arch, Fedora, Alpine, CentOS, openSUSE, and macOS (Intel & Apple Silicon).*
 
-### Windows (PowerShell)
-
+**Windows (PowerShell 5.1 / 7+):**
 ```powershell
 iwr -useb https://raw.githubusercontent.com/SalvucciFacundo/agis/main/install.ps1 | iex
 ```
 
-### Build from Source
+---
 
-Requirements: Go 1.26+, and [Ollama](https://ollama.com) running locally (or an OpenAI API key).
+### 2. Go Install (Cross-Platform)
+
+If you have Go installed on your machine:
+```bash
+go install github.com/SalvucciFacundo/agis/cmd/agis@latest
+```
+
+---
+
+### 3. Prebuilt Packages & Binaries (GitHub Releases)
+
+Download precompiled standalone binaries, `.deb`, `.rpm`, `.apk`, `.tar.gz`, or `.zip` archives directly from [GitHub Releases](https://github.com/SalvucciFacundo/agis/releases):
+
+- **Debian / Ubuntu / Mint / Pop!_OS:** `sudo dpkg -i agis_*_linux_amd64.deb`
+- **Fedora / RHEL / CentOS / Rocky:** `sudo rpm -ivh agis_*_linux_amd64.rpm`
+- **Alpine Linux:** `sudo apk add --allow-untrusted agis_*_linux_amd64.apk`
+- **Arch Linux:** Standalone binary or install via script
+- **macOS Universal Binary:** Standalone `tar.gz` for both Apple Silicon (M1/M2/M3/M4) and Intel
+- **Windows Executable:** `agis_*_windows_amd64.zip`
+
+---
+
+### 4. Build from Source
+
+Requirements: Go 1.26+ (or 1.24+).
 
 ```bash
-# clone and build the binary
+# Clone the repository
 git clone https://github.com/SalvucciFacundo/agis.git
 cd agis
+
+# Build static binary
 make build
 
-# run interactive TUI (local Ollama, model llama3.2 by default)
+# Launch interactive TUI (defaults to local Ollama with llama3.2)
 ./bin/agis
 
-# or run directly without building
+# Or run directly without building
 go run ./cmd/agis
 ```
 
-The Makefile targets are `build`, `test`, `vet`, `lint`, `fmt`, `tidy`, `clean`.
+The `Makefile` targets are: `build`, `test`, `vet`, `lint`, `fmt`, `tidy`, `clean`.
 
 ## CLI Subcommands
 
