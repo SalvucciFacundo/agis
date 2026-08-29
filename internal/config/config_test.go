@@ -330,6 +330,95 @@ func TestLoad_ToolsDefaultsAndExplicit(t *testing.T) {
 	}
 }
 
+func TestLoad_CronDefaultsAndExplicit(t *testing.T) {
+	tests := []struct {
+		name        string
+		yaml        string
+		wantEnabled bool
+		wantJobs    int
+		checkJobs   func(t *testing.T, cfg *Config)
+	}{
+		{
+			name:        "empty config has cron disabled by default",
+			yaml:        "",
+			wantEnabled: false,
+			wantJobs:    0,
+		},
+		{
+			name: "cron block present but disabled",
+			yaml: `cron:
+  enabled: false
+  jobs:
+    - name: "test-job"
+      schedule: "@every 1h"
+      prompt: "ping"
+`,
+			wantEnabled: false,
+			wantJobs:    1,
+		},
+		{
+			name: "cron enabled with full job and target configuration",
+			yaml: `cron:
+  enabled: true
+  jobs:
+    - name: "daily-health"
+      schedule: "@every 1h"
+      prompt: "Check system health"
+      session_id: "cron-health"
+      target:
+        adapter: "telegram"
+        recipient: "123456"
+    - name: "weekly-summary"
+      schedule: "0 8 * * 1"
+      prompt: "Generate weekly summary"
+`,
+			wantEnabled: true,
+			wantJobs:    2,
+			checkJobs: func(t *testing.T, cfg *Config) {
+				j1 := cfg.Cron.Jobs[0]
+				if j1.Name != "daily-health" || j1.Schedule != "@every 1h" || j1.Prompt != "Check system health" || j1.SessionID != "cron-health" {
+					t.Errorf("unexpected job 0: %+v", j1)
+				}
+				if j1.Target == nil || j1.Target.Adapter != "telegram" || j1.Target.Recipient != "123456" {
+					t.Errorf("unexpected target for job 0: %+v", j1.Target)
+				}
+
+				j2 := cfg.Cron.Jobs[1]
+				if j2.Name != "weekly-summary" || j2.Schedule != "0 8 * * 1" || j2.Prompt != "Generate weekly summary" {
+					t.Errorf("unexpected job 1: %+v", j2)
+				}
+				if j2.Target != nil {
+					t.Errorf("expected nil target for job 1, got %+v", j2.Target)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+			if tt.yaml != "" {
+				writeConfig(t, home, tt.yaml, 0o600)
+			}
+
+			cfg, err := Load("")
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if cfg.Cron.Enabled != tt.wantEnabled {
+				t.Errorf("Cron.Enabled = %v, want %v", cfg.Cron.Enabled, tt.wantEnabled)
+			}
+			if len(cfg.Cron.Jobs) != tt.wantJobs {
+				t.Errorf("len(Cron.Jobs) = %d, want %d", len(cfg.Cron.Jobs), tt.wantJobs)
+			}
+			if tt.checkJobs != nil {
+				tt.checkJobs(t, cfg)
+			}
+		})
+	}
+}
+
 func TestLoad_GatewayDefaultsAndExplicit(t *testing.T) {
 	tests := []struct {
 		name       string
