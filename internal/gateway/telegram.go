@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SalvucciFacundo/agis/internal/config"
+	"github.com/SalvucciFacundo/agis/internal/core"
 )
 
 // TelegramMaxMessageLength is Telegram's per-message character limit (4096).
@@ -86,6 +87,27 @@ func WithTelegramHTTPClient(client *http.Client) TelegramOption {
 	}
 }
 
+// WithTelegramTranscriber sets the audio transcription service.
+func WithTelegramTranscriber(transcriber core.Transcriber) TelegramOption {
+	return func(a *TelegramAdapter) {
+		a.transcriber = transcriber
+	}
+}
+
+// WithTelegramMaxImageSize configures the maximum photo size limit in bytes.
+func WithTelegramMaxImageSize(maxBytes int64) TelegramOption {
+	return func(a *TelegramAdapter) {
+		a.maxImageSize = maxBytes
+	}
+}
+
+// WithTelegramMaxAudioSize configures the maximum audio size limit in bytes.
+func WithTelegramMaxAudioSize(maxBytes int64) TelegramOption {
+	return func(a *TelegramAdapter) {
+		a.maxAudioSize = maxBytes
+	}
+}
+
 // TelegramAdapter implements the Adapter port for Telegram Bot API.
 type TelegramAdapter struct {
 	cfg          TelegramConfig
@@ -94,6 +116,9 @@ type TelegramAdapter struct {
 	logger       *slog.Logger
 	client       *http.Client
 	pollInterval time.Duration
+	transcriber  core.Transcriber
+	maxImageSize int64
+	maxAudioSize int64
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -109,6 +134,8 @@ func NewTelegramAdapter(cfg TelegramConfig, opts ...TelegramOption) *TelegramAda
 		pollInterval: 1 * time.Second,
 		client:       &http.Client{Timeout: 30 * time.Second},
 		logger:       slog.Default(),
+		maxImageSize: DefaultMaxImageSize,
+		maxAudioSize: DefaultMaxAudioSize,
 	}
 	for _, opt := range opts {
 		opt(a)
@@ -199,6 +226,28 @@ func (a *TelegramAdapter) sendMessage(ctx context.Context, chatID string, text s
 	return nil
 }
 
+type tgPhotoSize struct {
+	FileID   string `json:"file_id"`
+	FileSize int64  `json:"file_size"`
+	Width    int    `json:"width"`
+	Height   int    `json:"height"`
+}
+
+type tgVoice struct {
+	FileID   string `json:"file_id"`
+	MimeType string `json:"mime_type"`
+	FileSize int64  `json:"file_size"`
+	Duration int    `json:"duration"`
+}
+
+type tgAudio struct {
+	FileID   string `json:"file_id"`
+	FileName string `json:"file_name"`
+	MimeType string `json:"mime_type"`
+	FileSize int64  `json:"file_size"`
+	Duration int    `json:"duration"`
+}
+
 type tgUpdate struct {
 	UpdateID int64 `json:"update_id"`
 	Message  *struct {
@@ -210,14 +259,56 @@ type tgUpdate struct {
 		Chat *struct {
 			ID int64 `json:"id"`
 		} `json:"chat"`
-		Text string `json:"text"`
-		Date int64  `json:"date"`
+		Text    string        `json:"text"`
+		Caption string        `json:"caption"`
+		Photo   []tgPhotoSize `json:"photo"`
+		Voice   *tgVoice      `json:"voice"`
+		Audio   *tgAudio      `json:"audio"`
+		Date    int64         `json:"date"`
 	} `json:"message"`
 }
 
 type tgGetUpdatesResponse struct {
 	OK     bool       `json:"ok"`
 	Result []tgUpdate `json:"result"`
+}
+
+type tgGetFileResponse struct {
+	OK     bool `json:"ok"`
+	Result struct {
+		FileID   string `json:"file_id"`
+		FilePath string `json:"file_path"`
+		FileSize int64  `json:"file_size"`
+	} `json:"result"`
+}
+
+func (a *TelegramAdapter) getFile(ctx context.Context, fileID string) (string, error) {
+	url := fmt.Sprintf("%s/bot%s/getFile?file_id=%s", a.baseURL, a.cfg.Token, fileID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", fmt.Errorf("creating getFile request: %w", err)
+	}
+
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("executing getFile request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("telegram getFile HTTP %d: %s", resp.StatusCode, string(b))
+	}
+
+	var data tgGetFileResponse
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return "", fmt.Errorf("decoding telegram getFile response: %w", err)
+	}
+	if !data.OK || data.Result.FilePath == "" {
+		return "", fmt.Errorf("telegram getFile returned empty file_path")
+	}
+
+	return data.Result.FilePath, nil
 }
 
 func (a *TelegramAdapter) pollLoop(ctx context.Context) {
@@ -302,12 +393,105 @@ func (a *TelegramAdapter) processUpdate(ctx context.Context, u tgUpdate) {
 		return
 	}
 
+	content := u.Message.Text
+	if content == "" {
+		content = u.Message.Caption
+	}
+
+	var attachments []core.Attachment
+
+	// 1. Process photos
+	if len(u.Message.Photo) > 0 {
+		var best tgPhotoSize
+		for _, p := range u.Message.Photo {
+			if p.Width*p.Height >= best.Width*best.Height {
+				best = p
+			}
+		}
+
+		filePath, err := a.getFile(ctx, best.FileID)
+		if err != nil {
+			a.logger.Warn("gateway: telegram getFile photo failed", "file_id", best.FileID, "error", err)
+		} else {
+			downloadURL := fmt.Sprintf("%s/file/bot%s/%s", a.baseURL, a.cfg.Token, filePath)
+			data, mime, dlErr := DownloadMedia(ctx, a.client, downloadURL, a.maxImageSize)
+			if dlErr != nil {
+				a.logger.Warn("gateway: telegram photo download failed", "file_id", best.FileID, "error", dlErr)
+			} else {
+				attachments = append(attachments, core.Attachment{
+					Type:     "image",
+					MimeType: mime,
+					Data:     data,
+					Name:     "photo.jpg",
+				})
+			}
+		}
+	}
+
+	// 2. Process voice or audio notes
+	var audioFileID string
+	var audioMime string
+	var audioName string
+
+	if u.Message.Voice != nil {
+		audioFileID = u.Message.Voice.FileID
+		audioMime = u.Message.Voice.MimeType
+		if audioMime == "" {
+			audioMime = "audio/ogg"
+		}
+		audioName = "voice.ogg"
+	} else if u.Message.Audio != nil {
+		audioFileID = u.Message.Audio.FileID
+		audioMime = u.Message.Audio.MimeType
+		audioName = u.Message.Audio.FileName
+		if audioName == "" {
+			audioName = "audio.mp3"
+		}
+	}
+
+	if audioFileID != "" {
+		filePath, err := a.getFile(ctx, audioFileID)
+		if err != nil {
+			a.logger.Warn("gateway: telegram getFile audio failed", "file_id", audioFileID, "error", err)
+		} else {
+			downloadURL := fmt.Sprintf("%s/file/bot%s/%s", a.baseURL, a.cfg.Token, filePath)
+			data, mime, dlErr := DownloadMedia(ctx, a.client, downloadURL, a.maxAudioSize)
+			if dlErr != nil {
+				a.logger.Warn("gateway: telegram audio download failed", "file_id", audioFileID, "error", dlErr)
+			} else {
+				if mime == "" {
+					mime = audioMime
+				}
+				attachments = append(attachments, core.Attachment{
+					Type:     "audio",
+					MimeType: mime,
+					Data:     data,
+					Name:     audioName,
+				})
+
+				if a.transcriber != nil {
+					transcript, tErr := a.transcriber.Transcribe(ctx, data, mime)
+					if tErr != nil {
+						a.logger.Warn("gateway: telegram audio transcription failed", "error", tErr)
+					} else if transcript != "" {
+						if content == "" {
+							content = transcript
+						} else {
+							content = content + "\n" + transcript
+						}
+					}
+				}
+			}
+		}
+	}
+
 	ev := MessageEvent{
-		Adapter:   "telegram",
-		UserID:    userID,
-		ChatID:    chatID,
-		Content:   u.Message.Text,
-		Timestamp: time.Unix(u.Message.Date, 0),
+		Adapter:     "telegram",
+		UserID:      userID,
+		ChatID:      chatID,
+		Content:     content,
+		Attachments: attachments,
+		Timestamp:   time.Unix(u.Message.Date, 0),
 	}
 
 	if err := a.handler(ctx, ev); err != nil {

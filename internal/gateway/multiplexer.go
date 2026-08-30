@@ -217,9 +217,18 @@ func (m *Multiplexer) HandleEvent(ctx context.Context, ev MessageEvent) error {
 
 	m.brain.SetActiveConversation(convID)
 
-	if err := m.brain.Step(ctx, ev.Content); err != nil {
-		m.logger.Error("gateway multiplexer: brain step error", "session_key", sessionKey, "error", err)
-		return fmt.Errorf("brain step: %w", err)
+	var stepErr error
+	if bw, ok := m.brain.(interface {
+		StepWithAttachments(ctx context.Context, input string, attachments []core.Attachment) error
+	}); ok && len(ev.Attachments) > 0 {
+		stepErr = bw.StepWithAttachments(ctx, ev.Content, ev.Attachments)
+	} else {
+		stepErr = m.brain.Step(ctx, ev.Content)
+	}
+
+	if stepErr != nil {
+		m.logger.Error("gateway multiplexer: brain step error", "session_key", sessionKey, "error", stepErr)
+		return fmt.Errorf("brain step: %w", stepErr)
 	}
 
 	// Fetch assistant reply to send back via the originating adapter

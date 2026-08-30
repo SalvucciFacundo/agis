@@ -158,6 +158,22 @@ func runGatewayWithContext(ctx context.Context, args []string, stdout, stderr io
 
 	brain := core.NewBrain(repo, provider, brainOpts...)
 
+	var transcriber core.Transcriber
+	if cfg.Multimodal.Audio.Enabled {
+		if cfg.Multimodal.Audio.Provider == "openai" {
+			whisperModel := cfg.Multimodal.Audio.Model
+			if whisperModel == "" {
+				whisperModel = "whisper-1"
+			}
+			transcriber = llm.NewWhisper(
+				"",
+				cfg.LLM.APIKey,
+				whisperModel,
+			)
+			logger.Info("multimodal: audio transcriber initialized", "provider", "openai", "model", whisperModel)
+		}
+	}
+
 	mux := gateway.NewMultiplexer(
 		gateway.WithMultiplexerBrain(brain),
 		gateway.WithMultiplexerRepository(repo),
@@ -166,19 +182,47 @@ func runGatewayWithContext(ctx context.Context, args []string, stdout, stderr io
 	)
 
 	if cfg.Gateway.Telegram.Enabled {
-		tg := gateway.NewTelegramAdapter(
-			cfg.Gateway.Telegram,
+		var tgOpts []gateway.TelegramOption
+		tgOpts = append(tgOpts,
 			gateway.WithTelegramHandler(mux.HandleEvent),
 			gateway.WithTelegramLogger(logger),
+		)
+		if transcriber != nil {
+			tgOpts = append(tgOpts, gateway.WithTelegramTranscriber(transcriber))
+		}
+		if cfg.Multimodal.Vision.MaxImageSizeMB > 0 {
+			tgOpts = append(tgOpts, gateway.WithTelegramMaxImageSize(int64(cfg.Multimodal.Vision.MaxImageSizeMB)*1024*1024))
+		}
+		if cfg.Multimodal.Audio.MaxAudioSizeMB > 0 {
+			tgOpts = append(tgOpts, gateway.WithTelegramMaxAudioSize(int64(cfg.Multimodal.Audio.MaxAudioSizeMB)*1024*1024))
+		}
+
+		tg := gateway.NewTelegramAdapter(
+			cfg.Gateway.Telegram,
+			tgOpts...,
 		)
 		mux.RegisterAdapter(tg)
 	}
 
 	if cfg.Gateway.Discord.Enabled {
-		dc := gateway.NewDiscordAdapter(
-			cfg.Gateway.Discord,
+		var dcOpts []gateway.DiscordOption
+		dcOpts = append(dcOpts,
 			gateway.WithDiscordHandler(mux.HandleEvent),
 			gateway.WithDiscordLogger(logger),
+		)
+		if transcriber != nil {
+			dcOpts = append(dcOpts, gateway.WithDiscordTranscriber(transcriber))
+		}
+		if cfg.Multimodal.Vision.MaxImageSizeMB > 0 {
+			dcOpts = append(dcOpts, gateway.WithDiscordMaxImageSize(int64(cfg.Multimodal.Vision.MaxImageSizeMB)*1024*1024))
+		}
+		if cfg.Multimodal.Audio.MaxAudioSizeMB > 0 {
+			dcOpts = append(dcOpts, gateway.WithDiscordMaxAudioSize(int64(cfg.Multimodal.Audio.MaxAudioSizeMB)*1024*1024))
+		}
+
+		dc := gateway.NewDiscordAdapter(
+			cfg.Gateway.Discord,
+			dcOpts...,
 		)
 		mux.RegisterAdapter(dc)
 	}

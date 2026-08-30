@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/SalvucciFacundo/agis/internal/config"
+	"github.com/SalvucciFacundo/agis/internal/core"
 )
 
 // DiscordMaxMessageLength is Discord's per-message character limit (2000).
@@ -66,6 +67,27 @@ func WithDiscordHTTPClient(client *http.Client) DiscordOption {
 	}
 }
 
+// WithDiscordTranscriber sets the audio transcription service.
+func WithDiscordTranscriber(transcriber core.Transcriber) DiscordOption {
+	return func(a *DiscordAdapter) {
+		a.transcriber = transcriber
+	}
+}
+
+// WithDiscordMaxImageSize configures the maximum image size limit in bytes.
+func WithDiscordMaxImageSize(maxBytes int64) DiscordOption {
+	return func(a *DiscordAdapter) {
+		a.maxImageSize = maxBytes
+	}
+}
+
+// WithDiscordMaxAudioSize configures the maximum audio size limit in bytes.
+func WithDiscordMaxAudioSize(maxBytes int64) DiscordOption {
+	return func(a *DiscordAdapter) {
+		a.maxAudioSize = maxBytes
+	}
+}
+
 // DiscordAdapter implements the Adapter port for Discord Bot REST/Gateway API.
 type DiscordAdapter struct {
 	cfg          DiscordConfig
@@ -75,6 +97,9 @@ type DiscordAdapter struct {
 	logger       *slog.Logger
 	client       *http.Client
 	pollInterval time.Duration
+	transcriber  core.Transcriber
+	maxImageSize int64
+	maxAudioSize int64
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -90,6 +115,8 @@ func NewDiscordAdapter(cfg DiscordConfig, opts ...DiscordOption) *DiscordAdapter
 		pollInterval: 1 * time.Second,
 		client:       &http.Client{Timeout: 30 * time.Second},
 		logger:       slog.Default(),
+		maxImageSize: DefaultMaxImageSize,
+		maxAudioSize: DefaultMaxAudioSize,
 	}
 	for _, opt := range opts {
 		opt(a)
@@ -180,16 +207,26 @@ func (a *DiscordAdapter) sendMessage(ctx context.Context, channelID string, text
 	return nil
 }
 
+type discordAttachment struct {
+	ID          string `json:"id"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Size        int64  `json:"size"`
+	URL         string `json:"url"`
+	ProxyURL    string `json:"proxy_url"`
+}
+
 type discordMessage struct {
-	ID        string `json:"id"`
-	ChannelID string `json:"channel_id"`
-	Content   string `json:"content"`
-	Author    struct {
+	ID          string              `json:"id"`
+	ChannelID   string              `json:"channel_id"`
+	Content     string              `json:"content"`
+	Author      struct {
 		ID       string `json:"id"`
 		Username string `json:"username"`
 		Bot      bool   `json:"bot"`
 	} `json:"author"`
-	Timestamp string `json:"timestamp"`
+	Attachments []discordAttachment `json:"attachments"`
+	Timestamp   string              `json:"timestamp"`
 }
 
 func (a *DiscordAdapter) pollLoop(ctx context.Context) {
@@ -276,17 +313,78 @@ func (a *DiscordAdapter) processMessage(ctx context.Context, msg discordMessage)
 		return
 	}
 
+	content := msg.Content
+	var attachments []core.Attachment
+
+	for _, att := range msg.Attachments {
+		targetURL := att.URL
+		if targetURL == "" {
+			targetURL = att.ProxyURL
+		}
+		if targetURL == "" {
+			continue
+		}
+
+		// Determine if attachment is likely audio or image
+		isAudio := IsAllowedAudioMime(att.ContentType) || strings.HasSuffix(strings.ToLower(att.Filename), ".ogg") ||
+			strings.HasSuffix(strings.ToLower(att.Filename), ".wav") || strings.HasSuffix(strings.ToLower(att.Filename), ".mp3") ||
+			strings.HasSuffix(strings.ToLower(att.Filename), ".m4a")
+
+		maxSize := a.maxImageSize
+		if isAudio {
+			maxSize = a.maxAudioSize
+		}
+
+		data, mime, err := DownloadMedia(ctx, a.client, targetURL, maxSize)
+		if err != nil {
+			a.logger.Warn("gateway: discord attachment download failed", "filename", att.Filename, "url", targetURL, "error", err)
+			continue
+		}
+
+		if IsAllowedImageMime(mime) {
+			attachments = append(attachments, core.Attachment{
+				Type:     "image",
+				MimeType: mime,
+				Data:     data,
+				Name:     att.Filename,
+				URL:      targetURL,
+			})
+		} else if IsAllowedAudioMime(mime) {
+			attachments = append(attachments, core.Attachment{
+				Type:     "audio",
+				MimeType: mime,
+				Data:     data,
+				Name:     att.Filename,
+				URL:      targetURL,
+			})
+
+			if a.transcriber != nil {
+				transcript, tErr := a.transcriber.Transcribe(ctx, data, mime)
+				if tErr != nil {
+					a.logger.Warn("gateway: discord audio transcription failed", "filename", att.Filename, "error", tErr)
+				} else if transcript != "" {
+					if content == "" {
+						content = transcript
+					} else {
+						content = content + "\n" + transcript
+					}
+				}
+			}
+		}
+	}
+
 	t, _ := time.Parse(time.RFC3339, msg.Timestamp)
 	if t.IsZero() {
 		t = time.Now()
 	}
 
 	ev := MessageEvent{
-		Adapter:   "discord",
-		UserID:    msg.Author.ID,
-		ChatID:    msg.ChannelID,
-		Content:   msg.Content,
-		Timestamp: t,
+		Adapter:     "discord",
+		UserID:      msg.Author.ID,
+		ChatID:      msg.ChannelID,
+		Content:     content,
+		Attachments: attachments,
+		Timestamp:   t,
 	}
 
 	if err := a.handler(ctx, ev); err != nil {

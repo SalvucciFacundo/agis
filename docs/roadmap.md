@@ -170,12 +170,13 @@ Future capabilities identified for post-v1 expansion:
 - Multi-server manager, paginated tool discovery (`tools/list`), and execution (`tools/call`).
 - `core.ToolRunner` bridge (`MCPRunner`), `PolicyGuard` multi-tier security, and `agis mcp [list|test]` CLI.
 
-### 4. Multimodal Ingestion (Vision & Audio)
-- Extend `core.ChatRequest` and gateway message event pipelines (Telegram & Discord) to accept image and voice attachments.
-- Route image payloads to multimodal LLMs (e.g. `llama3.2-vision`, `gpt-4o`) and voice messages to local Whisper/Ollama transcription endpoints.
-
-
-### 4. Multimodal Ingestion (Vision & Audio)
-- Extend `core.ChatRequest` and gateway message event pipelines to accept image and audio attachments.
-- Route image payloads to multimodal LLMs (e.g. `llama3.2-vision`, `gpt-4o`) and audio to local Whisper/Ollama transcription endpoints.
+### 4. Multimodal Ingestion (Vision & Audio) ✅ DONE (v1.3.0)
+- `core.Attachment` domain model embedded on `core.Message` with backward compatibility for text-only turns.
+- Vision multipart content transformation in `internal/adapters/llm/client.go` serializing image attachments as OpenAI/Ollama-compatible base64 Data URLs with strict MIME validation.
+- `core.Transcriber` domain port and OpenAI Whisper adapter (`internal/adapters/llm/whisper.go`) issuing `multipart/form-data` requests to `/v1/audio/transcriptions`.
+- Telegram (`internal/gateway/telegram.go`) photo download via `getFile` and voice/audio note ingestion with Whisper transcription.
+- Discord (`internal/gateway/discord.go`) CDN attachment download for images and audio with Whisper transcription.
+- Size limits (10MB image, 25MB audio), stream guards (`io.LimitReader`), and MIME type sniffing (`http.DetectContentType`) in `internal/gateway/media.go`.
+- SQLite migration `0007_attachments.sql` with cascade deletion and transactional persistence in `internal/memory/sqlite.go`.
+- End-to-end integration test suite (`cmd/agis/multimodal_integration_test.go`) under `go test -race ./...` and `goleak`.
 

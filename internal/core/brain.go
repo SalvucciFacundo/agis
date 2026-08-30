@@ -190,12 +190,19 @@ func NewBrain(repo Repository, provider Provider, opts ...Option) *Brain {
 // provider error the user message remains persisted and no assistant message
 // is written.
 func (b *Brain) Step(ctx context.Context, input string) error {
+	return b.StepWithAttachments(ctx, input, nil)
+}
+
+// StepWithAttachments processes one user turn with optional media attachments.
+// On a provider error the user message and attachments remain persisted and no
+// assistant message is written.
+func (b *Brain) StepWithAttachments(ctx context.Context, input string, attachments []Attachment) error {
 	conv, err := b.ensureConversation(ctx)
 	if err != nil {
 		return err
 	}
 
-	if err := b.repo.AppendMessage(ctx, conv.ID, Message{Role: RoleUser, Content: input}); err != nil {
+	if err := b.repo.AppendMessage(ctx, conv.ID, Message{Role: RoleUser, Content: input, Attachments: attachments}); err != nil {
 		return fmt.Errorf("persisting user message: %w", err)
 	}
 

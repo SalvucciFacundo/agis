@@ -94,6 +94,18 @@ embeddings:
   model: "nomic-embed-text"       # default: "nomic-embed-text" (ollama) or "text-embedding-3-small" (openai)
   dimensions: 768                 # vector dimensions (0 for auto-detected)
   batch_size: 100                 # maximum items per embedding batch request (capped to 2048)
+
+multimodal:
+  enabled: false                  # master switch for vision and audio ingestion
+  vision:
+    enabled: false                # vision model multipart processing
+    model: "gpt-4o"               # vision-capable model (e.g. gpt-4o, llama3.2-vision)
+    max_image_size_mb: 10         # maximum image size limit in MB (default: 10)
+  audio:
+    enabled: false                # audio transcription processing
+    provider: "openai"            # transcription provider ("openai" / Whisper)
+    model: "whisper-1"            # transcription model
+    max_audio_size_mb: 25         # maximum audio size limit in MB (default: 25)
 ```
 
 ## Precedence

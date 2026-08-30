@@ -8,6 +8,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"github.com/SalvucciFacundo/agis/internal/core"
 )
 
 var (
@@ -24,11 +26,12 @@ var (
 
 // MessageEvent represents an inbound chat event normalized across platforms.
 type MessageEvent struct {
-	Adapter   string
-	UserID    string
-	ChatID    string
-	Content   string
-	Timestamp time.Time
+	Adapter     string
+	UserID      string
+	ChatID      string
+	Content     string
+	Attachments []core.Attachment
+	Timestamp   time.Time
 }
 
 // Handler handles normalized inbound message events.
