@@ -11,6 +11,7 @@ import (
 
 	"github.com/SalvucciFacundo/agis/internal/cron"
 	"github.com/SalvucciFacundo/agis/internal/memory"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMain(m *testing.M) {
@@ -82,18 +83,14 @@ func TestEngine_TargetSendError(t *testing.T) {
 		t.Fatalf("Start error = %v", err)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		sender.mu.Lock()
+		defer sender.mu.Unlock()
+		return len(sender.sendCalls) > 0
+	}, 2*time.Second, 10*time.Millisecond, "expected sender to be called even if it returned error")
 
 	if err := engine.Stop(); err != nil {
 		t.Fatalf("Stop error = %v", err)
-	}
-
-	sender.mu.Lock()
-	calls := len(sender.sendCalls)
-	sender.mu.Unlock()
-
-	if calls == 0 {
-		t.Error("expected sender to be called even if it returned error")
 	}
 }
 
