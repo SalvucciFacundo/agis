@@ -193,3 +193,34 @@ PRAGMA user_version = 6;
 - WHEN `NewRepository` initializes
 - THEN migration 0006 applies idempotently and `PRAGMA user_version` becomes 6
 
+
+repository-memory (MODIFIED)
+
+### Requirement AGIS-M9-REPO-001: Attachments Storage & Migration 0007_attachments.sql
+The persistence layer MUST store message attachments in an `attachments` table linked to `messages(id)`:
+```sql
+CREATE TABLE IF NOT EXISTS attachments (
+    id         TEXT PRIMARY KEY,
+    message_id TEXT NOT NULL,
+    type       TEXT NOT NULL,
+    mime_type  TEXT NOT NULL,
+    data       BLOB,
+    url        TEXT NOT NULL DEFAULT '',
+    name       TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_attachments_msg ON attachments(message_id);
+PRAGMA user_version = 7;
+```
+
+1. `Repository.AppendMessage` MUST persist message attachments in the same transaction.
+2. `Repository.Messages` MUST query and populate the `Attachments` slice for each message.
+3. Deleting a conversation or message MUST cascade delete associated attachment rows.
+
+#### Scenario: Attachments saved and loaded transactionally
+- GIVEN a message with an image attachment
+- WHEN `AppendMessage` and `Messages` are executed
+- THEN the returned message includes the exact binary attachment payload
+
+

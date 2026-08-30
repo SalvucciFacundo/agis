@@ -84,3 +84,49 @@ The Gateway MUST maintain deterministic session mapping using `session.SessionMa
 - GIVEN an existing gateway session for Telegram chat ID `445566`
 - WHEN the user sends a second message within the same chat
 - THEN the brain receives the previous conversation history from `SessionManager` and appends the new turn
+
+
+gateway (MODIFIED)
+
+### Requirement AGIS-M9-GTW-001: Telegram Photo and Voice Ingestion
+The Telegram adapter in `internal/gateway/telegram.go` MUST support downloading and processing inbound photos and voice notes:
+1. **Photos**: When an update contains a `photo` array, the adapter MUST select the largest resolution entry, resolve its file path via the Telegram `getFile` endpoint, and download the binary payload.
+2. **Voice & Audio Notes**: When an update contains a `voice` or `audio` payload, the adapter MUST resolve the file path, download the audio bytes, and invoke `core.Transcriber.Transcribe` to generate a text transcript.
+3. The adapter MUST populate `MessageEvent.Attachments` with the downloaded binary payload and MIME metadata.
+
+#### Scenario: Inbound Telegram photo processed
+- GIVEN a Telegram user sending a photo with caption `"What's in this image?"`
+- WHEN the adapter processes the update
+- THEN the image is downloaded, attached to the message event, and passed to the brain
+
+#### Scenario: Inbound Telegram voice note transcribed
+- GIVEN a Telegram user sending a voice message
+- WHEN the adapter downloads the audio and invokes `Transcriber`
+- THEN the audio is transcribed to text, attached to the event, and processed by the brain
+
+---
+
+### Requirement AGIS-M9-GTW-002: Discord Media Ingestion
+The Discord adapter in `internal/gateway/discord.go` MUST support downloading attachments:
+1. Inspect inbound message attachments for `image/*` and `audio/*` content types.
+2. Download media bytes from the Discord CDN URL with bounded timeouts.
+3. If the attachment is audio, invoke `core.Transcriber` to produce text transcripts.
+4. Populate `MessageEvent.Attachments` with the downloaded media payload.
+
+#### Scenario: Inbound Discord image attachment processed
+- GIVEN a Discord message with an image attachment
+- WHEN the adapter downloads the attachment
+- THEN the image is validated and attached to the event
+
+---
+
+### Requirement AGIS-M9-GTW-003: Media Size and MIME Guardrails
+Each gateway adapter MUST enforce strict media validation guardrails before processing:
+1. **Size Limits**: Images MUST NOT exceed 10MB (`10 * 1024 * 1024` bytes). Audio payloads MUST NOT exceed 25MB (`25 * 1024 * 1024` bytes). Oversized payloads MUST be dropped or rejected with a warning.
+2. **MIME Sniffing**: The adapter MUST inspect magic bytes via `http.DetectContentType` to ensure payloads match genuine allowed MIME formats (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, `audio/ogg`, `audio/wav`, `audio/mpeg`). Executable or unrecognized payloads MUST be rejected fail-closed.
+
+#### Scenario: Oversized image rejected
+- GIVEN an inbound image payload of 15MB
+- WHEN evaluated by gateway media guards
+- THEN the download is rejected and an oversized media warning is logged
+

@@ -161,4 +161,31 @@ mcp:
 - THEN `cfg.MCP.Servers` contains both server definitions with their respective commands and URLs
 
 
+config-loader (MODIFIED)
+
+### Requirement AGIS-M9-CONF-001: Multimodal Configuration Schema
+The configuration loader in `internal/config/config.go` MUST support the following optional root configuration block:
+
+```yaml
+multimodal:
+  enabled: false
+  vision:
+    enabled: true
+    model: "llama3.2-vision" # default vision model
+  audio:
+    enabled: true
+    provider: "openai"       # "openai" | "whisper"
+    model: "whisper-1"       # default transcription model
+```
+
+- `multimodal.enabled` MUST default to `false`.
+- Missing vision or audio fields MUST inherit documented safe defaults.
+
+#### Scenario: Default configuration disables multimodal
+- GIVEN an empty `config.yaml`
+- WHEN `config.Load()` is executed
+- THEN `cfg.Multimodal.Enabled` is `false`
+
+
+
 
