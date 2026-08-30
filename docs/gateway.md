@@ -114,3 +114,22 @@ Output:
 ```
 
 Press `Ctrl+C` or send `SIGTERM` to trigger clean teardown.
+
+---
+
+## Multimodal Ingestion in Gateways
+
+When `multimodal.enabled: true`:
+
+- **Telegram Photos & Voice Notes**:
+  - Inbound photo messages are downloaded via `getFile` (highest resolution chosen) and forwarded to vision-capable models (`gpt-4o`, `llama3.2-vision`).
+  - Inbound voice notes and audio clips are downloaded and transcribed via `core.Transcriber` (OpenAI Whisper), populating message content for the Brain.
+- **Discord Attachments**:
+  - Image attachments are downloaded from Discord's CDN and passed to the vision pipeline.
+  - Audio attachments are downloaded, transcribed to text, and forwarded to the Brain.
+- **Guardrails**:
+  - Image size limit: 10MB (configurable via `multimodal.vision.max_image_size_mb`).
+  - Audio size limit: 25MB (configurable via `multimodal.audio.max_audio_size_mb`).
+  - MIME sniffing with `http.DetectContentType` to fail-closed on spoofed or executable files.
+
+See [docs/multimodal.md](multimodal.md) for full configuration details.

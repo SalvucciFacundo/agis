@@ -9,7 +9,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge" alt="License: MIT"></a>
   <a href="https://github.com/SalvucciFacundo/agis/releases"><img src="https://img.shields.io/github/v/release/SalvucciFacundo/agis?style=for-the-badge&logo=github" alt="Release"></a>
   <a href="https://github.com/SalvucciFacundo/agis/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/SalvucciFacundo/agis/ci.yml?style=for-the-badge&label=CI" alt="CI"></a>
-  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/Milestones-M1--M8%20Shipped-brightgreen?style=for-the-badge" alt="Milestones M1-M8 Shipped"></a>
+  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/Milestones-M1--M9%20Shipped-brightgreen?style=for-the-badge" alt="Milestones M1-M9 Shipped"></a>
   <a href="https://github.com/SalvucciFacundo/agis"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=for-the-badge" alt="PRs Welcome"></a>
 </p>
 
@@ -83,6 +83,7 @@ go run ./cmd/agis
 - **🎭 Skill Hub & Persona** — Agentskills.io-compatible Markdown skill loading, runtime skill distillation, durable `SOUL.md`, and dynamic personality overlays.
 - **🛡️ Policy Guard & Tool Backends** — Multi-tier security postures (`sandbox`, `standard`, `full`), fail-closed approval, audit logging, and Local/Docker/SSH tool backends.
 - **🔌 Model Context Protocol (MCP) Client** — Native JSON-RPC 2.0 client supporting `stdio` subprocesses with process group isolation and `sse` network streams, dynamic tool discovery, and Policy Guard integration.
+- **🖼️ Multimodal Ingestion (Vision & Audio)** — Native vision multipart content formatting (Data URLs) and audio speech-to-text (OpenAI Whisper) across Telegram, Discord, and core Brain turns.
 - **💬 Chat Gateway Multiplexer** — Concurrent Telegram and Discord bot adapters, user allowlists, session multiplexing, and message chunking.
 - **⏱️ Cron Scheduler Daemon** — Autonomous scheduled tasks with 5-field cron and `@every` duration expressions, sandbox policy, and chat notification delivery.
 - **🧩 Plugin Manager** — Dynamic external plugin discovery (`plugin.json`), stdio tool runner bridge, skill extraction, and persistent state management.

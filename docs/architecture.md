@@ -15,7 +15,7 @@ AGIS is a hexagonal (ports & adapters) Go application, mirroring the structure p
 | `internal/memory` | `Repository` adapter on SQLite + FTS5, binary vector storage, RRF hybrid search, embedded migrations, summarizer, curator | `core` |
 | `internal/adapters/llm` | `Provider` adapters (OpenAI, Ollama) & `Embedder` adapters (Ollama, OpenAI) | `core`, `config` |
 | `internal/adapters/tui` | Bubbletea TUI: viewport, input, spinner, streaming, slash commands | `core`, `policy`, `session`, `persona` |
-| `internal/gateway` | External chat platform adapters (Telegram, Discord), Multiplexer, Auto-deny approver | `core`, `session` |
+| `internal/gateway` | External chat platform adapters (Telegram, Discord), media ingestion helpers, Multiplexer, Auto-deny approver | `core`, `session` |
 | `internal/cron` | Background job scheduler, cron parser, interval triggers, gateway notification sender | `core`, `config` |
 | `internal/plugins` | External plugin discovery, `plugin.json` manifest parsing, tool/skill registration, state persistence | `core`, `skills` |
 | `internal/webhook` | HTTP webhook ingestion server, HMAC-SHA256 signature verification, Brain event dispatch | `core`, `gateway` |
@@ -75,6 +75,13 @@ type Embedder interface {
     Embed(ctx context.Context, text string) ([]float32, error)
     EmbedBatch(ctx context.Context, texts []string) ([][]float32, error)
     Dimension() int
+}
+```
+
+**`core.Transcriber`** (`internal/core/port_transcriber.go`) — the audio transcription port:
+```go
+type Transcriber interface {
+    Transcribe(ctx context.Context, audio []byte, mimeType string) (string, error)
 }
 ```
 

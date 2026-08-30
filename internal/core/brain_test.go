@@ -283,3 +283,33 @@ func TestBrainStep_ReusesLatestConversation(t *testing.T) {
 		t.Fatalf("got %d messages, want 4 across one conversation", len(msgs))
 	}
 }
+
+func TestBrainStep_WithAttachments(t *testing.T) {
+	repo := newFakeRepo()
+	provider := &fakeProvider{events: []StreamEvent{{Text: "analyzed image"}}}
+	brain := NewBrain(repo, provider)
+
+	attachments := []Attachment{
+		{
+			Type:     "image",
+			MimeType: "image/png",
+			Data:     []byte{0x89, 0x50, 0x4E, 0x47},
+			Name:     "chart.png",
+		},
+	}
+
+	if err := brain.StepWithAttachments(context.Background(), "describe this", attachments); err != nil {
+		t.Fatalf("StepWithAttachments error = %v", err)
+	}
+
+	msgs, _ := repo.Messages(context.Background(), "conv-1", 0)
+	if len(msgs) != 2 {
+		t.Fatalf("got %d messages, want 2", len(msgs))
+	}
+	if len(msgs[0].Attachments) != 1 {
+		t.Fatalf("got %d attachments on user message, want 1", len(msgs[0].Attachments))
+	}
+	if msgs[0].Attachments[0].Name != "chart.png" {
+		t.Errorf("attachment name = %q, want chart.png", msgs[0].Attachments[0].Name)
+	}
+}

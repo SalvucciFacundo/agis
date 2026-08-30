@@ -42,9 +42,9 @@ Chain strategy: stacked-to-main
 
 ## PR Slice 3: Gateway Media Ingestion (Telegram & Discord), CLI Wiring & Docs
 
-- [ ] Implement `internal/gateway/media.go` with robust download helpers, timeout wrappers, MIME sniffing (`http.DetectContentType`), and size guards (10MB image, 25MB audio). <!-- sdd-owner: implementation -->
-- [ ] Extend `internal/gateway/telegram.go` to download photos via `getFile` and voice/audio notes, transcribe audio via `core.Transcriber`, and construct `MessageEvent.Attachments`. <!-- sdd-owner: implementation -->
-- [ ] Extend `internal/gateway/discord.go` to download CDN attachments for images and audio, transcribe voice messages, and attach to `MessageEvent`. <!-- sdd-owner: implementation -->
-- [ ] Wire `Transcriber` and multimodal options into `cmd/agis/main.go`, `cmd/agis/gateway.go`, and runtime startup flows. <!-- sdd-owner: implementation -->
-- [ ] Implement integration tests in `cmd/agis/multimodal_integration_test.go` and `internal/gateway/media_test.go` with race detector (`go test -race ./...`) and `goleak`. <!-- sdd-owner: implementation -->
-- [ ] Create `docs/multimodal.md` and update `docs/architecture.md`, `docs/configuration.md`, `docs/gateway.md`, `docs/roadmap.md` (M9 marked as DONE), and `README.md`. <!-- sdd-owner: implementation -->
+- [x] Implement `internal/gateway/media.go` with robust download helpers, timeout wrappers, MIME sniffing (`http.DetectContentType`), and size guards (10MB image, 25MB audio). <!-- sdd-owner: implementation -->
+- [x] Extend `internal/gateway/telegram.go` to download photos via `getFile` and voice/audio notes, transcribe audio via `core.Transcriber`, and construct `MessageEvent.Attachments`. <!-- sdd-owner: implementation -->
+- [x] Extend `internal/gateway/discord.go` to download CDN attachments for images and audio, transcribe voice messages, and attach to `MessageEvent`. <!-- sdd-owner: implementation -->
+- [x] Wire `Transcriber` and multimodal options into `cmd/agis/main.go`, `cmd/agis/gateway.go`, and runtime startup flows. <!-- sdd-owner: implementation -->
+- [x] Implement integration tests in `cmd/agis/multimodal_integration_test.go` and `internal/gateway/media_test.go` with race detector (`go test -race ./...`) and `goleak`. <!-- sdd-owner: implementation -->
+- [x] Create `docs/multimodal.md` and update `docs/architecture.md`, `docs/configuration.md`, `docs/gateway.md`, `docs/roadmap.md` (M9 marked as DONE), and `README.md`. <!-- sdd-owner: implementation -->
