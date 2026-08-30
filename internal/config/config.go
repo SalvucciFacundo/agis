@@ -48,6 +48,22 @@ type Config struct {
 	Plugins PluginsConfig  `yaml:"plugins"`
 	Webhook WebhookConfig  `yaml:"webhook"`
 	Embeddings EmbeddingsConfig `yaml:"embeddings"`
+	MCP        MCPConfig        `yaml:"mcp"`
+}
+
+// MCPConfig gates and configures the M8 Model Context Protocol client subsystem.
+type MCPConfig struct {
+	Enabled bool                       `yaml:"enabled"`
+	Servers map[string]MCPServerConfig `yaml:"servers"`
+}
+
+// MCPServerConfig defines an MCP server endpoint (either local stdio process or remote SSE).
+type MCPServerConfig struct {
+	Command  string            `yaml:"command,omitempty"`
+	Args     []string          `yaml:"args,omitempty"`
+	Env      map[string]string `yaml:"env,omitempty"`
+	URL      string            `yaml:"url,omitempty"`
+	Disabled bool              `yaml:"disabled,omitempty"`
 }
 
 // EmbeddingsConfig tunes the M7 hybrid search embeddings subsystem.
@@ -259,6 +275,10 @@ func defaults() *Config {
 		},
 		Embeddings: EmbeddingsConfig{
 			Enabled: false,
+		},
+		MCP: MCPConfig{
+			Enabled: false,
+			Servers: map[string]MCPServerConfig{},
 		},
 	}
 }

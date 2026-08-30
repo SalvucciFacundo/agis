@@ -760,3 +760,94 @@ func TestLoad_EmbeddingsDefaultsAndExplicit(t *testing.T) {
 	}
 }
 
+func TestLoad_MCPDefaultsAndExplicit(t *testing.T) {
+	tests := []struct {
+		name        string
+		yaml        string
+		wantEnabled bool
+		wantServers int
+		check       func(t *testing.T, cfg *Config)
+	}{
+		{
+			name:        "empty config has mcp disabled by default",
+			yaml:        "",
+			wantEnabled: false,
+			wantServers: 0,
+		},
+		{
+			name: "explicit mcp stdio and sse server config",
+			yaml: `mcp:
+  enabled: true
+  servers:
+    filesystem:
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-filesystem"
+        - "/tmp"
+      env:
+        DEBUG: "mcp:*"
+      disabled: false
+    remote-tools:
+      url: "http://localhost:8080/sse"
+      disabled: true
+`,
+			wantEnabled: true,
+			wantServers: 2,
+			check: func(t *testing.T, cfg *Config) {
+				fs, ok := cfg.MCP.Servers["filesystem"]
+				if !ok {
+					t.Fatalf("missing server filesystem")
+				}
+				if fs.Command != "npx" {
+					t.Errorf("fs.Command = %q, want npx", fs.Command)
+				}
+				if len(fs.Args) != 3 || fs.Args[0] != "-y" || fs.Args[2] != "/tmp" {
+					t.Errorf("fs.Args = %+v, want [-y, @modelcontextprotocol/server-filesystem, /tmp]", fs.Args)
+				}
+				if fs.Env["DEBUG"] != "mcp:*" {
+					t.Errorf("fs.Env[DEBUG] = %q, want mcp:*", fs.Env["DEBUG"])
+				}
+				if fs.Disabled {
+					t.Errorf("fs.Disabled = true, want false")
+				}
+
+				rem, ok := cfg.MCP.Servers["remote-tools"]
+				if !ok {
+					t.Fatalf("missing server remote-tools")
+				}
+				if rem.URL != "http://localhost:8080/sse" {
+					t.Errorf("rem.URL = %q, want http://localhost:8080/sse", rem.URL)
+				}
+				if !rem.Disabled {
+					t.Errorf("rem.Disabled = false, want true")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+			path := writeConfig(t, home, tt.yaml, 0o600)
+
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			if cfg.MCP.Enabled != tt.wantEnabled {
+				t.Errorf("MCP.Enabled = %v, want %v", cfg.MCP.Enabled, tt.wantEnabled)
+			}
+			if len(cfg.MCP.Servers) != tt.wantServers {
+				t.Errorf("len(MCP.Servers) = %d, want %d", len(cfg.MCP.Servers), tt.wantServers)
+			}
+			if tt.check != nil {
+				tt.check(t, cfg)
+			}
+		})
+	}
+}
+
+
