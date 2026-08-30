@@ -1,10 +1,10 @@
-# Apply Progress: m8-mcp-client (PR 1)
+# Apply Progress: m8-mcp-client (PR 1 & PR 2)
 
 ## Status
-- Current slice: PR 1 — JSON-RPC 2.0 Protocol, Transports (stdio & sse) & Config Extensions
+- Current slice: PR 2 — MCP Client, Discovery, Tool Calling & Multi-Server Manager
 - Delivery Strategy: auto-chain
 - Chain Strategy: stacked-to-main
-- PR Boundary: PR 1 of 3 (Foundation layer: Config + Protocol + Transports)
+- PR Boundary: PR 2 of 3 (Core Client Layer: MCP Client + Tool Discovery/Execution + Multi-Server Manager)
 
 ## TDD Cycle Evidence
 
@@ -14,12 +14,18 @@
 | 1.3, 1.4 | JSON-RPC 2.0 Protocol & Error Codes | `go test ./internal/mcp/...` (missing package/types) | Implemented `protocol.go` (`JSONRPCRequest`, `JSONRPCResponse`, `JSONRPCNotification`, `JSONRPCError`, `ClassifyMessage`, `ParseResponse`) | Added tests for normalization of numeric/string IDs, classification, and validation | PASS |
 | 1.5, 1.6 | Stdio Subprocess Transport | `go test ./internal/mcp/transport/...` (undefined `NewStdio`) | Implemented `stdio.go` with `exec.Command`, `Setpgid: true` (POSIX), `WaitDelay = 100ms`, `stderr` drain goroutine, and clean shutdown | Verified stream exchange, stderr isolation, context cancellation, and `goleak.VerifyNone` | PASS |
 | 1.7, 1.8 | SSE Network Transport | `go test ./internal/mcp/transport/...` (undefined `NewSSE`) | Implemented `sse.go` with HTTP GET event stream parser, session `endpoint` event discovery, and HTTP POST message dispatcher | Verified handshake, event streaming, POST dispatching, error paths, and `goleak.VerifyNone` | PASS |
+| 2.1, 2.2 | MCP Client (`client.go`, `client_test.go`) | `go test ./internal/mcp/...` (undefined `NewClient`, `Client`, `Tool`) | Implemented `client.go` with request ID tracking, `initialize` handshake, `notifications/initialized`, paginated `tools/list`, and `tools/call` parsing | Added tests for single & multi-page pagination, error responses, context deadlines, concurrent multiplexing, and `goleak.VerifyNone` | PASS |
+| 2.3, 2.4 | Multi-Server Manager (`manager.go`, `manager_test.go`) | `go test ./internal/mcp/...` (undefined `NewManager`, `Manager`) | Implemented `manager.go` with concurrent server initialization using `errgroup`, disabled server skipping, tool aggregation (`ListAllTools`), routing (`CallTool`), and graceful shutdown (`Stop`) | Verified concurrent start/stop, failure cleanup, unknown server handling, and `goleak.VerifyNone` | PASS |
 
 ## Files Changed
 
 ### Created
 - `internal/mcp/protocol.go`: JSON-RPC 2.0 wire models, error codes, serialization and parsing helpers.
 - `internal/mcp/protocol_test.go`: Protocol unit tests covering requests, notifications, responses, errors, and message classification.
+- `internal/mcp/client.go`: MCP Client interface, handshake lifecycle, tool discovery with pagination, tool invocation, and atomic request multiplexing.
+- `internal/mcp/client_test.go`: Unit tests for MCP Client with mock transport, lifecycle handshake, paginated discovery, execution results, error mapping, and `goleak.VerifyNone`.
+- `internal/mcp/manager.go`: Multi-server MCP Manager coordinating server configurations, concurrent startup via `errgroup`, graceful teardown, and tool routing.
+- `internal/mcp/manager_test.go`: Unit tests for Manager covering concurrent startup, skipping disabled servers, tool discovery aggregation, routing, and cleanup.
 - `internal/mcp/transport/transport.go`: `Transport` interface definition (`Send`, `Receive`, `Close`).
 - `internal/mcp/transport/stdio.go`: Local process lifecycle, stdin/stdout line pipes, stderr draining.
 - `internal/mcp/transport/stdio_unix.go`: POSIX process group configuration (`Setpgid: true`).
@@ -32,19 +38,14 @@
 - `internal/config/config.go`: Added `MCPConfig` and `MCPServerConfig` types; default `enabled: false`.
 - `internal/config/config_test.go`: Added unit tests for stdio and sse config parsing.
 - `internal/cron/edge_cases_test.go`: Fixed flaky timing test under `-race` using `require.Eventually`.
-- `openspec/changes/m8-mcp-client/tasks.md`: Checked off tasks 1.1 through 1.8.
+- `openspec/changes/m8-mcp-client/tasks.md`: Checked off tasks 1.1 through 1.8 and 2.1 through 2.4.
+- `go.mod`, `go.sum`: Added `golang.org/x/sync` for `errgroup`.
 
 ## Verification Evidence
-- `go test -count=1 -race ./...`: All 17 packages pass cleanly with race detection and zero goroutine leaks.
-- `go test -v -race ./internal/mcp/... ./internal/mcp/transport/...`: 100% pass across protocol, stdio transport, and sse transport.
+- `go test -count=1 -race ./...`: 18/18 packages pass cleanly with race detection and zero goroutine leaks.
+- `go test -v -race ./internal/mcp/... ./internal/mcp/transport/...`: 100% pass across protocol, client, manager, stdio transport, and sse transport.
 
-## Remaining Tasks (PR 2 & PR 3)
-
-### PR 2: MCP Client, Discovery, Tool Calling & Multi-Server Manager
-- [ ] 2.1 MCP Client: Implement `internal/mcp/client.go` with request ID tracking, lifecycle handshake (`initialize` -> `notifications/initialized`), `tools/list` discovery with pagination, and `tools/call` execution.
-- [ ] 2.2 Client tests: Add unit tests in `internal/mcp/client_test.go` verifying initialization handshake, tool discovery with pagination, timeout handling, and connection lifecycle.
-- [ ] 2.3 Multi-Server Manager: Implement `internal/mcp/manager.go` managing configured server pools, concurrent `Start(ctx)` and `Stop()`, server health checks, and aggregated tool listings.
-- [ ] 2.4 Manager tests: Add unit tests in `internal/mcp/manager_test.go` verifying concurrent server startup, tool aggregation across servers, and leak-free lifecycle (`goleak.VerifyNone`).
+## Remaining Tasks (PR 3)
 
 ### PR 3: ToolRunner Bridge, Policy Guard Integration, CLI Subcommands & Docs
 - [ ] 3.1 Core interface update: Add `Name() string` and `Description() string` to `core.ToolRunner` interface in `internal/core/port_learning.go` and update existing local/plugin runners.

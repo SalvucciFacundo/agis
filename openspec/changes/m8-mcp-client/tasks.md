@@ -31,10 +31,10 @@ Chain strategy: stacked-to-main
 
 ### PR 2: MCP Client, Discovery, Tool Calling & Multi-Server Manager
 
-- [ ] 2.1 MCP Client: Implement `internal/mcp/client.go` with request ID tracking, lifecycle handshake (`initialize` -> `notifications/initialized`), `tools/list` discovery with pagination, and `tools/call` execution (RED → GREEN). <!-- sdd-owner: implementation -->
-- [ ] 2.2 Client tests: Add unit tests in `internal/mcp/client_test.go` verifying initialization handshake, tool discovery with pagination, timeout handling, and connection lifecycle. <!-- sdd-owner: implementation -->
-- [ ] 2.3 Multi-Server Manager: Implement `internal/mcp/manager.go` managing configured server pools, concurrent `Start(ctx)` and `Stop()`, server health checks, and aggregated tool listings (RED → GREEN). <!-- sdd-owner: implementation -->
-- [ ] 2.4 Manager tests: Add unit tests in `internal/mcp/manager_test.go` verifying concurrent server startup, tool aggregation across servers, and leak-free lifecycle (`goleak.VerifyNone`). <!-- sdd-owner: implementation -->
+- [x] 2.1 MCP Client: Implement `internal/mcp/client.go` with request ID tracking, lifecycle handshake (`initialize` -> `notifications/initialized`), `tools/list` discovery with pagination, and `tools/call` execution (RED → GREEN). <!-- sdd-owner: implementation -->
+- [x] 2.2 Client tests: Add unit tests in `internal/mcp/client_test.go` verifying initialization handshake, tool discovery with pagination, timeout handling, and connection lifecycle. <!-- sdd-owner: implementation -->
+- [x] 2.3 Multi-Server Manager: Implement `internal/mcp/manager.go` managing configured server pools, concurrent `Start(ctx)` and `Stop()`, server health checks, and aggregated tool listings (RED → GREEN). <!-- sdd-owner: implementation -->
+- [x] 2.4 Manager tests: Add unit tests in `internal/mcp/manager_test.go` verifying concurrent server startup, tool aggregation across servers, and leak-free lifecycle (`goleak.VerifyNone`). <!-- sdd-owner: implementation -->
 
 ### PR 3: ToolRunner Bridge, Policy Guard Integration, CLI Subcommands & Docs
 
