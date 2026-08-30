@@ -33,10 +33,10 @@ Chain strategy: stacked-to-main
 
 ## PR Slice 2: Vision Multipart Formatter & Whisper Transcriber Adapter
 
-- [ ] Create `internal/core/port_transcriber.go` defining the `Transcriber` interface (`Transcribe(ctx, audio, mimeType) (string, error)`). <!-- sdd-owner: implementation -->
-- [ ] Extend `internal/adapters/llm/client.go` to format messages with image attachments as OpenAI/Ollama-compatible vision multipart content arrays with base64 Data URLs and strict MIME validation (`image/png`, `image/jpeg`, `image/webp`, `image/gif`). <!-- sdd-owner: implementation -->
-- [ ] Implement `internal/adapters/llm/whisper.go` issuing `multipart/form-data` requests to `/v1/audio/transcriptions` with model `"whisper-1"`. <!-- sdd-owner: implementation -->
-- [ ] Implement unit and mock tests in `internal/adapters/llm/vision_test.go` and `internal/adapters/llm/whisper_test.go` using `httptest.Server` to verify vision serialization, transcription, error handling, and `goleak.VerifyNone`. <!-- sdd-owner: implementation -->
+- [x] Create `internal/core/port_transcriber.go` defining the `Transcriber` interface (`Transcribe(ctx, audio, mimeType) (string, error)`). <!-- sdd-owner: implementation -->
+- [x] Extend `internal/adapters/llm/client.go` to format messages with image attachments as OpenAI/Ollama-compatible vision multipart content arrays with base64 Data URLs and strict MIME validation (`image/png`, `image/jpeg`, `image/webp`, `image/gif`). <!-- sdd-owner: implementation -->
+- [x] Implement `internal/adapters/llm/whisper.go` issuing `multipart/form-data` requests to `/v1/audio/transcriptions` with model `"whisper-1"`. <!-- sdd-owner: implementation -->
+- [x] Implement unit and mock tests in `internal/adapters/llm/vision_test.go` and `internal/adapters/llm/whisper_test.go` using `httptest.Server` to verify vision serialization, transcription, error handling, and `goleak.VerifyNone`. <!-- sdd-owner: implementation -->
 
 ---
 

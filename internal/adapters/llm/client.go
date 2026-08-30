@@ -14,6 +14,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -122,7 +123,7 @@ func (c *Client) doChat(ctx context.Context, req core.ChatRequest, stream bool) 
 		}
 	}
 	for _, m := range req.Messages {
-		mp := messagePayload{Role: string(m.Role), Content: m.Content}
+		mp := messagePayload{Role: string(m.Role), Content: formatContent(m)}
 		for _, tc := range m.ToolCalls {
 			mp.ToolCalls = append(mp.ToolCalls, toolCallPayload{
 				ID:       tc.ID,
@@ -268,12 +269,71 @@ type toolDefPayload struct {
 
 // messagePayload is one message in a chat-completion request. ToolCalls and
 // ToolCallID are additive M4 fields for the assistant-request / tool-result
-// protocol halves.
+// protocol halves. Content can be a string or a slice of contentPart for vision.
 type messagePayload struct {
 	Role       string            `json:"role"`
-	Content    string            `json:"content"`
+	Content    any               `json:"content"`
 	ToolCalls  []toolCallPayload `json:"tool_calls,omitempty"`
 	ToolCallID string            `json:"tool_call_id,omitempty"`
+}
+
+// contentPart represents a single part in a multipart vision message.
+type contentPart struct {
+	Type     string        `json:"type"`
+	Text     string        `json:"text,omitempty"`
+	ImageURL *imageURLPart `json:"image_url,omitempty"`
+}
+
+// imageURLPart holds the URL (data: URL or remote link) for a vision image part.
+type imageURLPart struct {
+	URL string `json:"url"`
+}
+
+// isAllowedVisionMIME checks if a given MIME type is supported by vision models.
+func isAllowedVisionMIME(mime string) bool {
+	switch mime {
+	case "image/png", "image/jpeg", "image/webp", "image/gif":
+		return true
+	default:
+		return false
+	}
+}
+
+// formatContent converts a core.Message into either a plain string content or
+// a multipart content array if valid image attachments are present.
+func formatContent(m core.Message) any {
+	var imageParts []contentPart
+	for _, att := range m.Attachments {
+		if att.Type != "image" || !isAllowedVisionMIME(att.MimeType) {
+			continue
+		}
+		var url string
+		if len(att.Data) > 0 {
+			url = fmt.Sprintf("data:%s;base64,%s", att.MimeType, base64.StdEncoding.EncodeToString(att.Data))
+		} else if att.URL != "" {
+			url = att.URL
+		}
+		if url != "" {
+			imageParts = append(imageParts, contentPart{
+				Type:     "image_url",
+				ImageURL: &imageURLPart{URL: url},
+			})
+		}
+	}
+
+	if len(imageParts) == 0 {
+		return m.Content
+	}
+
+	parts := make([]contentPart, 0, 1+len(imageParts))
+	if m.Content != "" {
+		parts = append(parts, contentPart{
+			Type: "text",
+			Text: m.Content,
+		})
+	}
+	parts = append(parts, imageParts...)
+	return parts
 }
 
 // toolCallPayload is one tool invocation on the wire.
