@@ -135,17 +135,25 @@ These six are the M1 review debt; the next milestone (M2) should close the first
 
 Future capabilities identified for post-v1 expansion:
 
-### 1. Automated CI/CD & Cross-Platform Releases
-- GitHub Actions CI pipeline running `go test -race ./...`, `go vet ./...`, and build checks on pull requests.
-- Multi-platform binary release pipeline via GitHub Actions for Linux (`amd64`, `arm64`), macOS (`amd64`, `arm64`), and Windows (`amd64`).
-- Quickstart single-command install scripts (`install.sh` for Unix/macOS, `install.ps1` for Windows).
+### 1. Automated CI/CD & Cross-Platform Releases ✅ DONE (v1.0.0)
+- GitHub Actions CI matrix running `go test -race ./...`, `go vet ./...`, and build checks on pull requests.
+- Multi-platform binary release pipeline via GoReleaser for Linux (`amd64`, `arm64`, `armv7`, `386`), macOS (`amd64`, `arm64`), FreeBSD, and Windows (`amd64`, `arm64`, `386`).
+- Native package formats (`.deb`, `.rpm`, `.apk`, `.pkg.tar.zst`, `.zip`, `.tar.gz`) and one-line installer scripts (`install.sh`, `install.ps1`).
 
-### 2. Hybrid Search (Vector Embeddings via Ollama)
-- Complement BM25 / FTS5 lexical full-text search with local dense vector embeddings (`nomic-embed-text` via Ollama or `sqlite-vec`).
-- Combine lexical keyword scores and cosine similarity behind the domain `Repository.Search` port without breaking single-binary ergonomics.
+### 2. Hybrid Search (Vector Embeddings via Ollama & OpenAI) ✅ DONE (v1.1.0)
+- Pure Go IEEE 754 binary BLOB float32 vector storage in SQLite (`0006_embeddings.sql`).
+- Reciprocal Rank Fusion ($k=60$) combining BM25 FTS5 lexical ranking with dense vector cosine similarity.
+- Asynchronous non-blocking background embedding worker for observation persistence.
+- Seamless fallback to BM25 FTS5 when embeddings are offline or disabled.
 
 ### 3. Model Context Protocol (MCP) Client
-- Implement an MCP client adapter in `internal/mcp` to dynamically connect AGIS to community MCP servers (database explorers, web browsers, GitHub tools, custom APIs) without writing bespoke plugins.
+- Implement an MCP client adapter in `internal/mcp` to dynamically connect AGIS to community MCP servers (Postgres, MySQL, GitHub, Puppeteer, Filesystem, Custom APIs) via `stdio` or `sse`.
+- Register external MCP tools dynamically into the AGIS `ToolRegistry`, enforcing `PolicyGuard` multi-tier security rules (`sandbox`, `standard`, `full`).
+
+### 4. Multimodal Ingestion (Vision & Audio)
+- Extend `core.ChatRequest` and gateway message event pipelines (Telegram & Discord) to accept image and voice attachments.
+- Route image payloads to multimodal LLMs (e.g. `llama3.2-vision`, `gpt-4o`) and voice messages to local Whisper/Ollama transcription endpoints.
+
 
 ### 4. Multimodal Ingestion (Vision & Audio)
 - Extend `core.ChatRequest` and gateway message event pipelines to accept image and audio attachments.
