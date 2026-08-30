@@ -127,3 +127,38 @@ embeddings:
 - THEN `cfg.Embeddings.Dimensions` defaults to `1536` and `BatchSize` to `100`
 
 
+config-loader (MODIFIED)
+
+### Requirement AGIS-M8-CONF-001: MCP Configuration Schema
+The configuration loader in `internal/config/config.go` MUST support the following optional root configuration block:
+
+```yaml
+mcp:
+  enabled: false
+  servers:
+    postgres:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/db"]
+      env: {}
+      disabled: false
+    remote-sse:
+      url: "http://localhost:8080/sse"
+      disabled: false
+```
+
+- `mcp.enabled` MUST default to `false`.
+- `mcp.servers` MUST parse both `stdio` (command, args, env) and `sse` (url) server configurations.
+- Servers with `disabled: true` MUST be parsed but ignored during runtime client startup.
+
+#### Scenario: Default configuration disables MCP
+- GIVEN an empty or minimal `config.yaml`
+- WHEN `config.Load()` is executed
+- THEN `cfg.MCP.Enabled` is `false`
+
+#### Scenario: Multi-server MCP configuration loaded
+- GIVEN `config.yaml` with two configured MCP servers
+- WHEN `config.Load()` is executed
+- THEN `cfg.MCP.Servers` contains both server definitions with their respective commands and URLs
+
+
+

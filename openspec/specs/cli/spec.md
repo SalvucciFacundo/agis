@@ -35,3 +35,22 @@ All daemon subcommands MUST exit with code 0 on clean shutdown via signal and no
 - GIVEN flag `--port 9090`
 - WHEN `agis webhook` runs
 - THEN the server binds to `127.0.0.1:9090` and handles HTTP requests
+
+
+cli (MODIFIED)
+
+### Requirement AGIS-M8-CLI-001: MCP CLI Subcommands (`mcp list`, `mcp test`)
+The `cmd/agis/` CLI entry points MUST provide the following subcommands:
+1. `agis mcp list`: Initializes configured MCP servers, establishes connections, queries `tools/list`, and prints an aggregated table of servers, statuses, and discovered tools.
+2. `agis mcp test <server_name> <tool_name> [json_arguments]`: Connects directly to the specified MCP server, executes `tools/call` with the provided JSON arguments, and prints the raw tool output without LLM orchestration.
+
+#### Scenario: `agis mcp list` displays active servers and tools
+- GIVEN a configured stdio MCP server `"postgres"` with tool `"query"`
+- WHEN `agis mcp list` is executed
+- THEN output lists server `"postgres"`, status `CONNECTED`, and tool `"query"`
+
+#### Scenario: `agis mcp test` executes tool directly
+- GIVEN a running MCP server `"postgres"`
+- WHEN `agis mcp test postgres query '{"sql": "SELECT 1"}'` runs
+- THEN the tool output is printed to stdout and exit code is 0
+
