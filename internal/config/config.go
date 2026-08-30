@@ -49,6 +49,29 @@ type Config struct {
 	Webhook WebhookConfig  `yaml:"webhook"`
 	Embeddings EmbeddingsConfig `yaml:"embeddings"`
 	MCP        MCPConfig        `yaml:"mcp"`
+	Multimodal MultimodalConfig `yaml:"multimodal"`
+}
+
+// MultimodalConfig gates and configures the M9 multimodal vision and audio subsystem.
+type MultimodalConfig struct {
+	Enabled bool         `yaml:"enabled"`
+	Vision  VisionConfig `yaml:"vision"`
+	Audio   AudioConfig  `yaml:"audio"`
+}
+
+// VisionConfig tunes the multimodal vision processing capabilities.
+type VisionConfig struct {
+	Enabled        bool   `yaml:"enabled"`
+	Model          string `yaml:"model"`
+	MaxImageSizeMB int    `yaml:"max_image_size_mb"`
+}
+
+// AudioConfig tunes the multimodal audio transcription capabilities.
+type AudioConfig struct {
+	Enabled        bool   `yaml:"enabled"`
+	Provider       string `yaml:"provider"`
+	Model          string `yaml:"model"`
+	MaxAudioSizeMB int    `yaml:"max_audio_size_mb"`
 }
 
 // MCPConfig gates and configures the M8 Model Context Protocol client subsystem.
@@ -280,6 +303,20 @@ func defaults() *Config {
 			Enabled: false,
 			Servers: map[string]MCPServerConfig{},
 		},
+		Multimodal: MultimodalConfig{
+			Enabled: false,
+			Vision: VisionConfig{
+				Enabled:        false,
+				Model:          "llama3.2-vision",
+				MaxImageSizeMB: 10,
+			},
+			Audio: AudioConfig{
+				Enabled:        false,
+				Provider:       "openai",
+				Model:          "whisper-1",
+				MaxAudioSizeMB: 25,
+			},
+		},
 	}
 }
 
@@ -344,6 +381,21 @@ func applyDefaults(cfg *Config) {
 		cfg.Embeddings.BatchSize = 100
 	} else if cfg.Embeddings.BatchSize > 2048 {
 		cfg.Embeddings.BatchSize = 2048
+	}
+	if cfg.Multimodal.Vision.Model == "" {
+		cfg.Multimodal.Vision.Model = "llama3.2-vision"
+	}
+	if cfg.Multimodal.Vision.MaxImageSizeMB <= 0 {
+		cfg.Multimodal.Vision.MaxImageSizeMB = 10
+	}
+	if cfg.Multimodal.Audio.Provider == "" {
+		cfg.Multimodal.Audio.Provider = "openai"
+	}
+	if cfg.Multimodal.Audio.Model == "" {
+		cfg.Multimodal.Audio.Model = "whisper-1"
+	}
+	if cfg.Multimodal.Audio.MaxAudioSizeMB <= 0 {
+		cfg.Multimodal.Audio.MaxAudioSizeMB = 25
 	}
 }
 

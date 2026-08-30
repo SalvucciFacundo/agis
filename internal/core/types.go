@@ -17,6 +17,15 @@ const (
 	RoleTool      Role = "tool"
 )
 
+// Attachment represents a non-text media payload (image, audio, document).
+type Attachment struct {
+	Type     string `json:"Type"`
+	MimeType string `json:"MimeType"`
+	Data     []byte `json:"Data"`
+	URL      string `json:"URL"`
+	Name     string `json:"Name"`
+}
+
 // Message is a single turn in a Conversation. An assistant message carrying a
 // tool request sets ToolCalls; the execution result answers with Role "tool"
 // and ToolCallID matching the request ID.
@@ -28,6 +37,7 @@ type Message struct {
 	CreatedAt      time.Time
 	ToolCalls      []ToolCall
 	ToolCallID     string
+	Attachments    []Attachment `json:"attachments,omitempty"`
 }
 
 // Conversation is a persisted session.

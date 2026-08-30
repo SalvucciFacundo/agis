@@ -27,7 +27,7 @@ func openTestDB(t *testing.T) *sql.DB {
 
 // latestVersion is the highest embedded migration version. Update when a new
 // migrations/*.sql file is added.
-const latestVersion = 6
+const latestVersion = 7
 
 func TestMigrations(t *testing.T) {
 	ctx := context.Background()
@@ -48,7 +48,7 @@ func TestMigrations(t *testing.T) {
 
 	// The base tables, the FTS table, and the learning-loop tables exist.
 	for _, table := range []string{
-		"conversations", "messages", "observations", "memory_fts", "user_model", "session_events", "skills", "snapshots", "audit_log", "embeddings",
+		"conversations", "messages", "observations", "memory_fts", "user_model", "session_events", "skills", "snapshots", "audit_log", "embeddings", "attachments",
 	} {
 		var name string
 		err := db.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE name = ?`, table).Scan(&name)
@@ -142,7 +142,95 @@ func TestMigration_V1ToV2(t *testing.T) {
 	}
 }
 
-// TestMigration_V5ToV6 proves 0006 upgrades a v5 database: creates embeddings table and index.
+// TestMigration_V6ToV7 proves 0007 upgrades a v6 database: creates attachments table and index.
+func TestMigration_V6ToV7(t *testing.T) {
+	ctx := context.Background()
+	db := openTestDB(t)
+
+	// Apply migrations 1 through 6.
+	migs, err := loadMigrations()
+	if err != nil {
+		t.Fatalf("loadMigrations() error = %v", err)
+	}
+	for _, m := range migs {
+		if m.version <= 6 {
+			if err := applyMigration(ctx, db, m); err != nil {
+				t.Fatalf("applying migration %s: %v", m.name, err)
+			}
+		}
+	}
+
+	// Verify user_version is 6 and attachments table does not yet exist.
+	var v int
+	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
+		t.Fatalf("reading user_version: %v", err)
+	}
+	if v != 6 {
+		t.Fatalf("user_version before upgrade = %d, want 6", v)
+	}
+
+	// Create a conversation and message
+	_, err = db.ExecContext(ctx,
+		`INSERT INTO conversations (id, title, created_at, updated_at, summary, message_count)
+		 VALUES ('conv-m7', 'test', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '', 1)`)
+	if err != nil {
+		t.Fatalf("inserting conversation: %v", err)
+	}
+
+	res, err := db.ExecContext(ctx,
+		`INSERT INTO messages (conversation_id, role, content, created_at)
+		 VALUES ('conv-m7', 'user', 'with media', '2026-01-01T00:00:00Z')`)
+	if err != nil {
+		t.Fatalf("inserting message: %v", err)
+	}
+	msgID, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("getting msgID: %v", err)
+	}
+
+	// Now apply remaining migrations (0007).
+	if err := applyMigrations(ctx, db); err != nil {
+		t.Fatalf("applyMigrations() error = %v", err)
+	}
+
+	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
+		t.Fatalf("reading user_version: %v", err)
+	}
+	if v != 7 {
+		t.Errorf("user_version after upgrade = %d, want 7", v)
+	}
+
+	// Insert attachment for the message
+	_, err = db.ExecContext(ctx,
+		`INSERT INTO attachments (id, message_id, type, mime_type, data, url, name, created_at)
+		 VALUES ('att-1', ?, 'image', 'image/png', X'89504E47', 'https://example.com/img.png', 'img.png', '2026-01-01T00:00:00Z')`, msgID)
+	if err != nil {
+		t.Fatalf("inserting attachment: %v", err)
+	}
+
+	// Verify attachment is present
+	var count int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM attachments WHERE message_id = ?`, msgID).Scan(&count); err != nil {
+		t.Fatalf("querying attachments count: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("attachments count = %d, want 1", count)
+	}
+
+	// Test cascade delete on conversation deletion
+	_, err = db.ExecContext(ctx, `DELETE FROM conversations WHERE id = 'conv-m7'`)
+	if err != nil {
+		t.Fatalf("deleting conversation: %v", err)
+	}
+
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM attachments WHERE id = 'att-1'`).Scan(&count); err != nil {
+		t.Fatalf("querying attachments after cascade: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("attachments count after cascade delete = %d, want 0", count)
+	}
+}
+
 func TestMigration_V5ToV6(t *testing.T) {
 	ctx := context.Background()
 	db := openTestDB(t)
@@ -177,8 +265,8 @@ func TestMigration_V5ToV6(t *testing.T) {
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
 		t.Fatalf("reading user_version: %v", err)
 	}
-	if v != 6 {
-		t.Errorf("user_version after upgrade = %d, want 6", v)
+	if v != latestVersion {
+		t.Errorf("user_version after upgrade = %d, want %d", v, latestVersion)
 	}
 
 	// Verify embeddings table and unique constraint on (doc_type, doc_id).
