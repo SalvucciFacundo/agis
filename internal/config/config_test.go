@@ -760,6 +760,105 @@ func TestLoad_EmbeddingsDefaultsAndExplicit(t *testing.T) {
 	}
 }
 
+func TestLoad_MultimodalDefaultsAndExplicit(t *testing.T) {
+	tests := []struct {
+		name        string
+		yaml        string
+		wantEnabled bool
+		wantVision  VisionConfig
+		wantAudio   AudioConfig
+	}{
+		{
+			name:        "empty config has multimodal disabled with safe defaults",
+			yaml:        "",
+			wantEnabled: false,
+			wantVision: VisionConfig{
+				Enabled:        false,
+				Model:          "llama3.2-vision",
+				MaxImageSizeMB: 10,
+			},
+			wantAudio: AudioConfig{
+				Enabled:        false,
+				Provider:       "openai",
+				Model:          "whisper-1",
+				MaxAudioSizeMB: 25,
+			},
+		},
+		{
+			name: "multimodal block present but disabled with partial overrides",
+			yaml: `multimodal:
+  enabled: false
+  vision:
+    model: "gpt-4o"
+  audio:
+    model: "custom-whisper"
+`,
+			wantEnabled: false,
+			wantVision: VisionConfig{
+				Enabled:        false,
+				Model:          "gpt-4o",
+				MaxImageSizeMB: 10,
+			},
+			wantAudio: AudioConfig{
+				Enabled:        false,
+				Provider:       "openai",
+				Model:          "custom-whisper",
+				MaxAudioSizeMB: 25,
+			},
+		},
+		{
+			name: "full multimodal configuration enabled",
+			yaml: `multimodal:
+  enabled: true
+  vision:
+    enabled: true
+    model: "gpt-4o"
+    max_image_size_mb: 20
+  audio:
+    enabled: true
+    provider: "openai"
+    model: "whisper-1"
+    max_audio_size_mb: 50
+`,
+			wantEnabled: true,
+			wantVision: VisionConfig{
+				Enabled:        true,
+				Model:          "gpt-4o",
+				MaxImageSizeMB: 20,
+			},
+			wantAudio: AudioConfig{
+				Enabled:        true,
+				Provider:       "openai",
+				Model:          "whisper-1",
+				MaxAudioSizeMB: 50,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+			path := writeConfig(t, home, tt.yaml, 0o600)
+
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			if cfg.Multimodal.Enabled != tt.wantEnabled {
+				t.Errorf("Multimodal.Enabled = %v, want %v", cfg.Multimodal.Enabled, tt.wantEnabled)
+			}
+			if cfg.Multimodal.Vision != tt.wantVision {
+				t.Errorf("Multimodal.Vision = %+v, want %+v", cfg.Multimodal.Vision, tt.wantVision)
+			}
+			if cfg.Multimodal.Audio != tt.wantAudio {
+				t.Errorf("Multimodal.Audio = %+v, want %+v", cfg.Multimodal.Audio, tt.wantAudio)
+			}
+		})
+	}
+}
+
 func TestLoad_MCPDefaultsAndExplicit(t *testing.T) {
 	tests := []struct {
 		name        string

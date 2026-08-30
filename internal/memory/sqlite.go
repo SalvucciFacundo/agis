@@ -154,6 +154,16 @@ func (r *Repository) AppendMessage(ctx context.Context, convID string, msg core.
 		return fmt.Errorf("reading message id: %w", err)
 	}
 
+	for _, att := range msg.Attachments {
+		attID := uuid.NewString()
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO attachments (id, message_id, type, mime_type, data, url, name, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			attID, strconv.FormatInt(id, 10), att.Type, att.MimeType, att.Data, att.URL, att.Name, formatTime(now)); err != nil {
+			return fmt.Errorf("inserting attachment: %w", err)
+		}
+	}
+
 	if err := insertFTSRow(ctx, tx, docTypeMessage, strconv.FormatInt(id, 10), msg.Content); err != nil {
 		return fmt.Errorf("indexing message: %w", err)
 	}
@@ -202,7 +212,55 @@ func (r *Repository) Messages(ctx context.Context, convID string, limit int) ([]
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterating messages: %w", err)
 	}
+	if len(msgs) > 0 {
+		if err := r.populateAttachments(ctx, msgs); err != nil {
+			return nil, err
+		}
+	}
 	return msgs, nil
+}
+
+// populateAttachments queries and populates attachments for the given messages.
+func (r *Repository) populateAttachments(ctx context.Context, msgs []core.Message) error {
+	if len(msgs) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(msgs))
+	args := make([]any, len(msgs))
+	msgMap := make(map[string]int, len(msgs))
+	for i, m := range msgs {
+		placeholders[i] = "?"
+		msgIDStr := strconv.FormatInt(m.ID, 10)
+		args[i] = msgIDStr
+		msgMap[msgIDStr] = i
+	}
+
+	query := `SELECT id, message_id, type, mime_type, data, url, name FROM attachments WHERE message_id IN (` +
+		strings.Join(placeholders, ",") + `) ORDER BY rowid ASC`
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("loading attachments: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			attID string
+			msgID string
+			att   core.Attachment
+		)
+		if err := rows.Scan(&attID, &msgID, &att.Type, &att.MimeType, &att.Data, &att.URL, &att.Name); err != nil {
+			return fmt.Errorf("scanning attachment: %w", err)
+		}
+		if idx, ok := msgMap[msgID]; ok {
+			msgs[idx].Attachments = append(msgs[idx].Attachments, att)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterating attachments: %w", err)
+	}
+	return nil
 }
 
 // Search returns full-text matches across messages and observations, best
