@@ -13,6 +13,7 @@ agis cron [run|list] [flags]               # Autonomous Cron Scheduler daemon & 
 agis plugins [list|enable|disable|inspect] # External Plugin Manager & tool bridge
 agis webhook [run] [flags]                 # Secure HTTP Webhook event listener daemon
 agis policy [init|show|set|rm|tier|test]   # Policy Guard security & permissions manager
+agis mcp [list|test] [flags]               # Model Context Protocol (MCP) server & tool inspection
 ```
 
 ---
@@ -185,6 +186,30 @@ agis policy test -b ssh "cat /etc/passwd"
 - **`sandbox`**: Read-only, safe commands only. Shell executions requiring root or filesystem mutation require confirmation (`ask`) or are auto-denied in background daemons.
 - **`standard`**: Developer mode with standard file and shell access. High-risk actions (privilege escalation, system destruction) require confirmation.
 - **`full`**: Unrestricted execution. Allowed as an in-session override only; `agis policy tier full` is rejected by default to prevent permanent privilege escalation.
+
+---
+
+## 7. Model Context Protocol CLI (`agis mcp`)
+
+Discovers, inspects, and directly executes tools on configured Model Context Protocol (MCP) servers (see [docs/mcp.md](mcp.md)).
+
+```bash
+# List all configured MCP servers, connectivity status, and discovered tools
+agis mcp list [--config config.yaml]
+
+# Directly test/invoke an MCP tool without LLM orchestration
+agis mcp test <server> <tool> [json_args] [--config config.yaml]
+```
+
+### Examples:
+```bash
+# List discovered tools
+agis mcp list
+
+# Test tool execution with JSON arguments
+agis mcp test filesystem read_file '{"path": "/tmp/test.txt"}'
+agis mcp test sqlite query '{"sql": "SELECT COUNT(*) FROM users;"}'
+```
 
 ---
 

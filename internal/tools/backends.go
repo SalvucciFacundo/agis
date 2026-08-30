@@ -42,6 +42,14 @@ func newDockerWith(image string, exec cmdExec) *Docker {
 // Backend implements core.ToolRunner.
 func (d *Docker) Backend() string { return "docker" }
 
+// Name implements core.ToolRunner.
+func (d *Docker) Name() string { return "shell-docker" }
+
+// Description implements core.ToolRunner.
+func (d *Docker) Description() string {
+	return `Run a shell command on the docker backend. Arguments: {"command": "<the command string>"}. Prefer read-only commands.`
+}
+
 // Run executes command via docker run --rm; the container never outlives the
 // call.
 func (d *Docker) Run(ctx context.Context, command string) (string, error) {
@@ -69,6 +77,14 @@ func newSSHWith(user, host, keyPath string, exec cmdExec) *SSH {
 
 // Backend implements core.ToolRunner.
 func (s *SSH) Backend() string { return "ssh" }
+
+// Name implements core.ToolRunner.
+func (s *SSH) Name() string { return "shell-ssh" }
+
+// Description implements core.ToolRunner.
+func (s *SSH) Description() string {
+	return `Run a shell command on the ssh backend. Arguments: {"command": "<the command string>"}. Prefer read-only commands.`
+}
 
 // Run executes command over ssh; connection failures surface as tool errors
 // with the remote's output preserved (spec TLS-004).

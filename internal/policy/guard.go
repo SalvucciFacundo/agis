@@ -99,8 +99,10 @@ func (s *Store) evaluate(req core.GuardRequest) core.Decision {
 		if req.Category == core.CategoryCommands && destructiveCommand(req.Subject) {
 			return core.DecisionDeny
 		}
-		if allowMatched && readOnlySubject(req) {
-			return core.DecisionAllow
+		if allowMatched {
+			if strings.HasPrefix(req.Backend, "mcp:") || readOnlySubject(req) {
+				return core.DecisionAllow
+			}
 		}
 		return core.DecisionDeny
 	}

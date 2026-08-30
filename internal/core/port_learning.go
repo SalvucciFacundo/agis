@@ -43,18 +43,27 @@ const maxToolRounds = 8
 
 // ToolRunner executes approved commands on one backend.
 type ToolRunner interface {
+	Name() string
+	Description() string
 	Run(ctx context.Context, command string) (string, error)
 	Backend() string
 }
 
-// toolDefs advertises one shell tool per registered backend so the model can
-// address them explicitly (shell-local, shell-docker, ...).
+// toolDefs advertises available tools from registered runners.
 func toolDefs(runners []ToolRunner) []ToolDef {
 	defs := make([]ToolDef, 0, len(runners))
 	for _, r := range runners {
+		name := r.Name()
+		if name == "" {
+			name = "shell-" + r.Backend()
+		}
+		desc := r.Description()
+		if desc == "" {
+			desc = fmt.Sprintf(`Run a shell command on the %s backend. Arguments: {"command": "<the command string>"}. Prefer read-only commands.`, r.Backend())
+		}
 		defs = append(defs, ToolDef{
-			Name:        "shell-" + r.Backend(),
-			Description: fmt.Sprintf(`Run a shell command on the %s backend. Arguments: {"command": "<the command string>"}. Prefer read-only commands.`, r.Backend()),
+			Name:        name,
+			Description: desc,
 		})
 	}
 	return defs

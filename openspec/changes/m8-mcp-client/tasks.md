@@ -38,9 +38,9 @@ Chain strategy: stacked-to-main
 
 ### PR 3: ToolRunner Bridge, Policy Guard Integration, CLI Subcommands & Docs
 
-- [ ] 3.1 Core interface update: Add `Name() string` and `Description() string` to `core.ToolRunner` interface in `internal/core/port_learning.go` and update existing local/plugin runners. <!-- sdd-owner: implementation -->
-- [ ] 3.2 ToolRunner Bridge: Implement `internal/tools/mcp.go` wrapping MCP tools into `core.ToolRunner` (`Backend() = "mcp:<server>"`) and dynamic tool definitions. <!-- sdd-owner: implementation -->
-- [ ] 3.3 Policy Guard Integration: Ensure MCP tool executions pass through `PolicyGuard` with `AutoDenyApprover` support in background daemons and audit trail logging. <!-- sdd-owner: implementation -->
-- [ ] 3.4 CLI Subcommands: Implement `cmd/agis/mcp.go` with `agis mcp list` and `agis mcp test <server> <tool> [args]` (wire into `cmd/agis/main.go`). <!-- sdd-owner: implementation -->
-- [ ] 3.5 Integration Tests: Implement `cmd/agis/mcp_integration_test.go` verifying end-to-end MCP tool calling from Brain and CLI under `go test -race ./...`. <!-- sdd-owner: implementation -->
-- [ ] 3.6 Documentation Updates: Create `docs/mcp.md`, update `docs/cli.md`, `docs/architecture.md`, `docs/configuration.md`, `docs/roadmap.md` (M8 DONE), and `README.md`. <!-- sdd-owner: implementation -->
+- [x] 3.1 Core interface update: Add `Name() string` and `Description() string` to `core.ToolRunner` interface in `internal/core/port_learning.go` and update existing local/plugin runners. <!-- sdd-owner: implementation -->
+- [x] 3.2 ToolRunner Bridge: Implement `internal/tools/mcp.go` wrapping MCP tools into `core.ToolRunner` (`Backend() = "mcp:<server>"`) and dynamic tool definitions. <!-- sdd-owner: implementation -->
+- [x] 3.3 Policy Guard Integration: Ensure MCP tool executions pass through `PolicyGuard` with `AutoDenyApprover` support in background daemons and audit trail logging. <!-- sdd-owner: implementation -->
+- [x] 3.4 CLI Subcommands: Implement `cmd/agis/mcp.go` with `agis mcp list` and `agis mcp test <server> <tool> [args]` (wire into `cmd/agis/main.go`). <!-- sdd-owner: implementation -->
+- [x] 3.5 Integration Tests: Implement `cmd/agis/mcp_integration_test.go` verifying end-to-end MCP tool calling from Brain and CLI under `go test -race ./...`. <!-- sdd-owner: implementation -->
+- [x] 3.6 Documentation Updates: Create `docs/mcp.md`, update `docs/cli.md`, `docs/architecture.md`, `docs/configuration.md`, `docs/roadmap.md` (M8 DONE), and `README.md`. <!-- sdd-owner: implementation -->

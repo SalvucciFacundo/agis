@@ -308,6 +308,19 @@ func (r *PluginRunner) Backend() string {
 	return "plugin-" + r.plugin.Manifest.Name
 }
 
+// Name returns the tool name formatted as "plugin-<name>".
+func (r *PluginRunner) Name() string {
+	return "plugin-" + r.plugin.Manifest.Name
+}
+
+// Description returns the plugin's description or a fallback.
+func (r *PluginRunner) Description() string {
+	if r.plugin.Manifest.Description != "" {
+		return r.plugin.Manifest.Description
+	}
+	return fmt.Sprintf("Plugin tool runner for %s", r.plugin.Manifest.Name)
+}
+
 // Run executes the plugin's entrypoint executable in the plugin directory with the command argument.
 func (r *PluginRunner) Run(ctx context.Context, command string) (string, error) {
 	entrypoint := r.plugin.Manifest.Entrypoint

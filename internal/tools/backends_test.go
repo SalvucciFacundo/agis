@@ -34,6 +34,12 @@ func TestDocker_RunUsesEphemeralContainer(t *testing.T) {
 	if d.Backend() != "docker" {
 		t.Errorf("Backend() = %q", d.Backend())
 	}
+	if d.Name() != "shell-docker" {
+		t.Errorf("Name() = %q, want shell-docker", d.Name())
+	}
+	if !strings.Contains(d.Description(), "docker") {
+		t.Errorf("Description() = %q, want description containing docker", d.Description())
+	}
 }
 
 func TestDocker_DefaultImage(t *testing.T) {
@@ -87,6 +93,15 @@ func TestSSH_KeylessAndConnectionFailure(t *testing.T) {
 	}
 	if !strings.Contains(out, "Connection refused") {
 		t.Errorf("out = %q, want remote diagnostic preserved", out)
+	}
+	if s.Backend() != "ssh" {
+		t.Errorf("Backend() = %q", s.Backend())
+	}
+	if s.Name() != "shell-ssh" {
+		t.Errorf("Name() = %q, want shell-ssh", s.Name())
+	}
+	if !strings.Contains(s.Description(), "ssh") {
+		t.Errorf("Description() = %q, want description containing ssh", s.Description())
 	}
 
 	keyless := newSSHWith("root", "h.example", "", func(_ context.Context, _ string, args ...string) (string, error) {

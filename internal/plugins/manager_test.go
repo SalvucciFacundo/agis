@@ -191,6 +191,9 @@ func TestManager_ToolRunners(t *testing.T) {
 	if runner.Backend() != "plugin-echoer" {
 		t.Errorf("Backend() = %q, want plugin-echoer", runner.Backend())
 	}
+	if runner.Name() != "plugin-echoer" {
+		t.Errorf("Name() = %q, want plugin-echoer", runner.Name())
+	}
 
 	ctx := context.Background()
 	out, err := runner.Run(ctx, "hello")

@@ -228,6 +228,48 @@ func TestMatchPattern_ExactPrefixPath(t *testing.T) {
 	}
 }
 
+func TestGuard_MCPEvaluation(t *testing.T) {
+	ctx := context.Background()
+	policyYAML := `
+tiers:
+  mcp:github: sandbox
+  mcp:filesystem: standard
+rules:
+  commands:
+    - backend: "mcp:github"
+      pattern: "list_issues"
+      action: "allow"
+    - backend: "mcp:github"
+      pattern: "delete_repo"
+      action: "deny"
+`
+	s, _ := newTestStore(t, policyYAML)
+
+	// 1. Sandbox posture: explicit allow rule allows
+	allowReq := core.GuardRequest{Backend: "mcp:github", Category: core.CategoryCommands, Subject: "list_issues"}
+	if got := s.Evaluate(ctx, allowReq); got != core.DecisionAllow {
+		t.Errorf("sandbox MCP with allow rule = %v, want allow", got)
+	}
+
+	// 2. Sandbox posture: no matching rule denies
+	unapprovedReq := core.GuardRequest{Backend: "mcp:github", Category: core.CategoryCommands, Subject: "create_issue"}
+	if got := s.Evaluate(ctx, unapprovedReq); got != core.DecisionDeny {
+		t.Errorf("sandbox MCP without rule = %v, want deny", got)
+	}
+
+	// 3. Explicit deny rule always denies
+	denyReq := core.GuardRequest{Backend: "mcp:github", Category: core.CategoryCommands, Subject: "delete_repo"}
+	if got := s.Evaluate(ctx, denyReq); got != core.DecisionDeny {
+		t.Errorf("MCP with deny rule = %v, want deny", got)
+	}
+
+	// 4. Standard posture: unapproved tool triggers Ask
+	stdReq := core.GuardRequest{Backend: "mcp:filesystem", Category: core.CategoryCommands, Subject: "read_file"}
+	if got := s.Evaluate(ctx, stdReq); got != core.DecisionAsk {
+		t.Errorf("standard MCP without rule = %v, want ask", got)
+	}
+}
+
 func TestDecision_String(t *testing.T) {
 	if core.DecisionAllow.String() != "allow" ||
 		core.DecisionDeny.String() != "deny" ||
