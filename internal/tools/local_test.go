@@ -19,8 +19,15 @@ func TestLocal_RunCapturesOutput(t *testing.T) {
 }
 
 func TestLocal_BackendName(t *testing.T) {
-	if got := NewLocal(0).Backend(); got != "local" {
+	l := NewLocal(0)
+	if got := l.Backend(); got != "local" {
 		t.Errorf("Backend() = %q, want local", got)
+	}
+	if got := l.Name(); got != "shell-local" {
+		t.Errorf("Name() = %q, want shell-local", got)
+	}
+	if got := l.Description(); !strings.Contains(got, "local") {
+		t.Errorf("Description() = %q, want description containing local", got)
 	}
 }
 

@@ -46,9 +46,25 @@ func toolCallEvents(id string) []StreamEvent {
 
 // fakeRunner records executed commands.
 type fakeRunner struct {
-	backend  string // defaults to "local"
-	commands []string
-	err      error
+	name        string
+	description string
+	backend     string // defaults to "local"
+	commands    []string
+	err         error
+}
+
+func (f *fakeRunner) Name() string {
+	if f.name != "" {
+		return f.name
+	}
+	return "shell-" + f.Backend()
+}
+
+func (f *fakeRunner) Description() string {
+	if f.description != "" {
+		return f.description
+	}
+	return "Fake runner description for " + f.Backend()
 }
 
 func (f *fakeRunner) Backend() string {
@@ -299,3 +315,134 @@ func TestBrainLoop_RoutesByBackendToolName(t *testing.T) {
 		t.Errorf("docker executed = %v, want the call routed to shell-docker", docker.commands)
 	}
 }
+
+// fakeMCPRunner simulates an MCP tool runner.
+type fakeMCPRunner struct {
+	serverName string
+	toolName   string
+	executed   []string
+	out        string
+	err        error
+}
+
+func (m *fakeMCPRunner) Backend() string     { return "mcp:" + m.serverName }
+func (m *fakeMCPRunner) Name() string        { return "mcp_" + m.serverName + "_" + m.toolName }
+func (m *fakeMCPRunner) ToolName() string    { return m.toolName }
+func (m *fakeMCPRunner) Description() string { return "MCP tool " + m.toolName }
+func (m *fakeMCPRunner) Run(_ context.Context, args string) (string, error) {
+	m.executed = append(m.executed, args)
+	return m.out, m.err
+}
+
+func TestBrainLoop_MCPTool_Allowed(t *testing.T) {
+	mcpRunner := &fakeMCPRunner{
+		serverName: "github",
+		toolName:   "create_issue",
+		out:        `{"issue_id": 123}`,
+	}
+	provider := &scriptedToolProvider{rounds: [][]StreamEvent{
+		{
+			{ToolCall: &ToolCall{ID: "call_mcp", Name: "mcp_github_create_issue", Arguments: `{"title":"bug report"}`}},
+		},
+		{{Text: "issue created"}},
+	}}
+	repo := newFakeRepo()
+	guard := &mapGuard{verdicts: map[string]Decision{"create_issue": DecisionAllow}}
+	brain := NewBrain(repo, provider,
+		WithSink(func(string) {}),
+		WithTools([]ToolRunner{mcpRunner}, guard, nil),
+	)
+
+	if err := brain.Step(context.Background(), "create issue"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	if len(mcpRunner.executed) != 1 || mcpRunner.executed[0] != `{"title":"bug report"}` {
+		t.Errorf("mcpRunner executed = %v, want [%s]", mcpRunner.executed, `{"title":"bug report"}`)
+	}
+
+	// Verify feedback protocol to LLM
+	msgs := provider.requests[1].Messages
+	var sawToolResult bool
+	for _, m := range msgs {
+		if m.Role == RoleTool && m.ToolCallID == "call_mcp" && strings.Contains(m.Content, `{"issue_id": 123}`) {
+			sawToolResult = true
+		}
+	}
+	if !sawToolResult {
+		t.Error("MCP tool execution result was not fed back as RoleTool")
+	}
+}
+
+func TestBrainLoop_MCPTool_SandboxDenied(t *testing.T) {
+	mcpRunner := &fakeMCPRunner{
+		serverName: "github",
+		toolName:   "create_issue",
+		out:        `{"issue_id": 123}`,
+	}
+	provider := &scriptedToolProvider{rounds: [][]StreamEvent{
+		{
+			{ToolCall: &ToolCall{ID: "call_mcp_deny", Name: "mcp_github_create_issue", Arguments: `{"title":"bug"}`}},
+		},
+		{{Text: "understood"}},
+	}}
+	repo := newFakeRepo()
+	guard := &mapGuard{verdicts: map[string]Decision{}} // default Deny
+	brain := NewBrain(repo, provider,
+		WithSink(func(string) {}),
+		WithTools([]ToolRunner{mcpRunner}, guard, nil),
+	)
+
+	if err := brain.Step(context.Background(), "create issue"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	if len(mcpRunner.executed) != 0 {
+		t.Errorf("mcpRunner executed = %v, want none (blocked by policy)", mcpRunner.executed)
+	}
+
+	msgs := provider.requests[1].Messages
+	var foundBlocked bool
+	for _, m := range msgs {
+		if m.Role == RoleTool && m.ToolCallID == "call_mcp_deny" && strings.Contains(m.Content, "blocked by policy") {
+			foundBlocked = true
+		}
+	}
+	if !foundBlocked {
+		t.Error("denied MCP tool call did not inform model with blocked by policy")
+	}
+}
+
+func TestBrainLoop_MCPTool_AskWithAutoDenyApprover(t *testing.T) {
+	mcpRunner := &fakeMCPRunner{
+		serverName: "filesystem",
+		toolName:   "delete_file",
+		out:        `deleted`,
+	}
+	provider := &scriptedToolProvider{rounds: [][]StreamEvent{
+		{
+			{ToolCall: &ToolCall{ID: "call_mcp_ask", Name: "mcp_filesystem_delete_file", Arguments: `{"path":"/tmp/test"}`}},
+		},
+		{{Text: "understood"}},
+	}}
+	repo := newFakeRepo()
+	guard := &mapGuard{verdicts: map[string]Decision{"delete_file": DecisionAsk}}
+	approver := &scriptedApprover{scopes: []Scope{ScopeDeny}} // AutoDenyApprover yields ScopeDeny
+	brain := NewBrain(repo, provider,
+		WithSink(func(string) {}),
+		WithTools([]ToolRunner{mcpRunner}, guard, approver.Approve),
+	)
+
+	if err := brain.Step(context.Background(), "delete file"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	if len(mcpRunner.executed) != 0 {
+		t.Errorf("mcpRunner executed = %v, want none (auto-denied)", mcpRunner.executed)
+	}
+
+	if len(approver.got) != 1 || approver.got[0].Backend != "mcp:filesystem" || approver.got[0].Subject != "delete_file" {
+		t.Errorf("approver got %+v, want GuardRequest for mcp:filesystem delete_file", approver.got)
+	}
+}
+

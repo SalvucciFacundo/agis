@@ -9,7 +9,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge" alt="License: MIT"></a>
   <a href="https://github.com/SalvucciFacundo/agis/releases"><img src="https://img.shields.io/github/v/release/SalvucciFacundo/agis?style=for-the-badge&logo=github" alt="Release"></a>
   <a href="https://github.com/SalvucciFacundo/agis/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/SalvucciFacundo/agis/ci.yml?style=for-the-badge&label=CI" alt="CI"></a>
-  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/Milestones-M1--M7%20Shipped-brightgreen?style=for-the-badge" alt="Milestones M1-M7 Shipped"></a>
+  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/Milestones-M1--M8%20Shipped-brightgreen?style=for-the-badge" alt="Milestones M1-M8 Shipped"></a>
   <a href="https://github.com/SalvucciFacundo/agis"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=for-the-badge" alt="PRs Welcome"></a>
 </p>
 
@@ -21,7 +21,7 @@
 ---
 
 ## 🏷️ Topics & Keywords
-`golang` • `ai-agent` • `autonomous-agents` • `llm` • `ollama` • `openai` • `bubbletea` • `tui` • `sqlite` • `fts5` • `telegram-bot` • `discord-bot` • `cron` • `plugins` • `webhooks` • `hexagonal-architecture` • `hermes-agent` • `spec-driven-development`
+`golang` • `ai-agent` • `autonomous-agents` • `llm` • `mcp` • `model-context-protocol` • `ollama` • `openai` • `bubbletea` • `tui` • `sqlite` • `fts5` • `telegram-bot` • `discord-bot` • `cron` • `plugins` • `webhooks` • `hexagonal-architecture` • `hermes-agent` • `spec-driven-development`
 
 ---
 
@@ -82,6 +82,7 @@ go run ./cmd/agis
 - **🔄 Learning & Memory Loop** — Continuous observation extraction (Curator), session summarization, and user model confidence synthesis.
 - **🎭 Skill Hub & Persona** — Agentskills.io-compatible Markdown skill loading, runtime skill distillation, durable `SOUL.md`, and dynamic personality overlays.
 - **🛡️ Policy Guard & Tool Backends** — Multi-tier security postures (`sandbox`, `standard`, `full`), fail-closed approval, audit logging, and Local/Docker/SSH tool backends.
+- **🔌 Model Context Protocol (MCP) Client** — Native JSON-RPC 2.0 client supporting `stdio` subprocesses with process group isolation and `sse` network streams, dynamic tool discovery, and Policy Guard integration.
 - **💬 Chat Gateway Multiplexer** — Concurrent Telegram and Discord bot adapters, user allowlists, session multiplexing, and message chunking.
 - **⏱️ Cron Scheduler Daemon** — Autonomous scheduled tasks with 5-field cron and `@every` duration expressions, sandbox policy, and chat notification delivery.
 - **🧩 Plugin Manager** — Dynamic external plugin discovery (`plugin.json`), stdio tool runner bridge, skill extraction, and persistent state management.
@@ -136,6 +137,10 @@ AGIS provides modular daemons and management subcommands alongside the default i
 ./bin/agis policy set <rule>
 ./bin/agis policy rm <rule>
 ./bin/agis policy tier <sandbox|standard>
+
+# 6. Model Context Protocol (MCP) CLI
+./bin/agis mcp list
+./bin/agis mcp test <server> <tool> [json_args]
 ```
 
 Full CLI reference in [docs/cli.md](docs/cli.md).
@@ -230,6 +235,7 @@ Detailed technical documentation and subsystem guides:
 - [docs/tui-commands.md](docs/tui-commands.md) — Interactive slash commands (`/new`, `/save`, `/restore`, `/snapshot`, `/compress`, `/personality`, `/permisos`) and hotkeys
 
 ### Integrations & Ecosystem
+- [docs/mcp.md](docs/mcp.md) — Model Context Protocol (MCP) Client guide (stdio/sse transports, tool discovery, Policy Guard)
 - [docs/gateway.md](docs/gateway.md) — Multi-platform Chat Gateway guide (Telegram & Discord setup, chunking, allowlists)
 - [docs/cron.md](docs/cron.md) — Autonomous Cron Scheduler guide (5-field syntax, interval macros, target delivery)
 - [docs/plugins.md](docs/plugins.md) — External Plugin System guide (`plugin.json` schema, stdio bridge, state management)
@@ -255,6 +261,8 @@ Detailed technical documentation and subsystem guides:
 | **M4** | Tools, backends & permissions: Policy Guard, `agis policy`, `/permisos` | **DONE ✅** |
 | **M5** | Full TUI: slash commands, session browse, interrupt-and-redirect | **DONE ✅** |
 | **M6** | Gateway (Telegram/Discord) + cron + plugins + webhooks | **DONE ✅** |
+| **M7** | Hybrid search: SQLite vector BLOBs, embeddings, RRF | **DONE ✅** |
+| **M8** | Model Context Protocol (MCP): JSON-RPC, stdio/sse, tool bridge | **DONE ✅** |
 
 Full detail and post-v1 backlog in [docs/roadmap.md](docs/roadmap.md).
 

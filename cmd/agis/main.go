@@ -41,6 +41,8 @@ func main() {
 			os.Exit(RunPluginsCLI(os.Args[2:], os.Stdout, os.Stderr))
 		case "webhook":
 			os.Exit(RunWebhookCLI(os.Args[2:], os.Stdout, os.Stderr))
+		case "mcp":
+			os.Exit(RunMCPCLI(os.Args[2:], os.Stdout, os.Stderr))
 		}
 	}
 

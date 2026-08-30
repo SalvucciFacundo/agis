@@ -1,6 +1,6 @@
 # Roadmap
 
-Milestone scopes come from `spec.md` §Milestones. M1, M2, M3, M4, M5, M6, and M7 are shipped. The archived requirements live as synced OpenSpec capability specs under `openspec/specs/` (`config-loader`, `repository-memory`, `llm-provider-port`, `brain-loop`, `minimal-tui`, `memory-curator`, `session-summarizer`, `user-model`, `skill-hub`, `persona`, `policy-guard`, `tools-backends`, `tool-calling`, `session-manager`, `gateway`, `cron`, `plugins`, `webhook`, `embeddings`).
+Milestone scopes come from `spec.md` §Milestones. M1, M2, M3, M4, M5, M6, M7, and M8 are shipped. The archived requirements live as synced OpenSpec capability specs under `openspec/specs/` (`config-loader`, `repository-memory`, `llm-provider-port`, `brain-loop`, `minimal-tui`, `memory-curator`, `session-summarizer`, `user-model`, `skill-hub`, `persona`, `policy-guard`, `tools-backends`, `tool-calling`, `session-manager`, `gateway`, `cron`, `plugins`, `webhook`, `embeddings`, `mcp`).
 
 ## M1 — Thinking agent with memory ✅ DONE
 
@@ -116,6 +116,24 @@ Change `m7-hybrid-search`, delivered as 3 stacked PRs merged to main (PR #1 Core
 
 **Verification:** 100% test pass rate across unit, adapter mock, and concurrency/race integration tests with `go test -race ./...`; zero goroutine leaks under `goleak`. "Done" criteria met: semantic search retrieves meaning matches that BM25 misses, and hybrid ranking outperforms pure lexical search.
 
+## M8 — Model Context Protocol (MCP) Client ✅ DONE
+
+Change `m8-mcp-client`, delivered as 3 stacked PRs merged to main (PR #1 JSON-RPC 2.0 protocol, stdio & sse transports, config extensions → PR #2 MCP client, paginated discovery, tool execution, multi-server manager → PR #3 ToolRunner bridge, PolicyGuard integration, CLI subcommands & documentation).
+
+**Shipped:**
+
+- Pure Go JSON-RPC 2.0 Protocol Client (`internal/mcp`): protocol version `2024-11-05`, request/response multiplexing, atomic request ID tracking, lifecycle handshake (`initialize` -> `notifications/initialized`), and structured error mapping.
+- Stdio Subprocess Transport (`internal/mcp/transport/stdio.go`): local process lifecycle, POSIX process group isolation (`Setpgid: true`), `WaitDelay = 100ms`, `stderr` drain goroutine, and clean shutdown.
+- SSE Network Transport (`internal/mcp/transport/sse.go`): HTTP GET event stream parser, session `endpoint` event discovery, and HTTP POST message dispatcher.
+- Dynamic Tool Discovery & Execution: `tools/list` with cursor pagination, JSON schema parameter parsing, and `tools/call` result block mapping.
+- Multi-Server Manager (`internal/mcp/manager.go`): server pool lifecycle, concurrent startup with `errgroup`, disabled server skipping, and tool aggregation.
+- `ToolRunner` Bridge (`internal/tools/mcp.go`): bridges MCP tools into `core.ToolRunner` under `mcp:<server_name>`, with `FromMCPManager` aggregator.
+- Policy Guard Integration: enforces `sandbox` (auto-deny unapproved calls; `AutoDenyApprover` in background daemons), `standard` (interactive confirmation), and full audit trail logging.
+- CLI Subcommands (`cmd/agis/mcp.go`): `agis mcp list` (server status & discovered tools) and `agis mcp test <server> <tool> [args]` (direct invocation).
+- Documentation: `docs/mcp.md`, CLI reference in `docs/cli.md`, architecture updates in `docs/architecture.md`, configuration spec in `docs/configuration.md`.
+
+**Verification:** 100% test pass rate across unit, mock, transport, manager, and end-to-end integration tests (`cmd/agis/mcp_integration_test.go`) under `go test -race ./...`; zero goroutine leaks under `goleak`. "Done" criteria met: external MCP servers provide dynamic tools to the Brain, evaluated under Policy Guard with full audit trails.
+
 ## M1 review follow-ups queued for M2
 
 From the M1 review, deferred deliberately:
@@ -146,9 +164,11 @@ Future capabilities identified for post-v1 expansion:
 - Asynchronous non-blocking background embedding worker for observation persistence.
 - Seamless fallback to BM25 FTS5 when embeddings are offline or disabled.
 
-### 3. Model Context Protocol (MCP) Client
-- Implement an MCP client adapter in `internal/mcp` to dynamically connect AGIS to community MCP servers (Postgres, MySQL, GitHub, Puppeteer, Filesystem, Custom APIs) via `stdio` or `sse`.
-- Register external MCP tools dynamically into the AGIS `ToolRegistry`, enforcing `PolicyGuard` multi-tier security rules (`sandbox`, `standard`, `full`).
+### 3. Model Context Protocol (MCP) Client ✅ DONE (v1.2.0)
+- Pure Go MCP client (`internal/mcp`) supporting JSON-RPC 2.0 protocol version `2024-11-05`.
+- Subprocess `stdio` transport with process group management and `sse` network transport.
+- Multi-server manager, paginated tool discovery (`tools/list`), and execution (`tools/call`).
+- `core.ToolRunner` bridge (`MCPRunner`), `PolicyGuard` multi-tier security, and `agis mcp [list|test]` CLI.
 
 ### 4. Multimodal Ingestion (Vision & Audio)
 - Extend `core.ChatRequest` and gateway message event pipelines (Telegram & Discord) to accept image and voice attachments.

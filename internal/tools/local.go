@@ -31,6 +31,14 @@ func NewLocal(timeout time.Duration) *Local {
 // Backend implements core.ToolRunner.
 func (l *Local) Backend() string { return "local" }
 
+// Name implements core.ToolRunner.
+func (l *Local) Name() string { return "shell-local" }
+
+// Description implements core.ToolRunner.
+func (l *Local) Description() string {
+	return `Run a shell command on the local backend. Arguments: {"command": "<the command string>"}. Prefer read-only commands.`
+}
+
 // Run executes command via sh -c and returns combined output.
 func (l *Local) Run(ctx context.Context, command string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, l.timeout)

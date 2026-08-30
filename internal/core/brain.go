@@ -309,10 +309,14 @@ func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message
 	}
 }
 
-// runnerFor routes a tool name (shell-<backend>) to its runner.
+// runnerFor routes a tool name to its runner.
 func (b *Brain) runnerFor(name string) ToolRunner {
 	for _, r := range b.runners {
-		if "shell-"+r.Backend() == name {
+		rName := r.Name()
+		if rName == "" {
+			rName = "shell-" + r.Backend()
+		}
+		if rName == name {
 			return r
 		}
 	}
@@ -328,12 +332,25 @@ func (b *Brain) executeTool(ctx context.Context, call ToolCall) string {
 		return fmt.Sprintf("unknown tool %q", call.Name)
 	}
 
-	command, err := commandFromArgs(call.Arguments)
-	if err != nil {
-		return fmt.Sprintf("invalid arguments: %v", err)
+	var subject string
+	var input string
+
+	if mcpRunner, ok := runner.(interface{ ToolName() string }); ok {
+		subject = mcpRunner.ToolName()
+		input = call.Arguments
+	} else if strings.HasPrefix(runner.Backend(), "mcp:") {
+		subject = runner.Name()
+		input = call.Arguments
+	} else {
+		cmd, err := commandFromArgs(call.Arguments)
+		if err != nil {
+			return fmt.Sprintf("invalid arguments: %v", err)
+		}
+		subject = cmd
+		input = cmd
 	}
 
-	req := GuardRequest{Backend: runner.Backend(), Category: CategoryCommands, Subject: command}
+	req := GuardRequest{Backend: runner.Backend(), Category: CategoryCommands, Subject: subject}
 	switch b.guard.Evaluate(ctx, req) {
 	case DecisionAllow:
 	case DecisionAsk:
@@ -348,7 +365,7 @@ func (b *Brain) executeTool(ctx context.Context, call ToolCall) string {
 		return "blocked by policy"
 	}
 
-	out, err := runner.Run(ctx, command)
+	out, err := runner.Run(ctx, input)
 	if err != nil {
 		return "error: " + err.Error()
 	}

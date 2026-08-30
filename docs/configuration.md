@@ -64,6 +64,19 @@ plugins:
   enabled: false                  # master switch for external plugins
   dir: ~/.agis/plugins            # plugin root directory (holds <name>/plugin.json)
 
+mcp:
+  enabled: false                  # master switch for Model Context Protocol (MCP) clients
+  servers:
+    filesystem:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"]
+      env:
+        DEBUG: "mcp:*"
+      disabled: false
+    remote-tools:
+      url: "http://localhost:8080/sse"
+      disabled: false
+
 webhook:
   enabled: false                  # master switch for webhook HTTP listener
   host: "127.0.0.1"               # binding address
@@ -128,6 +141,8 @@ A missing file is **not an error**: the loader falls back to built-in defaults. 
 | `cron.jobs` | `[]` |
 | `plugins.enabled` | `false` |
 | `plugins.dir` | `$AGIS_HOME/plugins` or `~/.agis/plugins` |
+| `mcp.enabled` | `false` |
+| `mcp.servers` | `{}` |
 | `webhook.enabled` | `false` |
 | `webhook.host` | `127.0.0.1` |
 | `webhook.port` | `8080` |
@@ -162,7 +177,15 @@ The `plugins` block configures external plugin discovery:
 - `plugins.enabled`: Master switch for dynamic tool and skill registration.
 - `plugins.dir`: Directory containing plugin subdirectories (each containing a `plugin.json` manifest).
 
-### 4. Webhook (`webhook`)
+### 4. Model Context Protocol (`mcp`)
+The `mcp` block configures native MCP client servers (see [docs/mcp.md](mcp.md)):
+- `mcp.enabled`: Master toggle for MCP tool discovery and execution.
+- `mcp.servers`: Map of server configurations:
+  - `command` / `args` / `env`: Executable binary, arguments, and environment variables for `stdio` subprocess transport.
+  - `url`: HTTP SSE endpoint URL for `sse` network transport.
+  - `disabled`: When `true`, skips initializing the server.
+
+### 5. Webhook (`webhook`)
 The `webhook` block configures the HTTP event listener:
 - `webhook.enabled`: Master switch for `agis webhook run` listener.
 - `host` & `port`: Network interface and port to bind (defaults to `127.0.0.1:8080`).

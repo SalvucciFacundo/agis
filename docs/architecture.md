@@ -6,9 +6,12 @@ AGIS is a hexagonal (ports & adapters) Go application, mirroring the structure p
 
 | Package | Role | Depends on |
 |---|---|---|
-| `cmd/agis` | Entrypoint: flag parsing, subcommands routing (`gateway`, `cron`, `plugins`, `webhook`, `policy`), wiring, TUI launch | everything |
+| `cmd/agis` | Entrypoint: flag parsing, subcommands routing (`gateway`, `cron`, `plugins`, `webhook`, `policy`, `mcp`), wiring, TUI launch | everything |
 | `internal/core` | Domain: types, `Provider` port, `Repository` port, `Brain` loop, `ToolRunner` port, `Approver` port | nothing internal |
-| `internal/config` | YAML loader, defaults, precedence, 0600 check, ecosystem blocks, embeddings config | `gopkg.in/yaml.v3` |
+| `internal/config` | YAML loader, defaults, precedence, 0600 check, ecosystem blocks, embeddings config, mcp config | `gopkg.in/yaml.v3` |
+| `internal/mcp` | Native MCP client: JSON-RPC 2.0 protocol, multiplexing, handshake, tool discovery/call, multi-server Manager | `config`, `core`, `internal/mcp/transport`, `golang.org/x/sync` |
+| `internal/mcp/transport` | MCP stream transports: `stdio` (subprocess with process group cleanup) and `sse` (HTTP event stream) | `config` |
+| `internal/tools` | Tool runners: Local, Docker, SSH, and MCP ToolRunner bridge (`MCPRunner`) | `core`, `config`, `internal/mcp` |
 | `internal/memory` | `Repository` adapter on SQLite + FTS5, binary vector storage, RRF hybrid search, embedded migrations, summarizer, curator | `core` |
 | `internal/adapters/llm` | `Provider` adapters (OpenAI, Ollama) & `Embedder` adapters (Ollama, OpenAI) | `core`, `config` |
 | `internal/adapters/tui` | Bubbletea TUI: viewport, input, spinner, streaming, slash commands | `core`, `policy`, `session`, `persona` |
@@ -51,11 +54,13 @@ type Repository interface {
 }
 ```
 
-**`core.ToolRunner`** (`internal/core/tools.go`) — the tool execution port:
+**`core.ToolRunner`** (`internal/core/port_learning.go`) — the tool execution port:
 ```go
 type ToolRunner interface {
-    Backend() string
+    Name() string
+    Description() string
     Run(ctx context.Context, command string) (string, error)
+    Backend() string
 }
 ```
 
@@ -139,6 +144,13 @@ The Webhook subsystem enables HTTP event ingestion:
 - **HTTP Handler**: listens on configured host/port, routing POST requests at configured path (`/webhook` or `/events`). Non-POST requests return `405 Method Not Allowed`.
 - **HMAC-SHA256 Verification**: verifies incoming signatures in `X-Hub-Signature-256` or `X-Signature` headers using constant-time comparison (`crypto/subtle.ConstantTimeCompare`). Missing or invalid signatures return `401 Unauthorized`.
 - **Dispatch & Target Forwarding**: extracts JSON event types into session keys (`webhook:<event_type>`), triggers `core.Brain.Step`, and forwards responses to chat gateway targets.
+
+### 5. Model Context Protocol (MCP) Client (`internal/mcp`)
+The MCP subsystem provides native tool integration with MCP-compliant servers:
+- **JSON-RPC 2.0 Client**: pure Go client implementing MCP specification (`2024-11-05`), atomic ID correlation, and lifecycle handshakes.
+- **Transports (`internal/mcp/transport`)**: `stdio` subprocess with POSIX process group cleanup (`Setpgid`) and `sse` network event streaming over HTTP.
+- **Multi-Server Manager**: coordinates server pools, concurrent initialization, server health tracking, and tool aggregation.
+- **ToolRunner Bridge (`internal/tools`)**: wraps MCP tools as `MCPRunner` under backend `mcp:<server_name>`, enforcing `PolicyGuard` security postures.
 
 ## StreamEvent Contract
 
