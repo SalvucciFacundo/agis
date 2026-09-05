@@ -5,6 +5,8 @@ import (
 
 	"github.com/SalvucciFacundo/agis/internal/config"
 	"github.com/SalvucciFacundo/agis/internal/core"
+	"github.com/SalvucciFacundo/agis/internal/tools/web/fetch"
+	"github.com/SalvucciFacundo/agis/internal/tools/web/search"
 )
 
 // Select builds the enabled runners in policy-relevant order: local first,
@@ -43,8 +45,37 @@ func Select(cfg config.ToolsConfig, logger *slog.Logger) []core.ToolRunner {
 		}
 	}
 
+	if cfg.Web.Enabled {
+		out = append(out, FromWebConfig(cfg.Web)...)
+	}
+
 	return out
 }
+
+// FromWebConfig instantiates the web_search and web_fetch tool runners from WebConfig.
+func FromWebConfig(cfg config.WebConfig) []core.ToolRunner {
+	if !cfg.Enabled {
+		return nil
+	}
+
+	searcher, err := search.NewSearcher(cfg.DefaultProvider, cfg)
+	if err != nil {
+		// Fall back to duckduckgo if default provider instantiation fails
+		searcher = search.NewDuckDuckGoSearcher()
+	}
+
+	fetcher := fetch.NewFetcher(fetch.FetchOptions{
+		Timeout:   cfg.FetchTimeout,
+		MaxBytes:  cfg.MaxFetchBytes,
+		UserAgent: cfg.UserAgent,
+	})
+
+	return []core.ToolRunner{
+		NewWebSearchRunner(searcher, cfg.DefaultProvider, cfg.Providers),
+		NewWebFetchRunner(fetcher, cfg.MaxFetchBytes),
+	}
+}
+
 
 // available reports whether a binary is on PATH.
 func available(bin string) bool {

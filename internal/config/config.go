@@ -33,6 +33,12 @@ const (
 	skillsDirName = "skills"
 
 	defaultDockerImage = "alpine:3"
+
+	// Web tools defaults.
+	defaultWebFetchTimeout   = 15 * time.Second
+	defaultWebMaxFetchBytes  = 2097152 // 2MB
+	defaultWebUserAgent      = "AGIS/1.0 (+https://github.com/SalvucciFacundo/agis)"
+	defaultWebSearchProvider = "duckduckgo"
 )
 
 // Config is the root AGIS configuration.
@@ -170,6 +176,60 @@ type ToolsConfig struct {
 	Enabled bool         `yaml:"enabled"`
 	Docker  DockerConfig `yaml:"docker"`
 	SSH     SSHConfig    `yaml:"ssh"`
+	Web     WebConfig    `yaml:"web"`
+}
+
+// WebConfig gates and configures the native web tools (web_search, web_fetch).
+type WebConfig struct {
+	Enabled         bool          `yaml:"enabled"`
+	DefaultProvider string        `yaml:"default_provider"` // "duckduckgo", "brave", "tavily", "searxng"
+	FetchTimeout    time.Duration `yaml:"fetch_timeout"`   // default: 15s
+	MaxFetchBytes   int64         `yaml:"max_fetch_bytes"` // default: 2097152 (2MB)
+	UserAgent       string        `yaml:"user_agent"`      // default: "AGIS/1.0 (+https://github.com/SalvucciFacundo/agis)"
+	Providers       WebProviders  `yaml:"providers"`
+}
+
+// WebProviders configures credentials and endpoints for web search providers.
+type WebProviders struct {
+	Brave   ProviderConfig `yaml:"brave"`
+	Tavily  ProviderConfig `yaml:"tavily"`
+	Searxng ProviderConfig `yaml:"searxng"`
+
+	// Flat field aliases for convenience and backwards compatibility
+	BraveAPIKey  string `yaml:"brave_api_key,omitempty"`
+	TavilyAPIKey string `yaml:"tavily_api_key,omitempty"`
+	SearxngURL   string `yaml:"searxng_url,omitempty"`
+}
+
+// GetBraveAPIKey returns the Brave API key from the structured or flat field.
+func (p WebProviders) GetBraveAPIKey() string {
+	if p.Brave.APIKey != "" {
+		return p.Brave.APIKey
+	}
+	return p.BraveAPIKey
+}
+
+// GetTavilyAPIKey returns the Tavily API key from the structured or flat field.
+func (p WebProviders) GetTavilyAPIKey() string {
+	if p.Tavily.APIKey != "" {
+		return p.Tavily.APIKey
+	}
+	return p.TavilyAPIKey
+}
+
+// GetSearxngURL returns the SearXNG BaseURL from the structured or flat field.
+func (p WebProviders) GetSearxngURL() string {
+	if p.Searxng.BaseURL != "" {
+		return p.Searxng.BaseURL
+	}
+	return p.SearxngURL
+}
+
+// ProviderConfig configures a single web search provider endpoint or credentials.
+type ProviderConfig struct {
+	APIKey  string        `yaml:"api_key,omitempty"`
+	BaseURL string        `yaml:"base_url,omitempty"`
+	Timeout time.Duration `yaml:"timeout,omitempty"`
 }
 
 // DockerConfig configures the container backend.
@@ -286,6 +346,13 @@ func defaults() *Config {
 		},
 		Tools: ToolsConfig{
 			Docker: DockerConfig{Image: defaultDockerImage},
+			Web: WebConfig{
+				Enabled:         false,
+				DefaultProvider: defaultWebSearchProvider,
+				FetchTimeout:    defaultWebFetchTimeout,
+				MaxFetchBytes:   defaultWebMaxFetchBytes,
+				UserAgent:       defaultWebUserAgent,
+			},
 		},
 		Plugins: PluginsConfig{
 			Dir: defaultPluginsDir(),
@@ -396,6 +463,18 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Multimodal.Audio.MaxAudioSizeMB <= 0 {
 		cfg.Multimodal.Audio.MaxAudioSizeMB = 25
+	}
+	if cfg.Tools.Web.DefaultProvider == "" {
+		cfg.Tools.Web.DefaultProvider = defaultWebSearchProvider
+	}
+	if cfg.Tools.Web.FetchTimeout <= 0 {
+		cfg.Tools.Web.FetchTimeout = defaultWebFetchTimeout
+	}
+	if cfg.Tools.Web.MaxFetchBytes <= 0 {
+		cfg.Tools.Web.MaxFetchBytes = defaultWebMaxFetchBytes
+	}
+	if cfg.Tools.Web.UserAgent == "" {
+		cfg.Tools.Web.UserAgent = defaultWebUserAgent
 	}
 }
 

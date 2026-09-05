@@ -949,4 +949,115 @@ func TestLoad_MCPDefaultsAndExplicit(t *testing.T) {
 	}
 }
 
+func TestLoad_WebDefaultsAndExplicit(t *testing.T) {
+	tests := []struct {
+		name        string
+		yaml        string
+		wantEnabled bool
+		wantProv    string
+		wantTimeout time.Duration
+		wantMaxByte int64
+		wantUA      string
+		wantBrave   string
+		wantTavily  string
+		wantSearxng string
+	}{
+		{
+			name:        "empty config has web tools disabled with safe defaults",
+			yaml:        "",
+			wantEnabled: false,
+			wantProv:    "duckduckgo",
+			wantTimeout: 15 * time.Second,
+			wantMaxByte: 2097152,
+			wantUA:      "AGIS/1.0 (+https://github.com/SalvucciFacundo/agis)",
+		},
+		{
+			name: "explicit web tools configuration with providers",
+			yaml: `tools:
+  enabled: true
+  web:
+    enabled: true
+    default_provider: "brave"
+    fetch_timeout: 30s
+    max_fetch_bytes: 5242880
+    user_agent: "CustomAgent/2.0"
+    providers:
+      brave:
+        api_key: "bsa-token-123"
+      tavily:
+        api_key: "tvly-token-456"
+      searxng:
+        base_url: "http://localhost:8888"
+`,
+			wantEnabled: true,
+			wantProv:    "brave",
+			wantTimeout: 30 * time.Second,
+			wantMaxByte: 5242880,
+			wantUA:      "CustomAgent/2.0",
+			wantBrave:   "bsa-token-123",
+			wantTavily:  "tvly-token-456",
+			wantSearxng: "http://localhost:8888",
+		},
+		{
+			name: "flat provider keys configuration",
+			yaml: `tools:
+  web:
+    enabled: true
+    default_provider: "tavily"
+    providers:
+      brave_api_key: "bsa-flat-123"
+      tavily_api_key: "tvly-flat-456"
+      searxng_url: "http://searxng.local"
+`,
+			wantEnabled: true,
+			wantProv:    "tavily",
+			wantTimeout: 15 * time.Second,
+			wantMaxByte: 2097152,
+			wantUA:      "AGIS/1.0 (+https://github.com/SalvucciFacundo/agis)",
+			wantBrave:   "bsa-flat-123",
+			wantTavily:  "tvly-flat-456",
+			wantSearxng: "http://searxng.local",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+			path := writeConfig(t, home, tt.yaml, 0o600)
+
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			if cfg.Tools.Web.Enabled != tt.wantEnabled {
+				t.Errorf("Tools.Web.Enabled = %v, want %v", cfg.Tools.Web.Enabled, tt.wantEnabled)
+			}
+			if cfg.Tools.Web.DefaultProvider != tt.wantProv {
+				t.Errorf("Tools.Web.DefaultProvider = %q, want %q", cfg.Tools.Web.DefaultProvider, tt.wantProv)
+			}
+			if cfg.Tools.Web.FetchTimeout != tt.wantTimeout {
+				t.Errorf("Tools.Web.FetchTimeout = %v, want %v", cfg.Tools.Web.FetchTimeout, tt.wantTimeout)
+			}
+			if cfg.Tools.Web.MaxFetchBytes != tt.wantMaxByte {
+				t.Errorf("Tools.Web.MaxFetchBytes = %d, want %d", cfg.Tools.Web.MaxFetchBytes, tt.wantMaxByte)
+			}
+			if cfg.Tools.Web.UserAgent != tt.wantUA {
+				t.Errorf("Tools.Web.UserAgent = %q, want %q", cfg.Tools.Web.UserAgent, tt.wantUA)
+			}
+			if tt.wantBrave != "" && cfg.Tools.Web.Providers.GetBraveAPIKey() != tt.wantBrave {
+				t.Errorf("GetBraveAPIKey() = %q, want %q", cfg.Tools.Web.Providers.GetBraveAPIKey(), tt.wantBrave)
+			}
+			if tt.wantTavily != "" && cfg.Tools.Web.Providers.GetTavilyAPIKey() != tt.wantTavily {
+				t.Errorf("GetTavilyAPIKey() = %q, want %q", cfg.Tools.Web.Providers.GetTavilyAPIKey(), tt.wantTavily)
+			}
+			if tt.wantSearxng != "" && cfg.Tools.Web.Providers.GetSearxngURL() != tt.wantSearxng {
+				t.Errorf("GetSearxngURL() = %q, want %q", cfg.Tools.Web.Providers.GetSearxngURL(), tt.wantSearxng)
+			}
+		})
+	}
+}
+
+
 

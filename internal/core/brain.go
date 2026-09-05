@@ -341,6 +341,7 @@ func (b *Brain) executeTool(ctx context.Context, call ToolCall) string {
 
 	var subject string
 	var input string
+	category := CategoryCommands
 
 	if mcpRunner, ok := runner.(interface{ ToolName() string }); ok {
 		subject = mcpRunner.ToolName()
@@ -348,6 +349,21 @@ func (b *Brain) executeTool(ctx context.Context, call ToolCall) string {
 	} else if strings.HasPrefix(runner.Backend(), "mcp:") {
 		subject = runner.Name()
 		input = call.Arguments
+	} else if runner.Backend() == "web" {
+		category = CategoryNetwork
+		input = call.Arguments
+		subject = call.Arguments
+		var parsed struct {
+			Query string `json:"query"`
+			URL   string `json:"url"`
+		}
+		if err := json.Unmarshal([]byte(call.Arguments), &parsed); err == nil {
+			if parsed.URL != "" {
+				subject = parsed.URL
+			} else if parsed.Query != "" {
+				subject = parsed.Query
+			}
+		}
 	} else {
 		cmd, err := commandFromArgs(call.Arguments)
 		if err != nil {
@@ -357,7 +373,7 @@ func (b *Brain) executeTool(ctx context.Context, call ToolCall) string {
 		input = cmd
 	}
 
-	req := GuardRequest{Backend: runner.Backend(), Category: CategoryCommands, Subject: subject}
+	req := GuardRequest{Backend: runner.Backend(), Category: category, Subject: subject}
 	switch b.guard.Evaluate(ctx, req) {
 	case DecisionAllow:
 	case DecisionAsk:

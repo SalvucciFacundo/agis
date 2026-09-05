@@ -54,6 +54,12 @@ func TestGet(t *testing.T) {
 	cfg.Memory.CloseTimeout = 45 * time.Second
 	cfg.Agent.EvolutionEnabled = true
 	cfg.Gateway.Telegram.Allowlist = []string{"user1", "user2"}
+	cfg.Tools.Web.Enabled = true
+	cfg.Tools.Web.DefaultProvider = "brave"
+	cfg.Tools.Web.FetchTimeout = 20 * time.Second
+	cfg.Tools.Web.MaxFetchBytes = 4194304
+	cfg.Tools.Web.Providers.Brave.APIKey = "bsa-key-accessor"
+	cfg.Tools.Web.Providers.TavilyAPIKey = "tvly-key-accessor"
 
 	tests := []struct {
 		name      string
@@ -96,6 +102,31 @@ func TestGet(t *testing.T) {
 			name:    "get slice field",
 			key:     "gateway.telegram.allowlist",
 			wantVal: []string{"user1", "user2"},
+		},
+		{
+			name:    "get web tools default provider",
+			key:     "tools.web.default_provider",
+			wantVal: "brave",
+		},
+		{
+			name:    "get web tools fetch timeout",
+			key:     "tools.web.fetch_timeout",
+			wantVal: 20 * time.Second,
+		},
+		{
+			name:    "get web tools max fetch bytes",
+			key:     "tools.web.max_fetch_bytes",
+			wantVal: int64(4194304),
+		},
+		{
+			name:    "get web tools nested brave api key",
+			key:     "tools.web.providers.brave.api_key",
+			wantVal: "bsa-key-accessor",
+		},
+		{
+			name:    "get web tools flat tavily api key",
+			key:     "tools.web.providers.tavily_api_key",
+			wantVal: "tvly-key-accessor",
 		},
 		{
 			name:      "get unknown key returns error",
@@ -188,6 +219,28 @@ func TestSet(t *testing.T) {
 		wantDiscord := []string{"123", "456"}
 		if !reflect.DeepEqual(cfg.Gateway.Discord.Allowlist, wantDiscord) {
 			t.Errorf("Gateway.Discord.Allowlist = %v, want %v", cfg.Gateway.Discord.Allowlist, wantDiscord)
+		}
+
+		// Web tools Set operations
+		if err := config.Set(cfg, "tools.web.default_provider", "duckduckgo"); err != nil {
+			t.Fatalf("Set(tools.web.default_provider) error: %v", err)
+		}
+		if cfg.Tools.Web.DefaultProvider != "duckduckgo" {
+			t.Errorf("Tools.Web.DefaultProvider = %q, want duckduckgo", cfg.Tools.Web.DefaultProvider)
+		}
+
+		if err := config.Set(cfg, "tools.web.fetch_timeout", "25s"); err != nil {
+			t.Fatalf("Set(tools.web.fetch_timeout) error: %v", err)
+		}
+		if cfg.Tools.Web.FetchTimeout != 25*time.Second {
+			t.Errorf("Tools.Web.FetchTimeout = %v, want 25s", cfg.Tools.Web.FetchTimeout)
+		}
+
+		if err := config.Set(cfg, "tools.web.providers.brave.api_key", "new-bsa-key"); err != nil {
+			t.Fatalf("Set(tools.web.providers.brave.api_key) error: %v", err)
+		}
+		if cfg.Tools.Web.Providers.Brave.APIKey != "new-bsa-key" {
+			t.Errorf("Tools.Web.Providers.Brave.APIKey = %q, want new-bsa-key", cfg.Tools.Web.Providers.Brave.APIKey)
 		}
 	})
 

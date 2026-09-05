@@ -91,6 +91,9 @@ func (s *Store) evaluate(req core.GuardRequest) core.Decision {
 
 	default: // sandbox
 		if req.Category == core.CategoryNetwork {
+			if req.Backend == "web" && allowMatched {
+				return core.DecisionAllow
+			}
 			return core.DecisionDeny
 		}
 		if req.Category == core.CategoryCommands && networkCommand(req.Subject) {
@@ -100,7 +103,7 @@ func (s *Store) evaluate(req core.GuardRequest) core.Decision {
 			return core.DecisionDeny
 		}
 		if allowMatched {
-			if strings.HasPrefix(req.Backend, "mcp:") || readOnlySubject(req) {
+			if strings.HasPrefix(req.Backend, "mcp:") || req.Backend == "web" || readOnlySubject(req) {
 				return core.DecisionAllow
 			}
 		}

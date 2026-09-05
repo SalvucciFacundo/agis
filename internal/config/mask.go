@@ -45,4 +45,16 @@ func maskFields(cfg *Config) {
 	if cfg.Webhook.Secret != "" {
 		cfg.Webhook.Secret = maskValue
 	}
+	if cfg.Tools.Web.Providers.Brave.APIKey != "" {
+		cfg.Tools.Web.Providers.Brave.APIKey = maskValue
+	}
+	if cfg.Tools.Web.Providers.BraveAPIKey != "" {
+		cfg.Tools.Web.Providers.BraveAPIKey = maskValue
+	}
+	if cfg.Tools.Web.Providers.Tavily.APIKey != "" {
+		cfg.Tools.Web.Providers.Tavily.APIKey = maskValue
+	}
+	if cfg.Tools.Web.Providers.TavilyAPIKey != "" {
+		cfg.Tools.Web.Providers.TavilyAPIKey = maskValue
+	}
 }

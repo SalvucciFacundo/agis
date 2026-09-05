@@ -81,3 +81,39 @@ func TestSelect_FullStackOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestSelect_WebToolsRegistration(t *testing.T) {
+	cfg := config.ToolsConfig{
+		Enabled: true,
+		Web: config.WebConfig{
+			Enabled:         true,
+			DefaultProvider: "duckduckgo",
+		},
+	}
+	runners := Select(cfg, slog.New(slog.DiscardHandler))
+	names := make([]string, len(runners))
+	for i, r := range runners {
+		names[i] = r.Name()
+	}
+
+	foundSearch, foundFetch := false, false
+	for _, n := range names {
+		if n == "web_search" {
+			foundSearch = true
+		}
+		if n == "web_fetch" {
+			foundFetch = true
+		}
+	}
+	if !foundSearch || !foundFetch {
+		t.Errorf("Select() with Web.Enabled did not register web_search (%v) or web_fetch (%v): got %v", foundSearch, foundFetch, names)
+	}
+}
+
+func TestFromWebConfig_DisabledReturnsNil(t *testing.T) {
+	cfg := config.WebConfig{Enabled: false}
+	if runners := FromWebConfig(cfg); len(runners) != 0 {
+		t.Errorf("FromWebConfig(disabled) = %v, want nil/empty", runners)
+	}
+}
+

@@ -123,12 +123,14 @@ func (s *Store) save() error {
 	return nil
 }
 
-// matchPattern: exact subject, prefix-with-space (command arguments), or
-// prefix-with-separator (paths). Deliberately not regex (design D2).
+// matchPattern: wildcard "*", exact subject, prefix-with-space (command arguments),
+// prefix-with-separator (paths), or prefix-with-colon (tools/schemes).
 func matchPattern(subject, pattern string) bool {
-	return subject == pattern ||
+	return pattern == "*" ||
+		subject == pattern ||
 		strings.HasPrefix(subject, pattern+" ") ||
-		strings.HasPrefix(subject, pattern+"/")
+		strings.HasPrefix(subject, pattern+"/") ||
+		strings.HasPrefix(subject, pattern+":")
 }
 
 // SetRule adds or replaces one rule and persists.

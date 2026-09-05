@@ -82,6 +82,7 @@ go run ./cmd/agis
 - **🔄 Learning & Memory Loop** — Continuous observation extraction (Curator), session summarization, and user model confidence synthesis.
 - **🎭 Skill Hub & Persona** — Agentskills.io-compatible Markdown skill loading, runtime skill distillation, durable `SOUL.md`, and dynamic personality overlays.
 - **🛡️ Policy Guard & Tool Backends** — Multi-tier security postures (`sandbox`, `standard`, `full`), fail-closed approval, audit logging, and Local/Docker/SSH tool backends.
+- **🌐 Native Web Search & Content Extraction** — Pure Go multi-provider search (DuckDuckGo, Brave, Tavily, SearXNG) and safe HTML-to-Markdown extractor with SSRF prevention and size guards.
 - **🔌 Model Context Protocol (MCP) Client** — Native JSON-RPC 2.0 client supporting `stdio` subprocesses with process group isolation and `sse` network streams, dynamic tool discovery, and Policy Guard integration.
 - **🖼️ Multimodal Ingestion (Vision & Audio)** — Native vision multipart content formatting (Data URLs) and audio speech-to-text (OpenAI Whisper) across Telegram, Discord, and core Brain turns.
 - **💬 Chat Gateway Multiplexer** — Concurrent Telegram and Discord bot adapters, user allowlists, session multiplexing, and message chunking.

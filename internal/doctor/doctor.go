@@ -149,6 +149,7 @@ func (d *Doctor) Run(ctx context.Context) *Report {
 		d.checkEmbeddings,
 		d.checkMCP,
 		d.checkTools,
+		d.checkWebTools,
 	}
 
 	for _, check := range checks {

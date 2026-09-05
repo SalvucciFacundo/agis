@@ -446,3 +446,56 @@ func TestBrainLoop_MCPTool_AskWithAutoDenyApprover(t *testing.T) {
 	}
 }
 
+type fakeWebRunner struct {
+	name     string
+	executed []string
+	out      string
+}
+
+func (f *fakeWebRunner) Name() string        { return f.name }
+func (f *fakeWebRunner) Description() string { return "fake web tool" }
+func (f *fakeWebRunner) Backend() string     { return "web" }
+func (f *fakeWebRunner) Run(_ context.Context, command string) (string, error) {
+	f.executed = append(f.executed, command)
+	return f.out, nil
+}
+
+func TestBrainLoop_WebTools_EvaluationAndExecution(t *testing.T) {
+	webRunner := &fakeWebRunner{
+		name: "web_search",
+		out:  `[{"title":"Go","url":"https://go.dev","snippet":"The Go Programming Language"}]`,
+	}
+	provider := &scriptedToolProvider{rounds: [][]StreamEvent{
+		{
+			{ToolCall: &ToolCall{ID: "call_web_1", Name: "web_search", Arguments: `{"query":"golang"}`}},
+		},
+		{{Text: "here are the results"}},
+	}}
+	repo := newFakeRepo()
+	guard := &mapGuard{verdicts: map[string]Decision{"golang": DecisionAllow}}
+	brain := NewBrain(repo, provider,
+		WithSink(func(string) {}),
+		WithTools([]ToolRunner{webRunner}, guard, nil),
+	)
+
+	if err := brain.Step(context.Background(), "search golang"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	if len(webRunner.executed) != 1 || webRunner.executed[0] != `{"query":"golang"}` {
+		t.Errorf("webRunner executed = %v, want raw arguments", webRunner.executed)
+	}
+
+	msgs := provider.requests[1].Messages
+	var foundOutput bool
+	for _, m := range msgs {
+		if m.Role == RoleTool && m.ToolCallID == "call_web_1" && strings.Contains(m.Content, "https://go.dev") {
+			foundOutput = true
+		}
+	}
+	if !foundOutput {
+		t.Error("model request missing web_search output")
+	}
+}
+
+

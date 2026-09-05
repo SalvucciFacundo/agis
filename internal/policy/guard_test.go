@@ -270,6 +270,62 @@ rules:
 	}
 }
 
+func TestGuard_WebToolsEvaluation(t *testing.T) {
+	ctx := context.Background()
+	policyYAML := `
+tiers:
+  web: sandbox
+rules:
+  network:
+    - backend: "web"
+      pattern: "duckduckgo"
+      action: "allow"
+    - backend: "web"
+      pattern: "https://evil.com"
+      action: "deny"
+`
+	s, _ := newTestStore(t, policyYAML)
+
+	// 1. Sandbox with allow rule for duckduckgo -> Allow
+	allowReq := core.GuardRequest{Backend: "web", Category: core.CategoryNetwork, Subject: "duckduckgo"}
+	if got := s.Evaluate(ctx, allowReq); got != core.DecisionAllow {
+		t.Errorf("sandbox web with allow rule = %v, want allow", got)
+	}
+
+	// 2. Sandbox without rule -> Deny
+	denyReq := core.GuardRequest{Backend: "web", Category: core.CategoryNetwork, Subject: "https://example.com"}
+	if got := s.Evaluate(ctx, denyReq); got != core.DecisionDeny {
+		t.Errorf("sandbox web without rule = %v, want deny", got)
+	}
+
+	// 3. Explicit deny rule -> Deny
+	explicitDenyReq := core.GuardRequest{Backend: "web", Category: core.CategoryNetwork, Subject: "https://evil.com/payload"}
+	if got := s.Evaluate(ctx, explicitDenyReq); got != core.DecisionDeny {
+		t.Errorf("web with explicit deny rule = %v, want deny", got)
+	}
+
+	// 4. Standard posture: no rule -> Ask
+	if err := s.SetTier(ctx, "web", core.PostureStandard); err != nil {
+		t.Fatalf("SetTier error: %v", err)
+	}
+	stdReq := core.GuardRequest{Backend: "web", Category: core.CategoryNetwork, Subject: "https://golang.org"}
+	if got := s.Evaluate(ctx, stdReq); got != core.DecisionAsk {
+		t.Errorf("standard web without rule = %v, want ask", got)
+	}
+
+	// 5. Standard posture: allow rule -> Allow
+	if got := s.Evaluate(ctx, allowReq); got != core.DecisionAllow {
+		t.Errorf("standard web with allow rule = %v, want allow", got)
+	}
+
+	// 6. Full posture: blanket allow
+	s.file.Tiers["web"] = "full"
+	fullReq := core.GuardRequest{Backend: "web", Category: core.CategoryNetwork, Subject: "https://unknown-domain.com"}
+	if got := s.Evaluate(ctx, fullReq); got != core.DecisionAllow {
+		t.Errorf("full posture web = %v, want allow", got)
+	}
+}
+
 func TestDecision_String(t *testing.T) {
 	if core.DecisionAllow.String() != "allow" ||
 		core.DecisionDeny.String() != "deny" ||

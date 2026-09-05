@@ -29,6 +29,16 @@ skills:
 
 tools:
   enabled: false                  # master switch: no tools without explicit opt-in
+  web:
+    enabled: false                # native web search and content extraction tools
+    default_provider: duckduckgo  # duckduckgo | brave | tavily | searxng
+    fetch_timeout: 15s            # HTTP request timeout
+    max_fetch_bytes: 2097152      # 2MB response size limit
+    user_agent: "AGIS/1.0 (+https://github.com/SalvucciFacundo/agis)"
+    providers:
+      brave_api_key: ""           # Brave Search API key (masked in logs)
+      tavily_api_key: ""          # Tavily Search API key (masked in logs)
+      searxng_url: ""             # SearXNG instance URL (e.g. http://localhost:8080)
   docker:
     enabled: false
     image: alpine:3               # ephemeral container image
