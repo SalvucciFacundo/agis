@@ -1237,6 +1237,94 @@ func TestLoad_LLMFallbacksAndAPIKeys(t *testing.T) {
 	}
 }
 
+func TestLoad_ServerDefaultsAndExplicit(t *testing.T) {
+	tests := []struct {
+		name             string
+		yaml             string
+		wantEnabled      bool
+		wantHost         string
+		wantPort         int
+		wantAPIKey       string
+		wantCORSOrigins  []string
+		wantReadTimeout  time.Duration
+		wantWriteTimeout time.Duration
+	}{
+		{
+			name:             "empty config has server disabled with defaults",
+			yaml:             "",
+			wantEnabled:      false,
+			wantHost:         "127.0.0.1",
+			wantPort:         8080,
+			wantAPIKey:       "",
+			wantCORSOrigins:  []string{"*"},
+			wantReadTimeout:  30 * time.Second,
+			wantWriteTimeout: 120 * time.Second,
+		},
+		{
+			name: "explicit server configuration",
+			yaml: `server:
+  enabled: true
+  host: "0.0.0.0"
+  port: 9090
+  api_key: "sk-srv-12345"
+  cors_origins:
+    - "https://app.example.com"
+    - "http://localhost:3000"
+  read_timeout: 45s
+  write_timeout: 180s
+`,
+			wantEnabled:      true,
+			wantHost:         "0.0.0.0",
+			wantPort:         9090,
+			wantAPIKey:       "sk-srv-12345",
+			wantCORSOrigins:  []string{"https://app.example.com", "http://localhost:3000"},
+			wantReadTimeout:  45 * time.Second,
+			wantWriteTimeout: 180 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+			path := writeConfig(t, home, tt.yaml, 0o600)
+
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			if cfg.Server.Enabled != tt.wantEnabled {
+				t.Errorf("Server.Enabled = %v, want %v", cfg.Server.Enabled, tt.wantEnabled)
+			}
+			if cfg.Server.Host != tt.wantHost {
+				t.Errorf("Server.Host = %q, want %q", cfg.Server.Host, tt.wantHost)
+			}
+			if cfg.Server.Port != tt.wantPort {
+				t.Errorf("Server.Port = %d, want %d", cfg.Server.Port, tt.wantPort)
+			}
+			if cfg.Server.APIKey != tt.wantAPIKey {
+				t.Errorf("Server.APIKey = %q, want %q", cfg.Server.APIKey, tt.wantAPIKey)
+			}
+			if len(cfg.Server.CORSOrigins) != len(tt.wantCORSOrigins) {
+				t.Fatalf("len(Server.CORSOrigins) = %d, want %d", len(cfg.Server.CORSOrigins), len(tt.wantCORSOrigins))
+			}
+			for i, o := range cfg.Server.CORSOrigins {
+				if o != tt.wantCORSOrigins[i] {
+					t.Errorf("Server.CORSOrigins[%d] = %q, want %q", i, o, tt.wantCORSOrigins[i])
+				}
+			}
+			if cfg.Server.ReadTimeout != tt.wantReadTimeout {
+				t.Errorf("Server.ReadTimeout = %v, want %v", cfg.Server.ReadTimeout, tt.wantReadTimeout)
+			}
+			if cfg.Server.WriteTimeout != tt.wantWriteTimeout {
+				t.Errorf("Server.WriteTimeout = %v, want %v", cfg.Server.WriteTimeout, tt.wantWriteTimeout)
+			}
+		})
+	}
+}
+
+
 
 
 

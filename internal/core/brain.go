@@ -213,10 +213,33 @@ func (b *Brain) Step(ctx context.Context, input string) error {
 // On a provider error the user message and attachments remain persisted and no
 // assistant message is written.
 func (b *Brain) StepWithAttachments(ctx context.Context, input string, attachments []Attachment) error {
+	return b.StepWithSessionAndAttachments(ctx, "", input, attachments, nil)
+}
+
+// StepWithSession processes one user turn bound to a specific session/conversation ID and token sink.
+func (b *Brain) StepWithSession(ctx context.Context, sessionID string, input string, sink Sink) error {
+	return b.StepWithSessionAndAttachments(ctx, sessionID, input, nil, sink)
+}
+
+// StepWithSessionAndAttachments processes one user turn bound to a specific session and token sink with attachments.
+func (b *Brain) StepWithSessionAndAttachments(ctx context.Context, sessionID string, input string, attachments []Attachment, sink Sink) error {
 	b.turnLimitReached = false
-	conv, err := b.ensureConversation(ctx)
-	if err != nil {
-		return err
+
+	var conv *Conversation
+	var err error
+	if sessionID != "" {
+		conv, err = b.repo.GetConversation(ctx, sessionID)
+		if errors.Is(err, ErrNotFound) {
+			conv, err = b.repo.CreateConversation(ctx, sessionID)
+		}
+		if err != nil {
+			return fmt.Errorf("resolving session conversation: %w", err)
+		}
+	} else {
+		conv, err = b.ensureConversation(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	if err := b.repo.AppendMessage(ctx, conv.ID, Message{Role: RoleUser, Content: input, Attachments: attachments}); err != nil {
@@ -233,7 +256,7 @@ func (b *Brain) StepWithAttachments(ctx context.Context, input string, attachmen
 		return err
 	}
 
-	reply, err := b.runTurns(ctx, conv.ID, &messages)
+	reply, err := b.runTurns(ctx, conv.ID, &messages, sink)
 	if err != nil {
 		return err
 	}
@@ -258,7 +281,7 @@ func (b *Brain) StepWithAttachments(ctx context.Context, input string, attachmen
 // messages. After maxToolRounds the model is told to answer without tools and
 // the final round runs unadvertised. The conversation message slice is
 // mutated in place so subsequent rounds see the full exchange.
-func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message) (string, error) {
+func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message, sink Sink) (string, error) {
 	toolsEnabled := len(b.runners) > 0 && b.guard != nil
 	limit := b.maxTurns
 	if limit <= 0 {
@@ -297,7 +320,9 @@ func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message
 				continue
 			}
 			text.WriteString(ev.Text)
-			if b.sink != nil {
+			if sink != nil {
+				sink(ev.Text)
+			} else if b.sink != nil {
 				b.sink(ev.Text)
 			}
 		}

@@ -20,6 +20,7 @@ agis mcp [list|test] [flags]               # Model Context Protocol (MCP) server
 agis session [list|show|delete|rename|export|snapshot] # Conversation session manager, export & backups
 agis update [flags]                        # In-place self-updater & release inspector
 agis config [show|get|set|path] [flags]    # Inspect, query, and safely modify configuration
+agis serve [flags]                         # OpenAI-compatible REST API HTTP server (alias: agis api)
 ```
 
 ---
@@ -452,6 +453,37 @@ agis profile delete work -force
 - `agis profile show [name] [-json]`: Print resolved filesystem paths for profile components.
 - `agis profile use <name>` / `agis profile switch <name>`: Update `$AGIS_HOME/.active_profile` (`0600`).
 - `agis profile delete <name> [-force]`: Remove profile directory. Requires `-force` if profile is active.
+
+---
+
+## 13. OpenAI-Compatible REST API Server (`agis serve` / `agis api`)
+
+Starts the high-performance HTTP REST API server exposing OpenAI-compatible endpoints (`/v1/chat/completions`, `/v1/models`, `/v1/health`, and `/healthz`). It allows third-party tools, OpenAI SDKs, web frontends, and custom integrations to converse with AGIS over standard HTTP/SSE streaming.
+
+```bash
+# Start the API server on default 127.0.0.1:8080
+agis serve
+
+# Or using the 'api' alias with custom port and API key
+agis api -host 0.0.0.0 -port 9090 -api-key "sk-custom-secret"
+
+# Enable CORS for web development clients
+agis serve -cors "http://localhost:3000,http://localhost:5173"
+```
+
+### Subcommand Flags:
+- `-host <string>`: HTTP host/interface to bind (overrides `server.host`, default: `127.0.0.1`).
+- `-port <int>`: HTTP port to bind (overrides `server.port`, default: `8080`).
+- `-api-key <string>`: Bearer token for authenticating `/v1/*` endpoints (overrides `server.api_key`).
+- `-cors <string>`: Comma-separated list of allowed CORS origins (overrides `server.cors_origins`).
+- `-profile <string>`: Configuration profile context to use (e.g. `work`, `dev`).
+- `-config <path>`: Custom YAML configuration file path.
+- `-h`, `--help`: Show usage instructions and default flag values.
+
+### Endpoints:
+- `POST /v1/chat/completions`: OpenAI-compatible completions with streaming (`stream: true`) SSE chunks (`data: [DONE]`) or non-streaming JSON. Supports `X-Session-ID` header and `user` field for multi-turn session persistence.
+- `GET /v1/models`: Enumerate active and auxiliary models in standard OpenAI list format.
+- `GET /v1/health` & `GET /healthz`: Health check returning system status, active provider, model, and version.
 
 ---
 

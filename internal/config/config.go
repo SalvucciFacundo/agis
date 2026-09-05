@@ -57,7 +57,20 @@ type Config struct {
 	MCP        MCPConfig        `yaml:"mcp"`
 	Multimodal MultimodalConfig `yaml:"multimodal"`
 	Subagents  SubagentsConfig  `yaml:"subagents"`
+	Server     ServerConfig     `yaml:"server"`
 }
+
+// ServerConfig gates and tunes the OpenAI-compatible HTTP REST API server.
+type ServerConfig struct {
+	Enabled      bool          `yaml:"enabled"`
+	Host         string        `yaml:"host"`
+	Port         int           `yaml:"port"`
+	APIKey       string        `yaml:"api_key"`
+	CORSOrigins  []string      `yaml:"cors_origins"`
+	ReadTimeout  time.Duration `yaml:"read_timeout"`
+	WriteTimeout time.Duration `yaml:"write_timeout"`
+}
+
 
 // SubagentsConfig gates and tunes the native subagent delegation subsystem.
 type SubagentsConfig struct {
@@ -416,6 +429,14 @@ func defaults() *Config {
 			DefaultTimeout: 60 * time.Second,
 			MaxTurns:       8,
 		},
+		Server: ServerConfig{
+			Enabled:      false,
+			Host:         "127.0.0.1",
+			Port:         8080,
+			CORSOrigins:  []string{"*"},
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 120 * time.Second,
+		},
 	}
 }
 
@@ -527,6 +548,21 @@ func applyDefaults(cfg *Config) {
 		cfg.Subagents.DefaultTimeout = 60 * time.Second
 	} else if cfg.Subagents.DefaultTimeout > 300*time.Second {
 		cfg.Subagents.DefaultTimeout = 300 * time.Second
+	}
+	if cfg.Server.Host == "" {
+		cfg.Server.Host = "127.0.0.1"
+	}
+	if cfg.Server.Port <= 0 {
+		cfg.Server.Port = 8080
+	}
+	if len(cfg.Server.CORSOrigins) == 0 {
+		cfg.Server.CORSOrigins = []string{"*"}
+	}
+	if cfg.Server.ReadTimeout <= 0 {
+		cfg.Server.ReadTimeout = 30 * time.Second
+	}
+	if cfg.Server.WriteTimeout <= 0 {
+		cfg.Server.WriteTimeout = 120 * time.Second
 	}
 }
 

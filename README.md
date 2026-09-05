@@ -90,6 +90,7 @@ go run ./cmd/agis
 - **🧩 Plugin Manager** — Dynamic external plugin discovery (`plugin.json`), stdio tool runner bridge, skill extraction, and persistent state management.
 - **🔗 HMAC Webhook Server** — HTTP event listener with constant-time HMAC-SHA256 signature verification and brain event dispatching.
 - **🤖 Native Subagent Delegation** — Spawns isolated, ephemeral child agents (`delegate_task`) with bounded execution loops, ephemeral state isolation, global concurrency limits, timeout propagation, and Policy Guard gating.
+- **🚀 OpenAI-Compatible REST API Server** — Exposes `/v1/chat/completions` (streaming SSE & non-streaming), `/v1/models`, and health probes, bridging external clients, third-party AI frontends, and OpenAI SDKs to the AGIS cognitive engine.
 
 ---
 
@@ -170,11 +171,15 @@ AGIS provides modular daemons and management subcommands alongside the default i
 # 11. In-Place Self-Updater & Release Inspector
 ./bin/agis update [--check] [--backup] [--version <tag>] [--force]
 
-# 10. Configuration Management & Inspection
+# 12. Configuration Management & Inspection
 ./bin/agis config show [--json] [--reveal]
 ./bin/agis config get <key> [--reveal] [--json]
 ./bin/agis config set <key> <value>
 ./bin/agis config path
+
+# 13. OpenAI-Compatible REST API Server
+./bin/agis serve [--port 8080] [--host 127.0.0.1] [--api-key sk-...]
+./bin/agis api -cors "http://localhost:3000"
 ```
 
 Full CLI reference in [docs/cli.md](docs/cli.md).

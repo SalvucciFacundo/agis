@@ -6,6 +6,11 @@ import (
 
 const maskValue = "[MASKED]"
 
+// MaskConfig is an alias for MaskSecrets for uniform API naming.
+func MaskConfig(cfg *Config) *Config {
+	return MaskSecrets(cfg)
+}
+
 // MaskSecrets returns a deep copy of cfg with sensitive credential fields obfuscated.
 func MaskSecrets(cfg *Config) *Config {
 	if cfg == nil {
@@ -67,5 +72,8 @@ func maskFields(cfg *Config) {
 	}
 	if cfg.Tools.Web.Providers.TavilyAPIKey != "" {
 		cfg.Tools.Web.Providers.TavilyAPIKey = maskValue
+	}
+	if cfg.Server.APIKey != "" {
+		cfg.Server.APIKey = maskValue
 	}
 }

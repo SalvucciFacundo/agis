@@ -121,3 +121,26 @@ func TestMaskSecrets_WebProviders(t *testing.T) {
 		t.Errorf("Masked DefaultProvider = %q, want 'brave'", masked.Tools.Web.DefaultProvider)
 	}
 }
+
+func TestMaskSecrets_ServerAPIKey(t *testing.T) {
+	orig := &config.Config{
+		Server: config.ServerConfig{
+			Enabled: true,
+			Host:    "127.0.0.1",
+			Port:    8080,
+			APIKey:  "sk-server-secret-key-12345",
+		},
+	}
+
+	masked := config.MaskSecrets(orig)
+
+	if orig.Server.APIKey != "sk-server-secret-key-12345" {
+		t.Errorf("Original Server.APIKey mutated: %q", orig.Server.APIKey)
+	}
+	if masked.Server.APIKey != "[MASKED]" {
+		t.Errorf("Masked Server.APIKey = %q, want '[MASKED]'", masked.Server.APIKey)
+	}
+	if masked.Server.Host != "127.0.0.1" || masked.Server.Port != 8080 {
+		t.Errorf("Non-secret Server fields altered: %+v", masked.Server)
+	}
+}

@@ -135,6 +135,15 @@ subagents:
   max_depth: 1                    # maximum recursion depth limit (clamped 1-2)
   default_timeout: 60s            # execution timeout per subagent task (clamped 1s-300s)
   max_turns: 8                    # default maximum turns per subagent task (clamped 1-15)
+
+server:
+  enabled: false                  # master switch for OpenAI-compatible REST API server
+  host: "127.0.0.1"               # binding address (default: "127.0.0.1")
+  port: 8080                      # binding port (default: 8080)
+  api_key: ""                     # optional Bearer token for /v1/* endpoints (masked in logs)
+  cors_origins: ["*"]             # list of allowed CORS origins
+  read_timeout: 30s               # maximum duration for reading request (default: 30s)
+  write_timeout: 120s             # maximum duration for writing response (default: 120s)
 ```
 
 ## Precedence
@@ -195,6 +204,13 @@ A missing file is **not an error**: the loader falls back to built-in defaults. 
 | `subagents.max_depth` | `1` |
 | `subagents.default_timeout` | `60s` |
 | `subagents.max_turns` | `8` |
+| `server.enabled` | `false` |
+| `server.host` | `127.0.0.1` |
+| `server.port` | `8080` |
+| `server.api_key` | (empty) |
+| `server.cors_origins` | `["*"]` |
+| `server.read_timeout` | `30s` |
+| `server.write_timeout` | `120s` |
 
 Defaults apply per-field: partial configuration retains safe defaults for omitted fields.
 
@@ -261,6 +277,30 @@ Auxiliary tasks can override models and providers independently from the primary
 - `multimodal.vision.provider` / `multimodal.vision.model`: Dedicated model for vision processing.
 - `multimodal.audio.provider` / `multimodal.audio.model`: Dedicated model for audio transcription.
 - `embeddings.provider` / `embeddings.model`: Dedicated model for vector embeddings.
+
+### 9. REST API Server (`server`)
+The `server` block configures the OpenAI-compatible HTTP API server:
+- `server.enabled`: Enable API server.
+- `server.host`: Host/interface to bind (default: `127.0.0.1`).
+- `server.port`: TCP port to listen on (default: `8080`).
+- `server.api_key`: Optional Bearer token for authenticating `/v1/*` requests with constant-time validation.
+- `server.cors_origins`: Allowed origins for CORS headers (default: `["*"]`).
+- `server.read_timeout`: Timeout for reading HTTP request headers and body (default: `30s`).
+- `server.write_timeout`: Timeout for response writes (default: `120s`).
+
+### 10. Expanded LLM Provider Presets Catalog
+AGIS includes built-in canonical endpoints for major LLM providers. Setting `provider` resolves the default `base_url` automatically:
+- `ollama`: `http://localhost:11434`
+- `openai`: `https://api.openai.com/v1`
+- `openrouter`: `https://openrouter.ai/api/v1`
+- `anthropic`: `https://api.anthropic.com` (native `/v1/messages` Messages API)
+- `gemini`: `https://generativelanguage.googleapis.com/v1beta/openai/`
+- `deepseek`: `https://api.deepseek.com/v1`
+- `groq`: `https://api.groq.com/openai/v1`
+- `mistral`: `https://api.mistral.ai/v1`
+- `xai`: `https://api.x.ai/v1`
+- `together`: `https://api.together.xyz/v1`
+- `cohere`: `https://api.cohere.com/v2`
 
 ---
 

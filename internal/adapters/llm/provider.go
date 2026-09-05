@@ -8,12 +8,16 @@ import (
 )
 
 // NewProvider returns the Provider adapter selected by cfg.Provider. The value
-// "ollama" selects the local Ollama adapter; every other value — including
-// "openai" and the empty string — selects the OpenAI adapter, which any
-// OpenAI-compatible endpoint can stand in for.
+// "ollama" selects the local Ollama adapter; "anthropic" selects the native
+// Anthropic adapter; every other value — including "openai", "gemini", "deepseek",
+// "groq", "mistral", "xai", "together", "cohere", "openrouter", and custom —
+// selects the OpenAI adapter configured with the corresponding preset or custom base URL.
 func NewProvider(cfg config.LLMConfig) core.Provider {
 	if strings.EqualFold(cfg.Provider, providerOllama) {
 		return NewOllama(cfg)
+	}
+	if strings.EqualFold(cfg.Provider, providerAnthropic) {
+		return NewAnthropic(cfg)
 	}
 	return NewOpenAI(cfg)
 }

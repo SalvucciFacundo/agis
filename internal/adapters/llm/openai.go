@@ -18,10 +18,7 @@ var _ core.Provider = (*OpenAI)(nil)
 
 // NewOpenAI returns an OpenAI-backed Provider configured from cfg.
 func NewOpenAI(cfg config.LLMConfig) *OpenAI {
-	baseURL := openAIBaseURL
-	if cfg.BaseURL != "" {
-		baseURL = cfg.BaseURL
-	}
+	baseURL := ResolveBaseURL(cfg.Provider, cfg.BaseURL)
 	return &OpenAI{
 		client: NewClientWithPool(baseURL, NewCredentialPool(cfg.APIKey, cfg.APIKeys)),
 		model:  cfg.Model,
