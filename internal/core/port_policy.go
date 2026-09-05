@@ -49,9 +49,10 @@ const (
 
 // Policy rule categories.
 const (
-	CategoryCommands = "commands"
-	CategoryFiles    = "files"
-	CategoryNetwork  = "network"
+	CategoryCommands  = "commands"
+	CategoryFiles     = "files"
+	CategoryNetwork   = "network"
+	CategoryExecution = "execution"
 )
 
 // GuardRequest identifies one policy evaluation subject.

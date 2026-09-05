@@ -498,4 +498,118 @@ func TestBrainLoop_WebTools_EvaluationAndExecution(t *testing.T) {
 	}
 }
 
+type fakeSubagentRunner struct {
+	name     string
+	executed []string
+	out      string
+}
+
+func (f *fakeSubagentRunner) Name() string        { return f.name }
+func (f *fakeSubagentRunner) Description() string { return "fake subagent runner" }
+func (f *fakeSubagentRunner) Backend() string     { return "subagent" }
+func (f *fakeSubagentRunner) Run(_ context.Context, command string) (string, error) {
+	f.executed = append(f.executed, command)
+	return f.out, nil
+}
+
+type capturingGuard struct {
+	requests []GuardRequest
+	verdict  Decision
+}
+
+func (c *capturingGuard) Evaluate(_ context.Context, req GuardRequest) Decision {
+	c.requests = append(c.requests, req)
+	if c.verdict != 0 {
+		return c.verdict
+	}
+	return DecisionAllow
+}
+
+func TestBrainLoop_SubagentTool_EvaluationAndExecution(t *testing.T) {
+	subagentRunner := &fakeSubagentRunner{
+		name: "delegate_task",
+		out:  "subagent task completed successfully",
+	}
+	provider := &scriptedToolProvider{rounds: [][]StreamEvent{
+		{
+			{ToolCall: &ToolCall{ID: "call_sub_1", Name: "delegate_task", Arguments: `{"task":"analyze logs","context":"log data","max_turns":5}`}},
+		},
+		{{Text: "task finished"}},
+	}}
+	repo := newFakeRepo()
+	guard := &capturingGuard{verdict: DecisionAllow}
+	brain := NewBrain(repo, provider,
+		WithSink(func(string) {}),
+		WithTools([]ToolRunner{subagentRunner}, guard, nil),
+	)
+
+	if err := brain.Step(context.Background(), "delegate log analysis"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	if len(guard.requests) != 1 {
+		t.Fatalf("guard evaluated %d times, want 1", len(guard.requests))
+	}
+	req := guard.requests[0]
+	if req.Backend != "subagent" {
+		t.Errorf("guard request Backend = %q, want %q", req.Backend, "subagent")
+	}
+	if req.Category != CategoryExecution {
+		t.Errorf("guard request Category = %q, want %q", req.Category, CategoryExecution)
+	}
+	if req.Subject != "analyze logs" {
+		t.Errorf("guard request Subject = %q, want %q", req.Subject, "analyze logs")
+	}
+
+	if len(subagentRunner.executed) != 1 || subagentRunner.executed[0] != `{"task":"analyze logs","context":"log data","max_turns":5}` {
+		t.Errorf("subagentRunner executed = %v", subagentRunner.executed)
+	}
+
+	msgs := provider.requests[1].Messages
+	var foundOutput bool
+	for _, m := range msgs {
+		if m.Role == RoleTool && m.ToolCallID == "call_sub_1" && strings.Contains(m.Content, "subagent task completed successfully") {
+			foundOutput = true
+		}
+	}
+	if !foundOutput {
+		t.Error("model request missing delegate_task output")
+	}
+}
+
+func TestBrainLoop_SubagentTool_LongTaskTruncationInGuard(t *testing.T) {
+	subagentRunner := &fakeSubagentRunner{
+		name: "delegate_task",
+		out:  "task completed",
+	}
+	longTask := strings.Repeat("A", 300)
+	provider := &scriptedToolProvider{rounds: [][]StreamEvent{
+		{
+			{ToolCall: &ToolCall{ID: "call_sub_long", Name: "delegate_task", Arguments: `{"task":"` + longTask + `"}`}},
+		},
+		{{Text: "done"}},
+	}}
+	repo := newFakeRepo()
+	guard := &capturingGuard{verdict: DecisionAllow}
+	brain := NewBrain(repo, provider,
+		WithSink(func(string) {}),
+		WithTools([]ToolRunner{subagentRunner}, guard, nil),
+	)
+
+	if err := brain.Step(context.Background(), "delegate long task"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	if len(guard.requests) != 1 {
+		t.Fatalf("guard evaluated %d times, want 1", len(guard.requests))
+	}
+	req := guard.requests[0]
+	if len(req.Subject) != 256 {
+		t.Errorf("guard request Subject len = %d, want 256", len(req.Subject))
+	}
+	if req.Subject != strings.Repeat("A", 256) {
+		t.Errorf("guard request Subject truncated incorrectly")
+	}
+}
+
 

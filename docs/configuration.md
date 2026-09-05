@@ -116,6 +116,13 @@ multimodal:
     provider: "openai"            # transcription provider ("openai" / Whisper)
     model: "whisper-1"            # transcription model
     max_audio_size_mb: 25         # maximum audio size limit in MB (default: 25)
+
+subagents:
+  enabled: true                   # master switch for native subagent delegation (delegate_task)
+  max_concurrent: 3               # global concurrency limit for simultaneous subagents (clamped 1-10)
+  max_depth: 1                    # maximum recursion depth limit (clamped 1-2)
+  default_timeout: 60s            # execution timeout per subagent task (clamped 1s-300s)
+  max_turns: 8                    # default maximum turns per subagent task (clamped 1-15)
 ```
 
 ## Precedence
@@ -171,6 +178,11 @@ A missing file is **not an error**: the loader falls back to built-in defaults. 
 | `webhook.path` | `/webhook` |
 | `webhook.secret` | (empty) |
 | `webhook.default_session_id` | `webhook-events` |
+| `subagents.enabled` | `true` |
+| `subagents.max_concurrent` | `3` |
+| `subagents.max_depth` | `1` |
+| `subagents.default_timeout` | `60s` |
+| `subagents.max_turns` | `8` |
 
 Defaults apply per-field: partial configuration retains safe defaults for omitted fields.
 
@@ -215,6 +227,14 @@ The `webhook` block configures the HTTP event listener:
 - `secret`: Secret key used for HMAC-SHA256 signature verification via `X-Hub-Signature-256` or `X-Signature`.
 - `default_session_id`: Default session prefix for incoming events (e.g. `webhook:<event_type>`).
 - `target` (optional): Outbound chat destination to forward brain responses.
+
+### 6. Subagents (`subagents`)
+The `subagents` block configures isolated, ephemeral subagent task delegation (`delegate_task` tool):
+- `subagents.enabled`: Master switch for subagent spawning and delegation (defaults to `true`).
+- `subagents.max_concurrent`: Global limit on concurrently active child subagent loops (defaults to `3`, clamped `1-10`).
+- `subagents.max_depth`: Maximum recursion depth allowed (defaults to `1`, hard maximum `2`).
+- `subagents.default_timeout`: Execution deadline for a child subagent run (defaults to `60s`, clamped `1s-300s`).
+- `subagents.max_turns`: Execution turn limit for child brain reasoning loops (defaults to `8`, clamped `1-15`).
 
 ---
 

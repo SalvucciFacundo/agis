@@ -333,3 +333,62 @@ func TestDecision_String(t *testing.T) {
 		t.Fatal("decision strings drifted")
 	}
 }
+
+func TestGuard_SubagentEvaluation(t *testing.T) {
+	ctx := context.Background()
+	policyYAML := `
+tiers:
+  subagent: sandbox
+rules:
+  execution:
+    - backend: "subagent"
+      pattern: "allowed-task"
+      action: "allow"
+    - backend: "subagent"
+      pattern: "forbidden-task"
+      action: "deny"
+`
+	s, _ := newTestStore(t, policyYAML)
+
+	// 1. Sandbox with allow rule -> Allow
+	allowReq := core.GuardRequest{Backend: "subagent", Category: core.CategoryExecution, Subject: "allowed-task"}
+	if got := s.Evaluate(ctx, allowReq); got != core.DecisionAllow {
+		t.Errorf("sandbox subagent with allow rule = %v, want allow", got)
+	}
+
+	// 2. Sandbox without rule -> Deny
+	unapprovedReq := core.GuardRequest{Backend: "subagent", Category: core.CategoryExecution, Subject: "random-task"}
+	if got := s.Evaluate(ctx, unapprovedReq); got != core.DecisionDeny {
+		t.Errorf("sandbox subagent without rule = %v, want deny", got)
+	}
+
+	// 3. Explicit deny rule -> Deny
+	denyReq := core.GuardRequest{Backend: "subagent", Category: core.CategoryExecution, Subject: "forbidden-task"}
+	if got := s.Evaluate(ctx, denyReq); got != core.DecisionDeny {
+		t.Errorf("subagent with explicit deny rule = %v, want deny", got)
+	}
+
+	// 4. Standard posture without rule -> Ask
+	if err := s.SetTier(ctx, "subagent", core.PostureStandard); err != nil {
+		t.Fatalf("SetTier error: %v", err)
+	}
+	stdReq := core.GuardRequest{Backend: "subagent", Category: core.CategoryExecution, Subject: "unmatched-task"}
+	if got := s.Evaluate(ctx, stdReq); got != core.DecisionAsk {
+		t.Errorf("standard subagent without rule = %v, want ask", got)
+	}
+
+	// 5. Standard posture with allow rule -> Allow
+	if got := s.Evaluate(ctx, allowReq); got != core.DecisionAllow {
+		t.Errorf("standard subagent with allow rule = %v, want allow", got)
+	}
+
+	// 6. Full posture -> Allow
+	s.SetTier(ctx, "subagent", core.PostureStandard) // clear and override
+	s.ClearSessionGrants()
+	// manually test posture full in memory
+	fullStore, _ := newTestStore(t, "tiers:\n  subagent: full\n")
+	fullReq := core.GuardRequest{Backend: "subagent", Category: core.CategoryExecution, Subject: "any-task"}
+	if got := fullStore.Evaluate(ctx, fullReq); got != core.DecisionAllow {
+		t.Errorf("full posture subagent = %v, want allow", got)
+	}
+}

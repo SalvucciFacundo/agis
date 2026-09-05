@@ -81,6 +81,11 @@ type Brain struct {
 	// lifetime; it is the nudge cadence counter.
 	assistantCount int
 
+	// maxTurns bounds tool rounds in runTurns. If <= 0, defaults to maxToolRounds (8).
+	maxTurns int
+	// turnLimitReached records whether the last Step reached the turn limit cap.
+	turnLimitReached bool
+
 	// activeID tracks the session manager's active conversation when M5 is
 	// wired. Empty means "use LatestConversation" (M1 fallback).
 	activeID string
@@ -146,6 +151,17 @@ func WithEvolution(e EvolutionLayer) Option {
 	return func(b *Brain) { b.evolution = e }
 }
 
+// WithMaxTurns sets the maximum tool rounds for Brain. A non-positive value
+// defaults to maxToolRounds (8).
+func WithMaxTurns(n int) Option {
+	return func(b *Brain) { b.maxTurns = n }
+}
+
+// TurnLimitReached reports whether the last Step reached the maximum tool turn limit.
+func (b *Brain) TurnLimitReached() bool {
+	return b.turnLimitReached
+}
+
 // SetOverlay applies or clears (empty text) the session personality overlay.
 // It takes effect from the next turn on.
 func (b *Brain) SetOverlay(text string) { b.overlay = text }
@@ -197,6 +213,7 @@ func (b *Brain) Step(ctx context.Context, input string) error {
 // On a provider error the user message and attachments remain persisted and no
 // assistant message is written.
 func (b *Brain) StepWithAttachments(ctx context.Context, input string, attachments []Attachment) error {
+	b.turnLimitReached = false
 	conv, err := b.ensureConversation(ctx)
 	if err != nil {
 		return err
@@ -243,10 +260,17 @@ func (b *Brain) StepWithAttachments(ctx context.Context, input string, attachmen
 // mutated in place so subsequent rounds see the full exchange.
 func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message) (string, error) {
 	toolsEnabled := len(b.runners) > 0 && b.guard != nil
+	limit := b.maxTurns
+	if limit <= 0 {
+		limit = maxToolRounds
+	}
 
 	for round := 0; ; round++ {
 		req := ChatRequest{Messages: *messages}
-		capReached := toolsEnabled && round >= maxToolRounds
+		capReached := toolsEnabled && round >= limit
+		if capReached {
+			b.turnLimitReached = true
+		}
 		if toolsEnabled && !capReached {
 			req.Tools = toolDefs(b.runners)
 		}
@@ -276,6 +300,10 @@ func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message
 			if b.sink != nil {
 				b.sink(ev.Text)
 			}
+		}
+
+		if ctx.Err() != nil {
+			return "", ctx.Err()
 		}
 
 		if len(calls) == 0 {
@@ -363,6 +391,19 @@ func (b *Brain) executeTool(ctx context.Context, call ToolCall) string {
 			} else if parsed.Query != "" {
 				subject = parsed.Query
 			}
+		}
+	} else if runner.Backend() == "subagent" {
+		category = CategoryExecution
+		input = call.Arguments
+		subject = call.Arguments
+		var parsed struct {
+			Task string `json:"task"`
+		}
+		if err := json.Unmarshal([]byte(call.Arguments), &parsed); err == nil && strings.TrimSpace(parsed.Task) != "" {
+			subject = strings.TrimSpace(parsed.Task)
+		}
+		if len(subject) > 256 {
+			subject = subject[:256]
 		}
 	} else {
 		cmd, err := commandFromArgs(call.Arguments)

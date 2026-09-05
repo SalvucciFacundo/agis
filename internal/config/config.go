@@ -56,6 +56,16 @@ type Config struct {
 	Embeddings EmbeddingsConfig `yaml:"embeddings"`
 	MCP        MCPConfig        `yaml:"mcp"`
 	Multimodal MultimodalConfig `yaml:"multimodal"`
+	Subagents  SubagentsConfig  `yaml:"subagents"`
+}
+
+// SubagentsConfig gates and tunes the native subagent delegation subsystem.
+type SubagentsConfig struct {
+	Enabled        bool          `yaml:"enabled"`
+	MaxConcurrent  int           `yaml:"max_concurrent"`
+	MaxDepth       int           `yaml:"max_depth"`
+	DefaultTimeout time.Duration `yaml:"default_timeout"`
+	MaxTurns       int           `yaml:"max_turns"`
 }
 
 // MultimodalConfig gates and configures the M9 multimodal vision and audio subsystem.
@@ -384,6 +394,13 @@ func defaults() *Config {
 				MaxAudioSizeMB: 25,
 			},
 		},
+		Subagents: SubagentsConfig{
+			Enabled:        true,
+			MaxConcurrent:  3,
+			MaxDepth:       1,
+			DefaultTimeout: 60 * time.Second,
+			MaxTurns:       8,
+		},
 	}
 }
 
@@ -475,6 +492,26 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Tools.Web.UserAgent == "" {
 		cfg.Tools.Web.UserAgent = defaultWebUserAgent
+	}
+	if cfg.Subagents.MaxConcurrent <= 0 {
+		cfg.Subagents.MaxConcurrent = 1
+	} else if cfg.Subagents.MaxConcurrent > 10 {
+		cfg.Subagents.MaxConcurrent = 10
+	}
+	if cfg.Subagents.MaxDepth <= 0 {
+		cfg.Subagents.MaxDepth = 1
+	} else if cfg.Subagents.MaxDepth > 2 {
+		cfg.Subagents.MaxDepth = 2
+	}
+	if cfg.Subagents.MaxTurns <= 0 {
+		cfg.Subagents.MaxTurns = 8
+	} else if cfg.Subagents.MaxTurns > 15 {
+		cfg.Subagents.MaxTurns = 15
+	}
+	if cfg.Subagents.DefaultTimeout <= 0 {
+		cfg.Subagents.DefaultTimeout = 60 * time.Second
+	} else if cfg.Subagents.DefaultTimeout > 300*time.Second {
+		cfg.Subagents.DefaultTimeout = 300 * time.Second
 	}
 }
 

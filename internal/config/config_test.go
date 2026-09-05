@@ -1059,5 +1059,101 @@ func TestLoad_WebDefaultsAndExplicit(t *testing.T) {
 	}
 }
 
+func TestLoad_SubagentsDefaultsAndClamping(t *testing.T) {
+	tests := []struct {
+		name              string
+		yaml              string
+		wantEnabled       bool
+		wantMaxConcurrent int
+		wantMaxDepth      int
+		wantDefaultTimeout time.Duration
+		wantMaxTurns       int
+	}{
+		{
+			name:              "empty config has subagents enabled with defaults",
+			yaml:              "",
+			wantEnabled:       true,
+			wantMaxConcurrent: 3,
+			wantMaxDepth:      1,
+			wantDefaultTimeout: 60 * time.Second,
+			wantMaxTurns:       8,
+		},
+		{
+			name: "explicit valid subagents configuration",
+			yaml: `subagents:
+  enabled: false
+  max_concurrent: 5
+  max_depth: 2
+  default_timeout: 45s
+  max_turns: 12
+`,
+			wantEnabled:       false,
+			wantMaxConcurrent: 5,
+			wantMaxDepth:      2,
+			wantDefaultTimeout: 45 * time.Second,
+			wantMaxTurns:       12,
+		},
+		{
+			name: "clamping under minimum boundaries",
+			yaml: `subagents:
+  enabled: true
+  max_concurrent: 0
+  max_depth: -1
+  default_timeout: 0s
+  max_turns: 0
+`,
+			wantEnabled:       true,
+			wantMaxConcurrent: 1,
+			wantMaxDepth:      1,
+			wantDefaultTimeout: 60 * time.Second,
+			wantMaxTurns:       8,
+		},
+		{
+			name: "clamping over maximum boundaries",
+			yaml: `subagents:
+  enabled: true
+  max_concurrent: 20
+  max_depth: 10
+  default_timeout: 600s
+  max_turns: 50
+`,
+			wantEnabled:       true,
+			wantMaxConcurrent: 10,
+			wantMaxDepth:      2,
+			wantDefaultTimeout: 300 * time.Second,
+			wantMaxTurns:       15,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+			path := writeConfig(t, home, tt.yaml, 0o600)
+
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			if cfg.Subagents.Enabled != tt.wantEnabled {
+				t.Errorf("Subagents.Enabled = %v, want %v", cfg.Subagents.Enabled, tt.wantEnabled)
+			}
+			if cfg.Subagents.MaxConcurrent != tt.wantMaxConcurrent {
+				t.Errorf("Subagents.MaxConcurrent = %d, want %d", cfg.Subagents.MaxConcurrent, tt.wantMaxConcurrent)
+			}
+			if cfg.Subagents.MaxDepth != tt.wantMaxDepth {
+				t.Errorf("Subagents.MaxDepth = %d, want %d", cfg.Subagents.MaxDepth, tt.wantMaxDepth)
+			}
+			if cfg.Subagents.DefaultTimeout != tt.wantDefaultTimeout {
+				t.Errorf("Subagents.DefaultTimeout = %v, want %v", cfg.Subagents.DefaultTimeout, tt.wantDefaultTimeout)
+			}
+			if cfg.Subagents.MaxTurns != tt.wantMaxTurns {
+				t.Errorf("Subagents.MaxTurns = %d, want %d", cfg.Subagents.MaxTurns, tt.wantMaxTurns)
+			}
+		})
+	}
+}
+
 
 

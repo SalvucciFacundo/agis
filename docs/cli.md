@@ -246,6 +246,7 @@ agis doctor -no-color
 8. **Model Context Protocol (MCP)**: Validates command paths for `stdio` subprocesses and URL syntax for `sse` transports.
 9. **Execution Backends & System Tools**: Validates local shell (`sh`), `docker` CLI, and `ssh` client availability.
 10. **Web Search & Content Extraction Tools**: Checks enabled status, default search provider (DuckDuckGo, Brave, Tavily, SearXNG), and validates required API keys.
+11. **Subagent Delegation Engine**: Checks subagent enabled status, active concurrency limit, recursion depth limit, timeout deadline, and maximum turns per task.
 
 ---
 

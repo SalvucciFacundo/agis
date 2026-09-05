@@ -89,6 +89,7 @@ go run ./cmd/agis
 - **⏱️ Cron Scheduler Daemon** — Autonomous scheduled tasks with 5-field cron and `@every` duration expressions, sandbox policy, and chat notification delivery.
 - **🧩 Plugin Manager** — Dynamic external plugin discovery (`plugin.json`), stdio tool runner bridge, skill extraction, and persistent state management.
 - **🔗 HMAC Webhook Server** — HTTP event listener with constant-time HMAC-SHA256 signature verification and brain event dispatching.
+- **🤖 Native Subagent Delegation** — Spawns isolated, ephemeral child agents (`delegate_task`) with bounded execution loops, ephemeral state isolation, global concurrency limits, timeout propagation, and Policy Guard gating.
 
 ---
 

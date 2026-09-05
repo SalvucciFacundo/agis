@@ -23,6 +23,7 @@ import (
 	"github.com/SalvucciFacundo/agis/internal/policy"
 	"github.com/SalvucciFacundo/agis/internal/session"
 	"github.com/SalvucciFacundo/agis/internal/skills"
+	"github.com/SalvucciFacundo/agis/internal/subagents"
 	"github.com/SalvucciFacundo/agis/internal/tools"
 )
 
@@ -171,19 +172,24 @@ func main() {
 			approvalResp = make(chan core.Scope)
 		}
 		runners := tools.Select(cfg.Tools, slog.Default())
+		resolvedApprover := func(ctx context.Context, req core.GuardRequest) core.Scope {
+			sc := approver(ctx, req)
+			switch sc {
+			case core.ScopeSession, core.ScopeAlways:
+				if err := pstore.ResolveAsk(ctx, req, sc); err != nil {
+					slog.Warn("policy: resolving ask", "error", err)
+				}
+			}
+			return sc
+		}
+		if cfg.Subagents.Enabled {
+			subEngine := subagents.NewEngine(cfg.Subagents, repo, provider, pstore, resolvedApprover, runners)
+			runners = append(runners, tools.FromSubagentsEngine(subEngine))
+		}
 		brainOpts = append(brainOpts, core.WithTools(
 			runners,
 			pstore,
-			func(ctx context.Context, req core.GuardRequest) core.Scope {
-				sc := approver(ctx, req)
-				switch sc {
-				case core.ScopeSession, core.ScopeAlways:
-					if err := pstore.ResolveAsk(ctx, req, sc); err != nil {
-						slog.Warn("policy: resolving ask", "error", err)
-					}
-				}
-				return sc
-			},
+			resolvedApprover,
 		))
 	}
 

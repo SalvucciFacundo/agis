@@ -103,7 +103,7 @@ func (s *Store) evaluate(req core.GuardRequest) core.Decision {
 			return core.DecisionDeny
 		}
 		if allowMatched {
-			if strings.HasPrefix(req.Backend, "mcp:") || req.Backend == "web" || readOnlySubject(req) {
+			if strings.HasPrefix(req.Backend, "mcp:") || req.Backend == "web" || req.Backend == "subagent" || readOnlySubject(req) {
 				return core.DecisionAllow
 			}
 		}

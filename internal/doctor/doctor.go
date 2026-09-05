@@ -150,6 +150,7 @@ func (d *Doctor) Run(ctx context.Context) *Report {
 		d.checkMCP,
 		d.checkTools,
 		d.checkWebTools,
+		d.checkSubagents,
 	}
 
 	for _, check := range checks {

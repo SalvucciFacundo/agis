@@ -129,6 +129,21 @@ func TestGet(t *testing.T) {
 			wantVal: "tvly-key-accessor",
 		},
 		{
+			name:    "get subagents enabled",
+			key:     "subagents.enabled",
+			wantVal: true,
+		},
+		{
+			name:    "get subagents max concurrent",
+			key:     "subagents.max_concurrent",
+			wantVal: 3,
+		},
+		{
+			name:    "get subagents default timeout",
+			key:     "subagents.default_timeout",
+			wantVal: 60 * time.Second,
+		},
+		{
 			name:      "get unknown key returns error",
 			key:       "invalid.unknown.key",
 			wantErr:   true,
@@ -241,6 +256,20 @@ func TestSet(t *testing.T) {
 		}
 		if cfg.Tools.Web.Providers.Brave.APIKey != "new-bsa-key" {
 			t.Errorf("Tools.Web.Providers.Brave.APIKey = %q, want new-bsa-key", cfg.Tools.Web.Providers.Brave.APIKey)
+		}
+
+		// Subagents Set operations
+		if err := config.Set(cfg, "subagents.max_concurrent", "7"); err != nil {
+			t.Fatalf("Set(subagents.max_concurrent) error: %v", err)
+		}
+		if cfg.Subagents.MaxConcurrent != 7 {
+			t.Errorf("Subagents.MaxConcurrent = %d, want 7", cfg.Subagents.MaxConcurrent)
+		}
+		if err := config.Set(cfg, "subagents.default_timeout", "120s"); err != nil {
+			t.Fatalf("Set(subagents.default_timeout) error: %v", err)
+		}
+		if cfg.Subagents.DefaultTimeout != 120*time.Second {
+			t.Errorf("Subagents.DefaultTimeout = %v, want 120s", cfg.Subagents.DefaultTimeout)
 		}
 	})
 
