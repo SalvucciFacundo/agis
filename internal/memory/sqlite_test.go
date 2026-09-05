@@ -198,6 +198,113 @@ func TestLatestConversation_ReturnsMostRecentlyUpdated(t *testing.T) {
 	}
 }
 
+func TestDeleteConversation_Cascade(t *testing.T) {
+	ctx := context.Background()
+	repo := openTestRepo(t)
+
+	// Create conversation 1 with messages, attachments, and snapshots.
+	conv1, err := repo.CreateConversation(ctx, "Session 1")
+	if err != nil {
+		t.Fatalf("CreateConversation(1) error = %v", err)
+	}
+
+	msg := core.Message{
+		Role:    core.RoleUser,
+		Content: "test message with attachment",
+		Attachments: []core.Attachment{
+			{
+				Type:     "image",
+				MimeType: "image/png",
+				Data:     []byte{0x89, 0x50, 0x4E, 0x47},
+				Name:     "photo.png",
+			},
+		},
+	}
+	if err := repo.AppendMessage(ctx, conv1.ID, msg); err != nil {
+		t.Fatalf("AppendMessage() error = %v", err)
+	}
+
+	snap, err := repo.CreateSnapshot(ctx, conv1.ID)
+	if err != nil {
+		t.Fatalf("CreateSnapshot() error = %v", err)
+	}
+	if snap == nil {
+		t.Fatal("expected snapshot, got nil")
+	}
+
+	// Create conversation 2 to verify isolation.
+	conv2, err := repo.CreateConversation(ctx, "Session 2")
+	if err != nil {
+		t.Fatalf("CreateConversation(2) error = %v", err)
+	}
+	if err := repo.AppendMessage(ctx, conv2.ID, core.Message{Role: core.RoleUser, Content: "session 2 msg"}); err != nil {
+		t.Fatalf("AppendMessage(2) error = %v", err)
+	}
+
+	// Delete conversation 1 via Repository method.
+	if err := repo.DeleteConversation(ctx, conv1.ID); err != nil {
+		t.Fatalf("DeleteConversation() error = %v", err)
+	}
+
+	// Verify conversation 1 is gone.
+	if _, err := repo.GetConversation(ctx, conv1.ID); !errors.Is(err, core.ErrNotFound) {
+		t.Errorf("GetConversation(1) error = %v, want core.ErrNotFound", err)
+	}
+
+	// Verify messages for conversation 1 are cascaded.
+	var msgCount int
+	if err := repo.db.QueryRowContext(ctx, `SELECT count(*) FROM messages WHERE conversation_id = ?`, conv1.ID).Scan(&msgCount); err != nil {
+		t.Fatalf("counting messages: %v", err)
+	}
+	if msgCount != 0 {
+		t.Errorf("got %d messages after DeleteConversation, want 0", msgCount)
+	}
+
+	// Verify snapshots for conversation 1 are cascaded.
+	snaps, err := repo.ListSnapshots(ctx, conv1.ID)
+	if err != nil {
+		t.Fatalf("ListSnapshots() error = %v", err)
+	}
+	if len(snaps) != 0 {
+		t.Errorf("got %d snapshots after DeleteConversation, want 0", len(snaps))
+	}
+
+	// Verify attachments are cascaded.
+	var attCount int
+	if err := repo.db.QueryRowContext(ctx, `SELECT count(*) FROM attachments`).Scan(&attCount); err != nil {
+		t.Fatalf("counting attachments: %v", err)
+	}
+	if attCount != 0 {
+		t.Errorf("got %d attachments after DeleteConversation, want 0", attCount)
+	}
+
+	// Verify conversation 2 and its messages remain untouched.
+	c2, err := repo.GetConversation(ctx, conv2.ID)
+	if err != nil {
+		t.Fatalf("GetConversation(2) error = %v", err)
+	}
+	if c2.ID != conv2.ID {
+		t.Errorf("c2.ID = %q, want %q", c2.ID, conv2.ID)
+	}
+	msgs2, err := repo.Messages(ctx, conv2.ID, 0)
+	if err != nil {
+		t.Fatalf("Messages(2) error = %v", err)
+	}
+	if len(msgs2) != 1 {
+		t.Errorf("got %d messages for conv2, want 1", len(msgs2))
+	}
+}
+
+func TestDeleteConversation_NotFound(t *testing.T) {
+	ctx := context.Background()
+	repo := openTestRepo(t)
+
+	err := repo.DeleteConversation(ctx, "non-existent-conv-id")
+	if !errors.Is(err, core.ErrNotFound) {
+		t.Errorf("DeleteConversation(non-existent) error = %v, want core.ErrNotFound", err)
+	}
+}
+
 func TestCascadeDelete(t *testing.T) {
 	ctx := context.Background()
 	repo := openTestRepo(t)

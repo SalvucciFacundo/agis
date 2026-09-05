@@ -142,6 +142,26 @@ AGIS provides modular daemons and management subcommands alongside the default i
 # 6. Model Context Protocol (MCP) CLI
 ./bin/agis mcp list
 ./bin/agis mcp test <server> <tool> [json_args]
+
+# 7. System Diagnostics & Health Probe
+./bin/agis doctor [--json] [--no-color]
+
+# 8. Conversation Session Management & Export
+./bin/agis session list [--limit 20] [--json]
+./bin/agis session show <id> [--json]
+./bin/agis session delete <id> [--yes]
+./bin/agis session rename <id> "<title>"
+./bin/agis session export <id> [--format json|markdown|txt] [--output file]
+./bin/agis session snapshot <id> [--json]
+
+# 9. In-Place Self-Updater & Release Inspector
+./bin/agis update [--check] [--backup] [--version <tag>] [--force]
+
+# 10. Configuration Management & Inspection
+./bin/agis config show [--json] [--reveal]
+./bin/agis config get <key> [--reveal] [--json]
+./bin/agis config set <key> <value>
+./bin/agis config path
 ```
 
 Full CLI reference in [docs/cli.md](docs/cli.md).

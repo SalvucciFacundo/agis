@@ -111,6 +111,7 @@ func (r *fakeRepo) RecordSkillUsage(context.Context, string) error { return nil 
 func (r *fakeRepo) ListConversations(ctx context.Context, limit, offset int) ([]core.Conversation, error) { return nil, nil }
 func (r *fakeRepo) GetConversation(ctx context.Context, id string) (*core.Conversation, error) { return nil, core.ErrNotFound }
 func (r *fakeRepo) RenameConversation(ctx context.Context, id, title string) error { return nil }
+func (r *fakeRepo) DeleteConversation(ctx context.Context, id string) error { return nil }
 func (r *fakeRepo) CreateSnapshot(ctx context.Context, convID string) (*core.Snapshot, error) { return &core.Snapshot{ID: "snap-1"}, nil }
 func (r *fakeRepo) ListSnapshots(ctx context.Context, convID string) ([]core.Snapshot, error) { return nil, nil }
 

@@ -142,20 +142,20 @@ func TestLoad_InvalidYAMLErrors(t *testing.T) {
 
 func TestResolvePath_Precedence(t *testing.T) {
 	// Flag path wins over everything.
-	if got := resolvePath("/explicit/config.yaml"); got != "/explicit/config.yaml" {
-		t.Errorf("resolvePath(flag) = %q", got)
+	if got := ResolvePath("/explicit/config.yaml"); got != "/explicit/config.yaml" {
+		t.Errorf("ResolvePath(flag) = %q", got)
 	}
 
 	// AGIS_HOME wins over the default ~/.agis location.
 	t.Setenv("AGIS_HOME", "/custom/home")
-	if got := resolvePath(""); got != filepath.Join("/custom/home", configFileName) {
-		t.Errorf("resolvePath(AGIS_HOME) = %q", got)
+	if got := ResolvePath(""); got != filepath.Join("/custom/home", configFileName) {
+		t.Errorf("ResolvePath(AGIS_HOME) = %q", got)
 	}
 
 	// Default falls back to ~/.agis/config.yaml.
 	t.Setenv("AGIS_HOME", "")
-	if got := resolvePath(""); !strings.HasSuffix(got, filepath.Join(dotAgisDir, configFileName)) {
-		t.Errorf("resolvePath(default) = %q, want suffix %q", got, filepath.Join(dotAgisDir, configFileName))
+	if got := ResolvePath(""); !strings.HasSuffix(got, filepath.Join(dotAgisDir, configFileName)) {
+		t.Errorf("ResolvePath(default) = %q, want suffix %q", got, filepath.Join(dotAgisDir, configFileName))
 	}
 }
 

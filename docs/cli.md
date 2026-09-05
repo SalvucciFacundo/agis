@@ -8,12 +8,16 @@ This document provides a comprehensive reference for all command-line interface 
 
 ```bash
 agis [flags]                               # Launch interactive TUI (default)
+agis doctor [flags]                        # System diagnostics & environment health probe
 agis gateway [run] [flags]                 # Chat Gateway Multiplexer daemon (Telegram & Discord)
 agis cron [run|list] [flags]               # Autonomous Cron Scheduler daemon & job inspector
 agis plugins [list|enable|disable|inspect] # External Plugin Manager & tool bridge
 agis webhook [run] [flags]                 # Secure HTTP Webhook event listener daemon
 agis policy [init|show|set|rm|tier|test]   # Policy Guard security & permissions manager
 agis mcp [list|test] [flags]               # Model Context Protocol (MCP) server & tool inspection
+agis session [list|show|delete|rename|export|snapshot] # Conversation session manager, export & backups
+agis update [flags]                        # In-place self-updater & release inspector
+agis config [show|get|set|path] [flags]    # Inspect, query, and safely modify configuration
 ```
 
 ---
@@ -213,8 +217,174 @@ agis mcp test sqlite query '{"sql": "SELECT COUNT(*) FROM users;"}'
 
 ---
 
+## 8. System Diagnostics (`agis doctor`)
+
+Runs an end-to-end diagnostic suite checking environment configuration, SQLite storage health, `SOUL.md` persona status, skill registrations, Policy Guard integrity, LLM/embeddings provider connectivity, and tool backends.
+
+```bash
+# Run interactive diagnostic report
+agis doctor
+
+# Run doctor with a custom configuration file
+agis doctor -config /path/to/custom-config.yaml
+
+# Output diagnostic report as JSON (for CI/CD or automation)
+agis doctor -json
+
+# Disable ANSI color formatting
+agis doctor -no-color
+```
+
+### Verified Diagnostic Probes:
+1. **Configuration & Environment**: Validates `$AGIS_HOME`, `config.yaml` existence, and file permissions (`0600`).
+2. **SQLite & Persistent Memory**: Checks database file connectivity, PRAGMA integrity, migration schema versions (`0001` through `0007`), and total record counts.
+3. **Agent Identity (`SOUL.md`)**: Verifies presence and readability of the persistent agent persona.
+4. **Skill Hub & Registry**: Scans `$AGIS_HOME/skills/` and validates frontmatter metadata on all Markdown skills.
+5. **Policy Guard & Permissions**: Validates `policy.yaml` parsing and active security postures across local, docker, and ssh tiers.
+6. **LLM Provider Connectivity**: Tests live connectivity to Ollama (`/api/tags`), OpenAI (`/v1/models`), or OpenRouter endpoints, verifying model availability.
+7. **Vector Embeddings & Hybrid Search**: Checks hybrid search configuration and embedding model parameters when enabled.
+8. **Model Context Protocol (MCP)**: Validates command paths for `stdio` subprocesses and URL syntax for `sse` transports.
+9. **Execution Backends & System Tools**: Validates local shell (`sh`), `docker` CLI, and `ssh` client availability.
+
+---
+
+## 9. Session Management CLI (`agis session`)
+
+Provides headless inspection, management, deletion, export, and point-in-time snapshotting of conversation sessions without launching the interactive TUI.
+
+```bash
+# List recent conversation sessions (table format)
+agis session list [--limit 20] [--json]
+
+# Show detailed metadata and complete message history of a session
+agis session show <id> [--json]
+
+# Delete a session and its cascaded records (messages, snapshots, attachments)
+agis session delete <id> [--yes]
+
+# Rename a session title (with automatic prompt injection sanitization)
+agis session rename <id> "<new_title>"
+
+# Export session message history to Markdown, JSON, or Plaintext
+agis session export <id> [--format markdown|json|txt] [--output /path/to/file]
+
+# Capture a point-in-time snapshot of a conversation
+agis session snapshot <id> [--json]
+```
+
+### Subcommands & Flags:
+
+#### `agis session list`
+- `-limit <N>`: Maximum number of sessions to return (integer > 0, default: `20`).
+- `-json`: Outputs list of sessions as a JSON array to `stdout`.
+- `-config <path>`: Custom configuration file path.
+
+#### `agis session show <id>`
+- Positional: Session UUID `<id>`.
+- `-json`: Outputs conversation metadata and full message array as JSON to `stdout`.
+- `-config <path>`: Custom configuration file path.
+
+#### `agis session delete <id>`
+- Positional: Session UUID `<id>`.
+- `-yes`, `-y`: Skip confirmation prompt (required in non-interactive / automated environments).
+- `-config <path>`: Custom configuration file path.
+
+#### `agis session rename <id> <title>`
+- Positional: Session UUID `<id>` and new title `<title>`.
+- Automatically sanitizes prompt injection markers via `scan.Lines`.
+- `-config <path>`: Custom configuration file path.
+
+#### `agis session export <id>`
+- Positional: Session UUID `<id>`.
+- `-format <json|markdown|txt>`: Output format (default: `markdown`).
+- `-output <path>`: Destination file path. If omitted, outputs directly to `stdout`.
+- `-config <path>`: Custom configuration file path.
+
+#### `agis session snapshot <id>`
+- Positional: Session UUID `<id>`.
+- `-json`: Outputs snapshot metadata as JSON to `stdout`.
+- `-config <path>`: Custom configuration file path.
+
+---
+
+## 10. Self-Updater (`agis update`)
+
+Provides in-place binary self-updating from GitHub Releases with SHA-256 checksum verification, state backup snapshots, version inspection, and atomic executable replacement across Linux, macOS, and Windows.
+
+```bash
+# Check for available updates without modifying the binary
+agis update --check
+
+# Update to latest GitHub release (with automated $AGIS_HOME state backup)
+agis update --backup
+
+# Force update or re-install to a specific release tag
+agis update --version v0.4.0 --force
+```
+
+### Subcommand Flags:
+
+- `-check`: Check for available updates and compare against local binary without modifying the filesystem.
+- `-backup`: Archive critical `$AGIS_HOME` state files (`agis.db`, `config.yaml`, `policy.yaml`, `SOUL.md`, `skills/`, `plugins/`) into `$AGIS_HOME/backups/agis-backup-<timestamp>.tar.gz` before updating.
+- `-version <tag>`: Target a specific release tag (e.g. `v0.4.0`) rather than the latest release, allowing upgrades and downgrades.
+- `-force`: Force re-download, verification, and replacement even if already up to date.
+- `-config <path>`: Custom configuration file path (to resolve `$AGIS_HOME`).
+- `-h`, `--help`: Show usage instructions.
+
+---
+
+## 11. Configuration Management (`agis config`)
+
+Inspect, read, and safely modify AGIS configuration without manually editing YAML files. Enforces atomic file writes, parent directory creation (`0700`), strict file mode (`0600`), type validation, and credential masking.
+
+```bash
+# Display active configuration with masked secrets (YAML or JSON)
+agis config show
+agis config show -json
+agis config show -reveal
+
+# Query specific configuration key using dot notation
+agis config get llm.model
+agis config get memory.recall_limit
+agis config get llm.api_key -reveal
+
+# Update and persist a configuration key with strict type validation
+agis config set llm.model llama3.3
+agis config set agent.evolution_enabled false
+agis config set memory.close_timeout 45s
+agis config set gateway.telegram.allowlist "admin,ops,user"
+
+# Print resolved active configuration file path
+agis config path
+```
+
+### Subcommands & Flags:
+
+#### `agis config show`
+- `-config <path>`: Custom configuration file path.
+- `-json`: Outputs configuration as formatted JSON with 2-space indentation.
+- `-reveal`: Displays sensitive credentials (`llm.api_key`, `gateway.telegram.token`, `gateway.discord.token`, `webhook.secret`) in plaintext rather than `"[MASKED]"`.
+
+#### `agis config get <key>`
+- Queries a scalar or complex configuration value using dot notation.
+- `-config <path>`: Custom configuration file path.
+- `-reveal`: Exposes plaintext secret value if querying a sensitive key.
+- `-json`: Serializes value as JSON.
+
+#### `agis config set <key> <value>`
+- Validates and updates the configuration key, saving atomically to disk with strict `0600` permissions.
+- Accepts `bool` (`true`/`false`/`1`/`0`), `int`, `time.Duration` (`30s`, `1m`), `string`, and `[]string` (comma-separated or JSON array).
+- `-config <path>`: Custom configuration file path.
+
+#### `agis config path`
+- Outputs the resolved configuration file path according to precedence (`-config` flag > `AGIS_HOME` env > `~/.agis/config.yaml`).
+- `-config <path>`: Custom configuration file path.
+
+---
+
 ## Exit Codes
 
 All `agis` CLI commands follow standard POSIX exit codes:
-- **`0`**: Successful execution or clean graceful shutdown on `SIGINT`/`SIGTERM`.
-- **`1`**: Runtime error, invalid configuration, missing required flags, or fatal initialization failure.
+- **`0`**: Successful execution (update applied, binary up to date, check completed, or clean graceful shutdown on `SIGINT`/`SIGTERM`).
+- **`1`**: Runtime error, invalid configuration, network failure, checksum mismatch, backup failure, or fatal initialization failure.
+- **`2`**: Command-line usage error (unrecognized flag or unexpected positional arguments).

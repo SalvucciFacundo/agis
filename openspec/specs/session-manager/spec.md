@@ -47,4 +47,26 @@ Compress MUST run the summarizer path early (same as `CloseSession`'s summarizer
 - WHEN `/compress` is invoked
 - THEN it is ignored and no summarization runs
 
+### Requirement: Headless Session Manager Extensions
+The Session Manager MUST expose stateless, targetable conversation operations:
+1. `Show(ctx, id)`: Retrieves the target conversation and full message history without altering the active session pointer.
+2. `Delete(ctx, id)`: Permanently deletes the conversation and cascades to messages, snapshots, and attachments. If `activeID` matches the deleted ID, `activeID` MUST be cleared to empty string.
+3. `SnapshotSession(ctx, id)`: Captures a point-in-time snapshot of the specified conversation ID.
+4. `Export(ctx, id, format)`: Serializes conversation history into JSON, Markdown, or Plaintext.
+
+#### Scenario: Show conversation by ID
+- GIVEN an existing conversation with ID `conv-1`
+- WHEN `Show(ctx, "conv-1")` is called
+- THEN it returns the conversation record and all messages without altering `activeID`
+
+#### Scenario: Delete active conversation clears activeID
+- GIVEN active session ID `conv-active`
+- WHEN `Delete(ctx, "conv-active")` is called
+- THEN the conversation is deleted and `activeID` becomes empty string
+
+#### Scenario: Export session in Markdown format
+- GIVEN a conversation with user and assistant turns
+- WHEN `Export(ctx, "conv-1", ExportFormatMarkdown)` is called
+- THEN it returns a formatted Markdown byte slice with role headers and metadata
+
 ---

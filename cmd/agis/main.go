@@ -31,6 +31,8 @@ func main() {
 	// TUI is the default surface, everything else is a managed subcommand.
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "config":
+			os.Exit(RunConfigCLI(os.Args[2:], os.Stdout, os.Stderr))
 		case "policy":
 			os.Exit(policy.RunCLI(os.Args[2:], os.Stdout, os.Stderr))
 		case "gateway":
@@ -43,6 +45,12 @@ func main() {
 			os.Exit(RunWebhookCLI(os.Args[2:], os.Stdout, os.Stderr))
 		case "mcp":
 			os.Exit(RunMCPCLI(os.Args[2:], os.Stdout, os.Stderr))
+		case "doctor":
+			os.Exit(RunDoctorCLI(os.Args[2:], os.Stdout, os.Stderr))
+		case "session":
+			os.Exit(RunSessionCLI(os.Args[2:], os.Stdout, os.Stderr))
+		case "update":
+			os.Exit(RunUpdateCLI(os.Args[2:], os.Stdout, os.Stderr))
 		}
 	}
 

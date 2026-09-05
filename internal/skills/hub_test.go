@@ -82,6 +82,7 @@ func (r *fakeSkillRepo) RecordSessionEvent(context.Context, string, string, stri
 func (r *fakeSkillRepo) ListConversations(ctx context.Context, limit, offset int) ([]core.Conversation, error) { return nil, nil }
 func (r *fakeSkillRepo) GetConversation(ctx context.Context, id string) (*core.Conversation, error) { return nil, core.ErrNotFound }
 func (r *fakeSkillRepo) RenameConversation(ctx context.Context, id, title string) error { return nil }
+func (r *fakeSkillRepo) DeleteConversation(ctx context.Context, id string) error { return nil }
 func (r *fakeSkillRepo) CreateSnapshot(ctx context.Context, convID string) (*core.Snapshot, error) { return &core.Snapshot{ID: "snap-1"}, nil }
 func (r *fakeSkillRepo) ListSnapshots(ctx context.Context, convID string) ([]core.Snapshot, error) { return nil, nil }
 

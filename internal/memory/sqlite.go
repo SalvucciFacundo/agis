@@ -928,6 +928,23 @@ func (r *Repository) RenameConversation(ctx context.Context, id, title string) e
 	return nil
 }
 
+// DeleteConversation permanently removes a conversation and relies on foreign
+// keys with ON DELETE CASCADE to clean up messages, snapshots, and attachments.
+func (r *Repository) DeleteConversation(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM conversations WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("deleting conversation %s: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("checking deleted rows for %s: %w", id, err)
+	}
+	if n == 0 {
+		return core.ErrNotFound
+	}
+	return nil
+}
+
 // CreateSnapshot captures a point-in-time copy of a conversation.
 func (r *Repository) CreateSnapshot(ctx context.Context, convID string) (*core.Snapshot, error) {
 	conv, err := r.GetConversation(ctx, convID)

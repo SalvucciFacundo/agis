@@ -81,6 +81,10 @@ type Repository interface {
 	// RenameConversation updates a conversation's title and bumps updated_at.
 	RenameConversation(ctx context.Context, id, title string) error
 
+	// DeleteConversation permanently deletes a conversation and cascades to all
+	// linked messages, snapshots, and attachments.
+	DeleteConversation(ctx context.Context, id string) error
+
 	// CreateSnapshot captures a point-in-time copy of a conversation.
 	CreateSnapshot(ctx context.Context, convID string) (*Snapshot, error)
 

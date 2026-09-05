@@ -241,7 +241,7 @@ func Load(configPath string, opts ...Option) (*Config, error) {
 		opt(o)
 	}
 
-	path := resolvePath(configPath)
+	path := ResolvePath(configPath)
 	cfg := defaults()
 
 	data, err := os.ReadFile(path)
@@ -415,8 +415,8 @@ func defaultSkillsDir() string {
 	return filepath.Join(agisDir(), skillsDirName)
 }
 
-// resolvePath applies the -config flag > AGIS_HOME > default precedence.
-func resolvePath(flagPath string) string {
+// ResolvePath applies the -config flag > AGIS_HOME > default precedence.
+func ResolvePath(flagPath string) string {
 	if flagPath != "" {
 		return flagPath
 	}

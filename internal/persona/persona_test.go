@@ -213,6 +213,7 @@ func (r *fakeEvolutionRepo) RecordSkillUsage(context.Context, string) error { re
 func (r *fakeEvolutionRepo) ListConversations(ctx context.Context, limit, offset int) ([]core.Conversation, error) { return nil, nil }
 func (r *fakeEvolutionRepo) GetConversation(ctx context.Context, id string) (*core.Conversation, error) { return nil, core.ErrNotFound }
 func (r *fakeEvolutionRepo) RenameConversation(ctx context.Context, id, title string) error { return nil }
+func (r *fakeEvolutionRepo) DeleteConversation(ctx context.Context, id string) error { return nil }
 func (r *fakeEvolutionRepo) CreateSnapshot(ctx context.Context, convID string) (*core.Snapshot, error) { return &core.Snapshot{ID: "snap-1"}, nil }
 func (r *fakeEvolutionRepo) ListSnapshots(ctx context.Context, convID string) ([]core.Snapshot, error) { return nil, nil }
 
