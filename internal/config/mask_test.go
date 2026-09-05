@@ -6,6 +6,69 @@ import (
 	"github.com/SalvucciFacundo/agis/internal/config"
 )
 
+func TestMaskSecrets_LLMFallbacksAndAPIKeys(t *testing.T) {
+	orig := &config.Config{
+		LLM: config.LLMConfig{
+			Provider: "openai",
+			Model:    "gpt-4o",
+			APIKey:   "sk-primary-key",
+			APIKeys:  []string{"sk-primary-1", "sk-primary-2"},
+			Fallbacks: []config.LLMFallbackConfig{
+				{
+					Provider: "openrouter",
+					Model:    "anthropic/claude-3.5-sonnet",
+					APIKey:   "sk-or-fallback",
+					APIKeys:  []string{"sk-or-1", "sk-or-2"},
+					BaseURL:  "https://openrouter.ai/api/v1",
+				},
+				{
+					Provider: "ollama",
+					Model:    "llama3.2",
+					BaseURL:  "http://localhost:11434/v1",
+				},
+			},
+		},
+	}
+
+	masked := config.MaskSecrets(orig)
+
+	// Verify original is untouched
+	if orig.LLM.APIKey != "sk-primary-key" {
+		t.Errorf("Original LLM.APIKey mutated: %q", orig.LLM.APIKey)
+	}
+	if len(orig.LLM.APIKeys) != 2 || orig.LLM.APIKeys[0] != "sk-primary-1" {
+		t.Errorf("Original LLM.APIKeys mutated: %+v", orig.LLM.APIKeys)
+	}
+	if len(orig.LLM.Fallbacks) != 2 || orig.LLM.Fallbacks[0].APIKey != "sk-or-fallback" {
+		t.Errorf("Original LLM.Fallbacks mutated: %+v", orig.LLM.Fallbacks)
+	}
+	if len(orig.LLM.Fallbacks[0].APIKeys) != 2 || orig.LLM.Fallbacks[0].APIKeys[0] != "sk-or-1" {
+		t.Errorf("Original LLM.Fallbacks[0].APIKeys mutated: %+v", orig.LLM.Fallbacks[0].APIKeys)
+	}
+
+	// Verify masked copy has "[MASKED]"
+	if masked.LLM.APIKey != "[MASKED]" {
+		t.Errorf("Masked LLM.APIKey = %q, want '[MASKED]'", masked.LLM.APIKey)
+	}
+	for i, k := range masked.LLM.APIKeys {
+		if k != "[MASKED]" {
+			t.Errorf("Masked LLM.APIKeys[%d] = %q, want '[MASKED]'", i, k)
+		}
+	}
+	if masked.LLM.Fallbacks[0].APIKey != "[MASKED]" {
+		t.Errorf("Masked Fallbacks[0].APIKey = %q, want '[MASKED]'", masked.LLM.Fallbacks[0].APIKey)
+	}
+	for i, k := range masked.LLM.Fallbacks[0].APIKeys {
+		if k != "[MASKED]" {
+			t.Errorf("Masked Fallbacks[0].APIKeys[%d] = %q, want '[MASKED]'", i, k)
+		}
+	}
+	// Fallback without keys remains unchanged
+	if masked.LLM.Fallbacks[1].APIKey != "" {
+		t.Errorf("Masked Fallbacks[1].APIKey = %q, want ''", masked.LLM.Fallbacks[1].APIKey)
+	}
+}
+
 func TestMaskSecrets_WebProviders(t *testing.T) {
 	orig, err := config.Load("")
 	if err != nil {

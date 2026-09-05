@@ -19,8 +19,12 @@ var _ core.Provider = (*Ollama)(nil)
 
 // NewOllama returns an Ollama-backed Provider configured from cfg.
 func NewOllama(cfg config.LLMConfig) *Ollama {
+	baseURL := ollamaBaseURL
+	if cfg.BaseURL != "" {
+		baseURL = cfg.BaseURL
+	}
 	return &Ollama{
-		client: NewClient(ollamaBaseURL, cfg.APIKey),
+		client: NewClientWithPool(baseURL, NewCredentialPool(cfg.APIKey, cfg.APIKeys)),
 		model:  cfg.Model,
 	}
 }

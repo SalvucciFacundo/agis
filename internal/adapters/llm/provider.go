@@ -18,6 +18,42 @@ func NewProvider(cfg config.LLMConfig) core.Provider {
 	return NewOpenAI(cfg)
 }
 
+// NewResilientProvider returns a core.Provider with fallback chains and credential pools configured.
+// If cfg.Fallbacks contains entries, it constructs a FallbackProvider with the primary provider
+// at index 0 and fallback providers in order. If no fallbacks are configured, it returns the primary provider.
+func NewResilientProvider(cfg config.LLMConfig) core.Provider {
+	primary := NewProvider(cfg)
+	if len(cfg.Fallbacks) == 0 {
+		return primary
+	}
+
+	fallbacks := make([]core.Provider, 0, len(cfg.Fallbacks))
+	for _, fb := range cfg.Fallbacks {
+		fbCfg := config.LLMConfig{
+			Provider: fb.Provider,
+			Model:    fb.Model,
+			APIKey:   fb.APIKey,
+			APIKeys:  fb.APIKeys,
+			BaseURL:  fb.BaseURL,
+		}
+		fallbacks = append(fallbacks, NewProvider(fbCfg))
+	}
+	return NewFallbackProvider(primary, fallbacks...)
+}
+
+// NewProviderForTask returns a core.Provider for a specific auxiliary task (e.g. Memory, Vision, Audio).
+// If taskProvider or taskModel are empty, they default to baseCfg.Provider and baseCfg.Model.
+func NewProviderForTask(baseCfg config.LLMConfig, taskProvider, taskModel string) core.Provider {
+	cfg := baseCfg
+	if taskProvider != "" {
+		cfg.Provider = taskProvider
+	}
+	if taskModel != "" {
+		cfg.Model = taskModel
+	}
+	return NewResilientProvider(cfg)
+}
+
 // staticModels returns the M1 static model list: exactly one ModelInfo for the
 // configured provider and model. Live enumeration is deferred to M4.
 func staticModels(model, provider string) []core.ModelInfo {

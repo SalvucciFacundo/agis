@@ -1155,5 +1155,88 @@ func TestLoad_SubagentsDefaultsAndClamping(t *testing.T) {
 	}
 }
 
+func TestLoad_LLMFallbacksAndAPIKeys(t *testing.T) {
+	tests := []struct {
+		name          string
+		yaml          string
+		wantAPIKeys   []string
+		wantFallbacks []LLMFallbackConfig
+	}{
+		{
+			name: "primary api_keys and fallbacks",
+			yaml: `llm:
+  provider: openai
+  model: gpt-4o
+  api_key: "sk-primary"
+  api_keys:
+    - "sk-primary-1"
+    - "sk-primary-2"
+  fallbacks:
+    - provider: openrouter
+      model: anthropic/claude-3.5-sonnet
+      api_key: "sk-or-1"
+      api_keys:
+        - "sk-or-1"
+        - "sk-or-2"
+      base_url: "https://openrouter.ai/api/v1"
+    - provider: ollama
+      model: llama3.2
+      base_url: "http://localhost:11434/v1"
+`,
+			wantAPIKeys: []string{"sk-primary-1", "sk-primary-2"},
+			wantFallbacks: []LLMFallbackConfig{
+				{
+					Provider: "openrouter",
+					Model:    "anthropic/claude-3.5-sonnet",
+					APIKey:   "sk-or-1",
+					APIKeys:  []string{"sk-or-1", "sk-or-2"},
+					BaseURL:  "https://openrouter.ai/api/v1",
+				},
+				{
+					Provider: "ollama",
+					Model:    "llama3.2",
+					BaseURL:  "http://localhost:11434/v1",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+			path := writeConfig(t, home, tt.yaml, 0o600)
+
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			if len(cfg.LLM.APIKeys) != len(tt.wantAPIKeys) {
+				t.Fatalf("len(LLM.APIKeys) = %d, want %d", len(cfg.LLM.APIKeys), len(tt.wantAPIKeys))
+			}
+			for i, k := range cfg.LLM.APIKeys {
+				if k != tt.wantAPIKeys[i] {
+					t.Errorf("LLM.APIKeys[%d] = %q, want %q", i, k, tt.wantAPIKeys[i])
+				}
+			}
+
+			if len(cfg.LLM.Fallbacks) != len(tt.wantFallbacks) {
+				t.Fatalf("len(LLM.Fallbacks) = %d, want %d", len(cfg.LLM.Fallbacks), len(tt.wantFallbacks))
+			}
+			for i, fb := range cfg.LLM.Fallbacks {
+				want := tt.wantFallbacks[i]
+				if fb.Provider != want.Provider || fb.Model != want.Model || fb.APIKey != want.APIKey || fb.BaseURL != want.BaseURL {
+					t.Errorf("LLM.Fallbacks[%d] = %+v, want %+v", i, fb, want)
+				}
+				if len(fb.APIKeys) != len(want.APIKeys) {
+					t.Errorf("len(LLM.Fallbacks[%d].APIKeys) = %d, want %d", i, len(fb.APIKeys), len(want.APIKeys))
+				}
+			}
+		})
+	}
+}
+
+
 
 

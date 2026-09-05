@@ -78,6 +78,7 @@ type MultimodalConfig struct {
 // VisionConfig tunes the multimodal vision processing capabilities.
 type VisionConfig struct {
 	Enabled        bool   `yaml:"enabled"`
+	Provider       string `yaml:"provider,omitempty"`
 	Model          string `yaml:"model"`
 	MaxImageSizeMB int    `yaml:"max_image_size_mb"`
 }
@@ -273,16 +274,30 @@ type SkillsConfig struct {
 // top-N recall bound, the nudge cadence, and how long a session close may take.
 type MemoryConfig struct {
 	LearningEnabled bool          `yaml:"learning_enabled"`
+	Provider        string        `yaml:"provider,omitempty"`
+	Model           string        `yaml:"model,omitempty"`
 	RecallLimit     int           `yaml:"recall_limit"`
 	NudgeEvery      int           `yaml:"nudge_every"`
 	CloseTimeout    time.Duration `yaml:"close_timeout"`
 }
 
-// LLMConfig selects the provider and model.
+// LLMConfig selects the provider and model, and configures credential pools and fallback chains.
 type LLMConfig struct {
-	Provider string `yaml:"provider"`
-	Model    string `yaml:"model"`
-	APIKey   string `yaml:"api_key"`
+	Provider  string              `yaml:"provider"`
+	Model     string              `yaml:"model"`
+	APIKey    string              `yaml:"api_key"`
+	APIKeys   []string            `yaml:"api_keys"`
+	BaseURL   string              `yaml:"base_url,omitempty"`
+	Fallbacks []LLMFallbackConfig `yaml:"fallbacks"`
+}
+
+// LLMFallbackConfig configures a fallback LLM provider.
+type LLMFallbackConfig struct {
+	Provider string   `yaml:"provider"`
+	Model    string   `yaml:"model"`
+	APIKey   string   `yaml:"api_key"`
+	APIKeys  []string `yaml:"api_keys"`
+	BaseURL  string   `yaml:"base_url,omitempty"`
 }
 
 // DBConfig locates the SQLite database file.

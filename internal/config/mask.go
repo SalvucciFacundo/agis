@@ -36,6 +36,17 @@ func maskFields(cfg *Config) {
 	if cfg.LLM.APIKey != "" {
 		cfg.LLM.APIKey = maskValue
 	}
+	for i := range cfg.LLM.APIKeys {
+		cfg.LLM.APIKeys[i] = maskValue
+	}
+	for i := range cfg.LLM.Fallbacks {
+		if cfg.LLM.Fallbacks[i].APIKey != "" {
+			cfg.LLM.Fallbacks[i].APIKey = maskValue
+		}
+		for j := range cfg.LLM.Fallbacks[i].APIKeys {
+			cfg.LLM.Fallbacks[i].APIKeys[j] = maskValue
+		}
+	}
 	if cfg.Gateway.Telegram.Token != "" {
 		cfg.Gateway.Telegram.Token = maskValue
 	}

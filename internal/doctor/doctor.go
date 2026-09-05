@@ -382,21 +382,79 @@ func (d *Doctor) checkLLM(ctx context.Context) CheckResult {
 		Title: "LLM Provider Connectivity",
 	}
 
-	provider := strings.ToLower(d.cfg.LLM.Provider)
-	if provider == "" {
-		provider = "ollama"
+	primaryProvider := strings.ToLower(d.cfg.LLM.Provider)
+	if primaryProvider == "" {
+		primaryProvider = "ollama"
 	}
-	model := d.cfg.LLM.Model
-	if model == "" {
-		model = "llama3.2"
+	primaryModel := d.cfg.LLM.Model
+	if primaryModel == "" {
+		primaryModel = "llama3.2"
 	}
 
-	res.Details = append(res.Details, fmt.Sprintf("Provider: %s", provider))
-	res.Details = append(res.Details, fmt.Sprintf("Model: %s", model))
+	primaryKeyCount := len(d.cfg.LLM.APIKeys)
+	if d.cfg.LLM.APIKey != "" {
+		primaryKeyCount++
+	}
+	if primaryKeyCount == 0 && len(d.cfg.LLM.APIKeys) > 0 {
+		primaryKeyCount = len(d.cfg.LLM.APIKeys)
+	}
+
+	res.Details = append(res.Details, fmt.Sprintf("Primary Provider: %s", primaryProvider))
+	res.Details = append(res.Details, fmt.Sprintf("Primary Model: %s", primaryModel))
+	if primaryKeyCount > 0 {
+		res.Details = append(res.Details, fmt.Sprintf("Primary Keys Configured: %d", primaryKeyCount))
+	}
+
+	pStatus, pMsg, pDetails := d.probeSingleLLM(ctx, primaryProvider, primaryModel, d.cfg.LLM.APIKey, d.cfg.LLM.APIKeys, d.cfg.LLM.BaseURL)
+	res.Details = append(res.Details, pDetails...)
+
+	// Probe configured fallbacks
+	fallbackPassCount := 0
+	for i, fb := range d.cfg.LLM.Fallbacks {
+		fbProvider := strings.ToLower(fb.Provider)
+		if fbProvider == "" {
+			fbProvider = "ollama"
+		}
+		fbModel := fb.Model
+		if fbModel == "" {
+			fbModel = "llama3.2"
+		}
+
+		fbStatus, fbMsg, fbDetails := d.probeSingleLLM(ctx, fbProvider, fbModel, fb.APIKey, fb.APIKeys, fb.BaseURL)
+		res.Details = append(res.Details, fmt.Sprintf("Fallback #%d (%s/%s): %s [%s]", i+1, fbProvider, fbModel, fbMsg, fbStatus))
+		res.Details = append(res.Details, fbDetails...)
+		if fbStatus == StatusPass {
+			fallbackPassCount++
+		}
+	}
+
+	if pStatus == StatusPass {
+		res.Status = StatusPass
+		res.Message = pMsg
+	} else if fallbackPassCount > 0 {
+		res.Status = StatusWarn
+		res.Message = "Primary provider failed, but fallback provider(s) are operational"
+	} else if len(d.cfg.LLM.Fallbacks) > 0 {
+		res.Status = StatusFail
+		res.Message = fmt.Sprintf("All LLM providers failed: %s", pMsg)
+	} else {
+		res.Status = pStatus
+		res.Message = pMsg
+	}
+
+	res.Duration = time.Since(start)
+	return res
+}
+
+func (d *Doctor) probeSingleLLM(ctx context.Context, provider, model, apiKey string, apiKeys []string, customBaseURL string) (CheckStatus, string, []string) {
+	var details []string
 
 	switch provider {
 	case "ollama":
-		ollamaBase := d.ollamaURL
+		ollamaBase := customBaseURL
+		if ollamaBase == "" {
+			ollamaBase = d.ollamaURL
+		}
 		if ollamaBase == "" {
 			ollamaBase = os.Getenv("OLLAMA_HOST")
 		}
@@ -407,30 +465,21 @@ func (d *Doctor) checkLLM(ctx context.Context) CheckResult {
 			ollamaBase = "http://" + ollamaBase
 		}
 		endpoint := strings.TrimRight(ollamaBase, "/") + "/api/tags"
-		// If base URL was specified in env/config (or default)
+
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
-			res.Status = StatusFail
-			res.Message = fmt.Sprintf("Creating request failed: %v", err)
-			res.Duration = time.Since(start)
-			return res
+			return StatusFail, fmt.Sprintf("Creating request failed: %v", err), details
 		}
 
 		resp, err := d.httpClient.Do(req)
 		if err != nil {
-			res.Status = StatusFail
-			res.Message = fmt.Sprintf("Ollama is not reachable at %s: %v", endpoint, err)
-			res.Details = append(res.Details, "Hint: make sure Ollama is running (`ollama serve`)")
-			res.Duration = time.Since(start)
-			return res
+			details = append(details, "Hint: make sure Ollama is running (`ollama serve`)")
+			return StatusFail, fmt.Sprintf("Ollama is not reachable at %s: %v", endpoint, err), details
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			res.Status = StatusFail
-			res.Message = fmt.Sprintf("Ollama returned HTTP %d", resp.StatusCode)
-			res.Duration = time.Since(start)
-			return res
+			return StatusFail, fmt.Sprintf("Ollama returned HTTP %d", resp.StatusCode), details
 		}
 
 		var tagsResp struct {
@@ -448,30 +497,36 @@ func (d *Doctor) checkLLM(ctx context.Context) CheckResult {
 				}
 			}
 			if found {
-				res.Status = StatusPass
-				res.Message = fmt.Sprintf("Ollama is reachable and model %q is installed", model)
-			} else {
-				res.Status = StatusWarn
-				res.Message = fmt.Sprintf("Ollama is reachable, but model %q was not found in installed models", model)
-				res.Details = append(res.Details, fmt.Sprintf("Installed models: %s", strings.Join(modelNames, ", ")))
-				res.Details = append(res.Details, fmt.Sprintf("Hint: run `ollama pull %s`", model))
+				return StatusPass, fmt.Sprintf("Ollama is reachable and model %q is installed", model), details
 			}
-		} else {
-			res.Status = StatusPass
-			res.Message = "Ollama is reachable"
+			details = append(details, fmt.Sprintf("Installed models: %s", strings.Join(modelNames, ", ")))
+			details = append(details, fmt.Sprintf("Hint: run `ollama pull %s`", model))
+			return StatusWarn, fmt.Sprintf("Ollama is reachable, but model %q was not found in installed models", model), details
 		}
+		return StatusPass, "Ollama is reachable", details
 
 	case "openai", "openrouter":
-		if d.cfg.LLM.APIKey == "" && os.Getenv("OPENAI_API_KEY") == "" && os.Getenv("OPENROUTER_API_KEY") == "" {
-			res.Status = StatusFail
-			res.Message = fmt.Sprintf("Missing API key for provider %q", provider)
-			res.Details = append(res.Details, "Hint: set `api_key` in config.yaml or export OPENAI_API_KEY / OPENROUTER_API_KEY")
-			res.Duration = time.Since(start)
-			return res
+		effectiveKey := apiKey
+		if effectiveKey == "" && len(apiKeys) > 0 {
+			effectiveKey = apiKeys[0]
+		}
+		if effectiveKey == "" {
+			if provider == "openai" {
+				effectiveKey = os.Getenv("OPENAI_API_KEY")
+			} else {
+				effectiveKey = os.Getenv("OPENROUTER_API_KEY")
+			}
 		}
 
-		// Perform lightweight ping to models endpoint
-		baseURL := d.openAIBaseURL
+		if effectiveKey == "" {
+			details = append(details, "Hint: set `api_key` in config.yaml or export OPENAI_API_KEY / OPENROUTER_API_KEY")
+			return StatusFail, fmt.Sprintf("Missing API key for provider %q", provider), details
+		}
+
+		baseURL := customBaseURL
+		if baseURL == "" {
+			baseURL = d.openAIBaseURL
+		}
 		if baseURL == "" {
 			baseURL = os.Getenv("OPENAI_BASE_URL")
 		}
@@ -485,47 +540,27 @@ func (d *Doctor) checkLLM(ctx context.Context) CheckResult {
 			baseURL = strings.TrimRight(baseURL, "/") + "/models"
 		}
 
-		apiKey := d.cfg.LLM.APIKey
-		if apiKey == "" {
-			if provider == "openai" {
-				apiKey = os.Getenv("OPENAI_API_KEY")
-			} else {
-				apiKey = os.Getenv("OPENROUTER_API_KEY")
-			}
-		}
-
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL, nil)
-		if err == nil {
-			req.Header.Set("Authorization", "Bearer "+apiKey)
-			resp, err := d.httpClient.Do(req)
-			if err != nil {
-				res.Status = StatusWarn
-				res.Message = fmt.Sprintf("API key configured, but endpoint verification timed out / network error: %v", err)
-			} else {
-				resp.Body.Close()
-				if resp.StatusCode == http.StatusOK {
-					res.Status = StatusPass
-					res.Message = fmt.Sprintf("%s API is reachable and API key is valid", strings.ToUpper(provider))
-				} else if resp.StatusCode == http.StatusUnauthorized {
-					res.Status = StatusFail
-					res.Message = fmt.Sprintf("%s API key was rejected (HTTP 401 Unauthorized)", strings.ToUpper(provider))
-				} else {
-					res.Status = StatusWarn
-					res.Message = fmt.Sprintf("%s endpoint returned HTTP %d", strings.ToUpper(provider), resp.StatusCode)
-				}
-			}
-		} else {
-			res.Status = StatusPass
-			res.Message = fmt.Sprintf("API key configured for %s", provider)
+		if err != nil {
+			return StatusPass, fmt.Sprintf("API key configured for %s", provider), details
 		}
+		req.Header.Set("Authorization", "Bearer "+effectiveKey)
+		resp, err := d.httpClient.Do(req)
+		if err != nil {
+			return StatusWarn, fmt.Sprintf("API key configured, but endpoint verification timed out / network error: %v", err), details
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusOK {
+			return StatusPass, fmt.Sprintf("%s API is reachable and API key is valid", strings.ToUpper(provider)), details
+		} else if resp.StatusCode == http.StatusUnauthorized {
+			return StatusFail, fmt.Sprintf("%s API key was rejected (HTTP 401 Unauthorized)", strings.ToUpper(provider)), details
+		}
+		return StatusWarn, fmt.Sprintf("%s endpoint returned HTTP %d", strings.ToUpper(provider), resp.StatusCode), details
 
 	default:
-		res.Status = StatusPass
-		res.Message = fmt.Sprintf("Custom provider %q configured", provider)
+		return StatusPass, fmt.Sprintf("Custom provider %q configured", provider), details
 	}
-
-	res.Duration = time.Since(start)
-	return res
 }
 
 func (d *Doctor) checkEmbeddings(ctx context.Context) CheckResult {

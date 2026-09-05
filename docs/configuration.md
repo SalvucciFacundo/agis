@@ -6,15 +6,27 @@ AGIS reads a single YAML file. The loader lives in `internal/config` and is full
 
 ```yaml
 llm:
-  provider: ollama      # llm provider: ollama | openai (or any OpenAI-compatible API)
-  model: llama3.2       # model name sent to the provider
-  api_key: ""           # API key (openai); empty is valid for local ollama
+  provider: openai      # llm provider: ollama | openai (or any OpenAI-compatible API)
+  model: gpt-4o         # model name sent to the provider
+  api_key: ""           # primary API key (masked in logs)
+  api_keys:             # optional pool of multiple API keys for automatic 429 rotation
+    - "sk-primary-1"
+    - "sk-backup-2"
+  base_url: ""          # optional custom endpoint URL override
+  fallbacks:            # ordered chain of fallback providers for transient error resilience
+    - provider: openrouter
+      model: anthropic/claude-3.5-sonnet
+      api_key: "sk-or-key"
+    - provider: ollama
+      model: llama3.2
 
 db:
   path: /home/you/.agis/agis.db   # SQLite database file
 
 memory:
   learning_enabled: true          # master switch for the learning loop
+  provider: "ollama"              # optional dedicated provider override for memory curation
+  model: "llama3.2:1b"            # optional dedicated model override for memory curation
   recall_limit: 10                # top-N observations injected per turn
   nudge_every: 10                 # curator runs every N assistant messages
   close_timeout: 30s              # bounded wait for session close on quit
@@ -228,13 +240,27 @@ The `webhook` block configures the HTTP event listener:
 - `default_session_id`: Default session prefix for incoming events (e.g. `webhook:<event_type>`).
 - `target` (optional): Outbound chat destination to forward brain responses.
 
-### 6. Subagents (`subagents`)
-The `subagents` block configures isolated, ephemeral subagent task delegation (`delegate_task` tool):
-- `subagents.enabled`: Master switch for subagent spawning and delegation (defaults to `true`).
-- `subagents.max_concurrent`: Global limit on concurrently active child subagent loops (defaults to `3`, clamped `1-10`).
-- `subagents.max_depth`: Maximum recursion depth allowed (defaults to `1`, hard maximum `2`).
-- `subagents.default_timeout`: Execution deadline for a child subagent run (defaults to `60s`, clamped `1s-300s`).
-- `subagents.max_turns`: Execution turn limit for child brain reasoning loops (defaults to `8`, clamped `1-15`).
+### 7. LLM Resilience & Credential Pooling (`llm`)
+The `llm` block configures primary models, multi-key credential pools, and fallback chains:
+- `llm.provider`: Main provider identifier (`"openai"`, `"ollama"`, `"openrouter"`, or custom OpenAI-compatible).
+- `llm.model`: Default model identifier (e.g. `"gpt-4o"`, `"llama3.2"`).
+- `llm.api_key`: Primary API key.
+- `llm.api_keys`: List of backup API keys forming a thread-safe `CredentialPool`. On HTTP 429 rate limits, AGIS automatically rotates keys and retries.
+- `llm.base_url`: Optional custom endpoint URL override.
+- `llm.fallbacks`: Ordered chain of secondary fallback providers:
+  - `provider`: Fallback provider name.
+  - `model`: Fallback model name.
+  - `api_key` / `api_keys`: Fallback credentials.
+  - `base_url`: Optional custom endpoint URL.
+
+When primary encounters transient errors (429 after pool exhaustion, 500, 502, 503, 504, network timeouts), `FallbackProvider` automatically fails over down the chain. Pre-token streaming failures seamlessly failover to the next provider; mid-stream errors terminate with an error event.
+
+### 8. Auxiliary Model Overrides
+Auxiliary tasks can override models and providers independently from the primary LLM:
+- `memory.provider` / `memory.model`: Dedicated model for background memory curation and summarization.
+- `multimodal.vision.provider` / `multimodal.vision.model`: Dedicated model for vision processing.
+- `multimodal.audio.provider` / `multimodal.audio.model`: Dedicated model for audio transcription.
+- `embeddings.provider` / `embeddings.model`: Dedicated model for vector embeddings.
 
 ---
 

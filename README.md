@@ -77,7 +77,7 @@ go run ./cmd/agis
 ## ✨ Core Capabilities & Architectural Pillars
 
 - **🧠 Brain Thinking Loop** — `Brain.Step` persists turns, loads history, injects memory & skills, streams model tokens, evaluates tool calls, and handles up to 8 bounded tool rounds.
-- **🔌 Multi-Provider LLM** — Ollama, OpenAI, OpenRouter, and any OpenAI-compatible API over a unified client with streaming SSE.
+- **🔌 Multi-Provider LLM & Resilience** — Ollama, OpenAI, OpenRouter, and any OpenAI-compatible API over a unified client with streaming SSE, multi-key credential pooling with reactive HTTP 429 rotation, ordered fallback provider chains with pre-token failover, and independent auxiliary model overrides (memory, vision, audio, embeddings).
 - **💾 SQLite + FTS5 & Hybrid Search** — Pure Go SQLite with full-text search and dense vector embeddings (Ollama / OpenAI) combined via Reciprocal Rank Fusion (RRF).
 - **🔄 Learning & Memory Loop** — Continuous observation extraction (Curator), session summarization, and user model confidence synthesis.
 - **🎭 Skill Hub & Persona** — Agentskills.io-compatible Markdown skill loading, runtime skill distillation, durable `SOUL.md`, and dynamic personality overlays.

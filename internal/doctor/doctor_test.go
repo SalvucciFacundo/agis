@@ -213,6 +213,135 @@ func TestDoctor_WarningsDetected(t *testing.T) {
 	}
 }
 
+func TestDoctor_LLM_ResilienceAndFallbacks(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("AGIS_HOME", tmpDir)
+
+	t.Run("primary healthy returns PASS", func(t *testing.T) {
+		tsOpenAI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer tsOpenAI.Close()
+
+		tsOllama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/tags" {
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(map[string]any{"models": []map[string]any{{"name": "llama3.2:latest"}}})
+			}
+		}))
+		defer tsOllama.Close()
+
+		cfg := &config.Config{
+			LLM: config.LLMConfig{
+				Provider: "openai",
+				Model:    "gpt-4o",
+				APIKey:   "sk-key-1",
+				APIKeys:  []string{"sk-key-2"},
+				Fallbacks: []config.LLMFallbackConfig{
+					{
+						Provider: "ollama",
+						Model:    "llama3.2",
+						BaseURL:  tsOllama.URL,
+					},
+				},
+			},
+			DB: config.DBConfig{Path: filepath.Join(tmpDir, "agis.db")},
+		}
+
+		doc := New(cfg, WithAgisHome(tmpDir), WithHTTPClient(tsOpenAI.Client()), WithOpenAIBaseURL(tsOpenAI.URL), WithOllamaURL(tsOllama.URL))
+		report := doc.Run(context.Background())
+
+		llmCheck := report.Find("llm")
+		if llmCheck == nil {
+			t.Fatal("expected llm check in report")
+		}
+		if llmCheck.Status != StatusPass {
+			t.Errorf("expected StatusPass, got %s: %s", llmCheck.Status, llmCheck.Message)
+		}
+	})
+
+	t.Run("primary fails but fallback operational returns WARN", func(t *testing.T) {
+		tsOpenAIFail := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		defer tsOpenAIFail.Close()
+
+		tsOllamaOK := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/tags" {
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(map[string]any{"models": []map[string]any{{"name": "llama3.2:latest"}}})
+			}
+		}))
+		defer tsOllamaOK.Close()
+
+		cfg := &config.Config{
+			LLM: config.LLMConfig{
+				Provider: "openai",
+				Model:    "gpt-4o",
+				APIKey:   "sk-invalid-key",
+				Fallbacks: []config.LLMFallbackConfig{
+					{
+						Provider: "ollama",
+						Model:    "llama3.2",
+						BaseURL:  tsOllamaOK.URL,
+					},
+				},
+			},
+			DB: config.DBConfig{Path: filepath.Join(tmpDir, "agis.db")},
+		}
+
+		doc := New(cfg, WithAgisHome(tmpDir), WithHTTPClient(tsOpenAIFail.Client()), WithOpenAIBaseURL(tsOpenAIFail.URL), WithOllamaURL(tsOllamaOK.URL))
+		report := doc.Run(context.Background())
+
+		llmCheck := report.Find("llm")
+		if llmCheck == nil {
+			t.Fatal("expected llm check in report")
+		}
+		if llmCheck.Status != StatusWarn {
+			t.Errorf("expected StatusWarn when primary fails but fallback is ok, got %s: %s", llmCheck.Status, llmCheck.Message)
+		}
+	})
+
+	t.Run("primary fails and all fallbacks fail returns FAIL", func(t *testing.T) {
+		tsOpenAIFail := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		defer tsOpenAIFail.Close()
+
+		tsOllamaFail := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer tsOllamaFail.Close()
+
+		cfg := &config.Config{
+			LLM: config.LLMConfig{
+				Provider: "openai",
+				Model:    "gpt-4o",
+				APIKey:   "sk-invalid-key",
+				Fallbacks: []config.LLMFallbackConfig{
+					{
+						Provider: "ollama",
+						Model:    "llama3.2",
+						BaseURL:  tsOllamaFail.URL,
+					},
+				},
+			},
+			DB: config.DBConfig{Path: filepath.Join(tmpDir, "agis.db")},
+		}
+
+		doc := New(cfg, WithAgisHome(tmpDir), WithHTTPClient(tsOpenAIFail.Client()), WithOpenAIBaseURL(tsOpenAIFail.URL), WithOllamaURL(tsOllamaFail.URL))
+		report := doc.Run(context.Background())
+
+		llmCheck := report.Find("llm")
+		if llmCheck == nil {
+			t.Fatal("expected llm check in report")
+		}
+		if llmCheck.Status != StatusFail {
+			t.Errorf("expected StatusFail when all providers fail, got %s: %s", llmCheck.Status, llmCheck.Message)
+		}
+	})
+}
+
 func TestDoctor_OpenAI_Checks(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("AGIS_HOME", tmpDir)

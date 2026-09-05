@@ -43,19 +43,32 @@ const (
 // core domain types.
 type Client struct {
 	baseURL    string
-	apiKey     string
+	pool       *CredentialPool
 	httpClient *http.Client
 }
 
 // NewClient returns an OpenAI-compatible client targeting baseURL. apiKey may
-// be empty for local backends such as Ollama. The caller owns the returned
-// client; it holds no background goroutines until a request is made.
-func NewClient(baseURL, apiKey string) *Client {
+// be empty for local backends such as Ollama. Optional apiKeys provide additional
+// fallback credentials in the CredentialPool.
+func NewClient(baseURL, apiKey string, apiKeys ...string) *Client {
+	return NewClientWithPool(baseURL, NewCredentialPool(apiKey, apiKeys))
+}
+
+// NewClientWithPool returns an OpenAI-compatible client with a dedicated CredentialPool.
+func NewClientWithPool(baseURL string, pool *CredentialPool) *Client {
+	if pool == nil {
+		pool = NewCredentialPool("", nil)
+	}
 	return &Client{
 		baseURL:    strings.TrimRight(baseURL, "/"),
-		apiKey:     apiKey,
+		pool:       pool,
 		httpClient: &http.Client{},
 	}
+}
+
+// KeyPool returns the client's CredentialPool.
+func (c *Client) KeyPool() *CredentialPool {
+	return c.pool
 }
 
 // Chat performs a non-streaming completion and returns the full reply.
@@ -140,29 +153,52 @@ func (c *Client) doChat(ctx context.Context, req core.ChatRequest, stream bool) 
 		return nil, fmt.Errorf("encoding chat request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		c.baseURL+"/chat/completions",
-		bytes.NewReader(body),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("building chat request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	if c.apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	maxAttempts := c.pool.Len()
+	if maxAttempts < 1 {
+		maxAttempts = 1
 	}
 
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("posting chat completion: %w", err)
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
+		httpReq, err := http.NewRequestWithContext(
+			ctx,
+			http.MethodPost,
+			c.baseURL+"/chat/completions",
+			bytes.NewReader(body),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("building chat request: %w", err)
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		keyUsed := c.pool.CurrentKey()
+		if keyUsed != "" {
+			httpReq.Header.Set("Authorization", "Bearer "+keyUsed)
+		}
+
+		resp, err := c.httpClient.Do(httpReq)
+		if err != nil {
+			return nil, fmt.Errorf("posting chat completion: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			if _, ok := c.pool.RotateKey(keyUsed); ok && attempt < maxAttempts-1 {
+				resp.Body.Close()
+				continue
+			}
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			defer resp.Body.Close()
+			return nil, httpStatusError(resp)
+		}
+		return resp, nil
 	}
-	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
-		return nil, httpStatusError(resp)
-	}
-	return resp, nil
+
+	return nil, errors.New("chat completion: all API keys exhausted")
 }
 
 // streamEvents reads SSE data lines from body and emits one StreamEvent per

@@ -90,7 +90,7 @@ func main() {
 	}
 	defer repo.Close()
 
-	provider := llm.NewProvider(cfg.LLM)
+	provider := llm.NewResilientProvider(cfg.LLM)
 
 	// The TUI owns the token stream: the brain's sink writes here and the
 	// model drains it to paint tokens in real time. Buffered so a slow update
@@ -127,8 +127,9 @@ func main() {
 	}
 	var summarizer *memory.Summarizer
 	if cfg.Memory.LearningEnabled {
-		curator := memory.NewCurator(provider, repo, nil)
-		summarizer = memory.NewSummarizer(provider, repo, nil)
+		memoryProvider := llm.NewProviderForTask(cfg.LLM, cfg.Memory.Provider, cfg.Memory.Model)
+		curator := memory.NewCurator(memoryProvider, repo, nil)
+		summarizer = memory.NewSummarizer(memoryProvider, repo, nil)
 		creator := skills.NewCreator(provider, repo, cfg.Skills.Enabled, nil)
 		brainOpts = append(brainOpts,
 			core.WithNudger(curator),

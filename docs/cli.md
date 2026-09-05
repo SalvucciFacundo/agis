@@ -241,7 +241,7 @@ agis doctor -no-color
 3. **Agent Identity (`SOUL.md`)**: Verifies presence and readability of the persistent agent persona.
 4. **Skill Hub & Registry**: Scans `$AGIS_HOME/skills/` and validates frontmatter metadata on all Markdown skills.
 5. **Policy Guard & Permissions**: Validates `policy.yaml` parsing and active security postures across local, docker, and ssh tiers.
-6. **LLM Provider Connectivity**: Tests live connectivity to Ollama (`/api/tags`), OpenAI (`/v1/models`), or OpenRouter endpoints, verifying model availability.
+6. **LLM Provider Connectivity & Fallbacks**: Tests live connectivity to primary and all configured fallback providers (Ollama `/api/tags`, OpenAI `/v1/models`, OpenRouter), validates API keys, credential pool sizes, and reports fallback readiness (`PASS` when primary is ok, `WARN` when primary is down but fallbacks are operational, `FAIL` when all providers fail).
 7. **Vector Embeddings & Hybrid Search**: Checks hybrid search configuration and embedding model parameters when enabled.
 8. **Model Context Protocol (MCP)**: Validates command paths for `stdio` subprocesses and URL syntax for `sse` transports.
 9. **Execution Backends & System Tools**: Validates local shell (`sh`), `docker` CLI, and `ssh` client availability.
