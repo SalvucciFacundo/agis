@@ -8,6 +8,8 @@ This document provides a comprehensive reference for all command-line interface 
 
 ```bash
 agis [flags]                               # Launch interactive TUI (default)
+agis setup [flags]                         # Setup wizard for interactive LLM provider onboarding (alias: agis init)
+agis profile [list|create|show|use|delete] # Isolated profile management subsystem
 agis doctor [flags]                        # System diagnostics & environment health probe
 agis gateway [run] [flags]                 # Chat Gateway Multiplexer daemon (Telegram & Discord)
 agis cron [run|list] [flags]               # Autonomous Cron Scheduler daemon & job inspector
@@ -29,9 +31,11 @@ Every `agis` command accepts the global configuration flag:
 | Flag | Type | Description | Default |
 |---|---|---|---|
 | `-config` | `string` | Explicit path to `config.yaml` file | `$AGIS_HOME/config.yaml` or `~/.agis/config.yaml` |
+| `-profile`, `--profile` | `string` | Active profile context override (e.g. `work`, `dev`) | `default` |
 
 ### Environment Variables
 - `AGIS_HOME`: Root directory for AGIS runtime files, database (`agis.db`), policy rules (`policy.yaml`), identity (`SOUL.md`), plugins (`plugins/`), and skills (`skills/`). Defaults to `~/.agis`.
+- `AGIS_PROFILE`: Target profile name for runtime isolation (e.g. `work`, `dev`). Defaults to `.active_profile` or `default`.
 
 ---
 
@@ -381,6 +385,73 @@ agis config path
 #### `agis config path`
 - Outputs the resolved configuration file path according to precedence (`-config` flag > `AGIS_HOME` env > `~/.agis/config.yaml`).
 - `-config <path>`: Custom configuration file path.
+
+---
+
+## 12. Setup Wizard (`agis setup` / `agis init`)
+
+Interactive setup wizard and headless automation for configuring LLM providers, credentials, models, and endpoints with live connectivity verification and atomic `0600` permission enforcement.
+
+```bash
+# Launch interactive setup wizard
+agis setup
+agis init
+
+# Headless non-interactive setup for Ollama (local)
+agis setup -non-interactive -provider ollama -model llama3.2 -force
+
+# Headless non-interactive setup for OpenAI
+agis setup -non-interactive -provider openai -model gpt-4o -api-key "sk-..." -force
+
+# Configure a specific profile headlessly
+agis setup -non-interactive -provider openrouter -model anthropic/claude-3.5-sonnet -api-key "sk-or-..." -profile work -force
+```
+
+### Flags:
+- `-provider <name>`: LLM provider name (`ollama`, `openai`, `openrouter`, `anthropic`).
+- `-model <name>`: Model identifier (defaults: `llama3.2` for Ollama, `gpt-4o` for OpenAI, `anthropic/claude-3.5-sonnet` for OpenRouter, `claude-3-5-sonnet-20241022` for Anthropic).
+- `-api-key <key>`: Provider API key or secret token (masked during interactive input).
+- `-base-url <url>`: Custom API base URL (e.g. `http://localhost:11434` for Ollama).
+- `-non-interactive`: Run headlessly without terminal prompts (requires flags).
+- `-force`: Overwrite existing configuration and bypass probe failure aborts.
+- `-config <path>`: Custom configuration file destination path override.
+- `-profile <name>`: Target profile name to configure.
+
+---
+
+## 13. Multi-Profile Management (`agis profile`)
+
+Manage isolated agent profiles with dedicated SQLite databases, personas (`SOUL.md`), configurations (`config.yaml`), custom skills (`skills/`), and security policies (`policy.yaml`).
+
+```bash
+# List all profiles (marks active profile with *)
+agis profile list
+agis profile list -json
+
+# Create a new isolated profile
+agis profile create work
+agis profile create work-clone -clone work
+
+# Display paths and metadata for active or named profile
+agis profile show
+agis profile show work
+agis profile show work -json
+
+# Switch the globally active profile pointer
+agis profile use work
+agis profile switch default
+
+# Delete a profile (with active profile guard)
+agis profile delete old-profile
+agis profile delete work -force
+```
+
+### Subcommands & Flags:
+- `agis profile list [-json]`: Enumerate all discovered profiles and active indicator.
+- `agis profile create <name> [-clone <source>]`: Scaffold a new profile directory (`0700`) with fresh database.
+- `agis profile show [name] [-json]`: Print resolved filesystem paths for profile components.
+- `agis profile use <name>` / `agis profile switch <name>`: Update `$AGIS_HOME/.active_profile` (`0600`).
+- `agis profile delete <name> [-force]`: Remove profile directory. Requires `-force` if profile is active.
 
 ---
 

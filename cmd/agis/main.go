@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -27,31 +28,70 @@ import (
 	"github.com/SalvucciFacundo/agis/internal/tools"
 )
 
+func extractGlobalProfile(args []string) (string, []string) {
+	var profileName string
+	var filtered []string
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "-profile" || arg == "--profile" {
+			if i+1 < len(args) {
+				profileName = args[i+1]
+				i++ // skip value
+			}
+			continue
+		}
+		if strings.HasPrefix(arg, "-profile=") {
+			profileName = strings.TrimPrefix(arg, "-profile=")
+			continue
+		}
+		if strings.HasPrefix(arg, "--profile=") {
+			profileName = strings.TrimPrefix(arg, "--profile=")
+			continue
+		}
+		filtered = append(filtered, arg)
+	}
+
+	return profileName, filtered
+}
+
 func main() {
+	profileName, remainingArgs := extractGlobalProfile(os.Args[1:])
+	if profileName != "" {
+		if err := config.SetActiveProfile(profileName); err != nil {
+			fmt.Fprintf(os.Stderr, "agis: invalid profile %q: %v\n", profileName, err)
+			os.Exit(2)
+		}
+	}
+
 	// Subcommands route before any flag parsing (design D9): the interactive
 	// TUI is the default surface, everything else is a managed subcommand.
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
+	if len(remainingArgs) > 0 {
+		switch remainingArgs[0] {
+		case "setup", "init":
+			os.Exit(RunSetupCLI(remainingArgs[1:], os.Stdin, os.Stdout, os.Stderr))
+		case "profile":
+			os.Exit(RunProfileCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "config":
-			os.Exit(RunConfigCLI(os.Args[2:], os.Stdout, os.Stderr))
+			os.Exit(RunConfigCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "policy":
-			os.Exit(policy.RunCLI(os.Args[2:], os.Stdout, os.Stderr))
+			os.Exit(policy.RunCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "gateway":
-			os.Exit(RunGatewayCLI(os.Args[2:], os.Stdout, os.Stderr))
+			os.Exit(RunGatewayCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "cron":
-			os.Exit(RunCronCLI(os.Args[2:], os.Stdout, os.Stderr))
+			os.Exit(RunCronCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "plugins":
-			os.Exit(RunPluginsCLI(os.Args[2:], os.Stdout, os.Stderr))
+			os.Exit(RunPluginsCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "webhook":
-			os.Exit(RunWebhookCLI(os.Args[2:], os.Stdout, os.Stderr))
+			os.Exit(RunWebhookCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "mcp":
-			os.Exit(RunMCPCLI(os.Args[2:], os.Stdout, os.Stderr))
+			os.Exit(RunMCPCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "doctor":
-			os.Exit(RunDoctorCLI(os.Args[2:], os.Stdout, os.Stderr))
+			os.Exit(RunDoctorCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "session":
-			os.Exit(RunSessionCLI(os.Args[2:], os.Stdout, os.Stderr))
+			os.Exit(RunSessionCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "update":
-			os.Exit(RunUpdateCLI(os.Args[2:], os.Stdout, os.Stderr))
+			os.Exit(RunUpdateCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		}
 	}
 
@@ -61,7 +101,7 @@ func main() {
 		"",
 		"path to config file (default: $AGIS_HOME/config.yaml or ~/.agis/config.yaml)",
 	)
-	if err := fs.Parse(os.Args[1:]); err != nil {
+	if err := fs.Parse(remainingArgs); err != nil {
 		os.Exit(2)
 	}
 

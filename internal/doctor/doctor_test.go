@@ -109,7 +109,7 @@ mcp:
 	}
 
 	// Verify expected checks are present
-	expectedChecks := []string{"config", "database", "soul", "skills", "policy", "llm", "tools", "web_tools", "subagents"}
+	expectedChecks := []string{"config", "profile", "database", "soul", "skills", "policy", "llm", "tools", "web_tools", "subagents"}
 	for _, name := range expectedChecks {
 		found := false
 		for _, r := range report.Results {

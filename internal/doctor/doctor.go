@@ -141,6 +141,7 @@ func (d *Doctor) Run(ctx context.Context) *Report {
 
 	checks := []func(context.Context) CheckResult{
 		d.checkConfig,
+		d.checkProfile,
 		d.checkDatabase,
 		d.checkSoul,
 		d.checkSkills,

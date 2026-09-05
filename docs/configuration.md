@@ -350,3 +350,42 @@ Start the webhook daemon:
 ```bash
 ./bin/agis webhook run --port 8080
 ```
+
+---
+
+## Multi-Profile Configuration & State Isolation
+
+AGIS supports isolated runtime profiles. Each profile encapsulates its own configuration (`config.yaml`), memory database (`agis.db`), persona identity (`SOUL.md`), custom skills (`skills/`), and security policy (`policy.yaml`).
+
+### Profile Directory Layout
+
+```text
+~/.agis/                              # Default root profile
+├── config.yaml                       # Default configuration (mode 0600)
+├── agis.db                           # Default SQLite database
+├── SOUL.md                           # Default persona identity
+├── policy.yaml                       # Default security policy
+├── skills/                           # Default skills directory
+├── .active_profile                   # Pointer to active named profile (e.g. "work")
+└── profiles/
+    ├── work/                         # Isolated "work" profile
+    │   ├── config.yaml
+    │   ├── agis.db
+    │   ├── SOUL.md
+    │   ├── policy.yaml
+    │   └── skills/
+    └── dev/                          # Isolated "dev" profile
+        ├── config.yaml
+        ├── agis.db
+        ├── SOUL.md
+        ├── policy.yaml
+        └── skills/
+```
+
+### Precedence Resolution
+
+When resolving the active profile context, AGIS applies the following precedence (highest to lowest):
+1. **Explicit CLI flag**: `--profile <name>` or `-profile <name>`
+2. **Environment variable**: `AGIS_PROFILE=<name>`
+3. **Active profile pointer**: Content of `$AGIS_HOME/.active_profile`
+4. **Default root**: `$AGIS_HOME` (or `~/.agis`)

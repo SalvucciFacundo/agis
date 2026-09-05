@@ -119,36 +119,47 @@ Full command guide in [docs/tui-commands.md](docs/tui-commands.md).
 AGIS provides modular daemons and management subcommands alongside the default interactive TUI:
 
 ```bash
-# 1. Chat Gateway (Telegram & Discord daemon)
+# 1. Setup Wizard (Interactive & Headless LLM Onboarding)
+./bin/agis setup
+./bin/agis init -non-interactive -provider ollama -model llama3.2 -force
+
+# 2. Multi-Profile Management (Isolated Databases, Personas, Configs)
+./bin/agis profile list
+./bin/agis profile create work
+./bin/agis profile use work
+./bin/agis profile show
+./bin/agis profile delete work -force
+
+# 3. Chat Gateway (Telegram & Discord daemon)
 ./bin/agis gateway [run] [--config config.yaml]
 
-# 2. Cron Scheduler Daemon
+# 4. Cron Scheduler Daemon
 ./bin/agis cron run [--config config.yaml]
 ./bin/agis cron list [--config config.yaml]
 
-# 3. External Plugins Management
+# 5. External Plugins Management
 ./bin/agis plugins list [--dir ~/.agis/plugins]
 ./bin/agis plugins enable <plugin_name>
 ./bin/agis plugins disable <plugin_name>
 ./bin/agis plugins inspect <plugin_name>
 
-# 4. Webhook HTTP Listener
+# 6. Webhook HTTP Listener
 ./bin/agis webhook run [--port 8080] [--host 127.0.0.1] [--path /webhook]
 
-# 5. Policy Guard CLI
+# 7. Policy Guard CLI
 ./bin/agis policy show
 ./bin/agis policy set <rule>
 ./bin/agis policy rm <rule>
 ./bin/agis policy tier <sandbox|standard>
 
-# 6. Model Context Protocol (MCP) CLI
+# 8. Model Context Protocol (MCP) CLI
 ./bin/agis mcp list
 ./bin/agis mcp test <server> <tool> [json_args]
 
-# 7. System Diagnostics & Health Probe
+# 9. System Diagnostics & Health Probe
 ./bin/agis doctor [--json] [--no-color]
 
-# 8. Conversation Session Management & Export
+# 10. Conversation Session Management & Export
 ./bin/agis session list [--limit 20] [--json]
 ./bin/agis session show <id> [--json]
 ./bin/agis session delete <id> [--yes]
@@ -156,7 +167,7 @@ AGIS provides modular daemons and management subcommands alongside the default i
 ./bin/agis session export <id> [--format json|markdown|txt] [--output file]
 ./bin/agis session snapshot <id> [--json]
 
-# 9. In-Place Self-Updater & Release Inspector
+# 11. In-Place Self-Updater & Release Inspector
 ./bin/agis update [--check] [--backup] [--version <tag>] [--force]
 
 # 10. Configuration Management & Inspection

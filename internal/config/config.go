@@ -530,45 +530,38 @@ func applyDefaults(cfg *Config) {
 	}
 }
 
-// defaultPluginsDir returns $AGIS_HOME/plugins (or ~/.agis/plugins).
+// defaultPluginsDir returns $AGIS_HOME/plugins (or ~/.agis/plugins) for the active profile.
 func defaultPluginsDir() string {
-	return filepath.Join(agisDir(), "plugins")
+	return filepath.Join(CurrentProfileDir(), "plugins")
 }
 
 // AgisHome exposes the resolved AGIS home directory ($AGIS_HOME or
-// ~/.agis). Identity, skills, and the registry live here.
+// ~/.agis) scoped to the active profile context. Identity, skills, and the registry live here.
 func AgisHome() string {
-	return agisDir()
+	return CurrentProfileDir()
 }
 
-// defaultSkillsDir returns $AGIS_HOME/skills (or ~/.agis/skills).
+// defaultSkillsDir returns $AGIS_HOME/skills (or ~/.agis/skills) for the active profile.
 func defaultSkillsDir() string {
-	return filepath.Join(agisDir(), skillsDirName)
+	return filepath.Join(CurrentProfileDir(), skillsDirName)
 }
 
-// ResolvePath applies the -config flag > AGIS_HOME > default precedence.
+// ResolvePath applies the -config flag > AGIS_HOME > default precedence scoped to the active profile.
 func ResolvePath(flagPath string) string {
 	if flagPath != "" {
 		return flagPath
 	}
-	return filepath.Join(agisDir(), configFileName)
+	return filepath.Join(CurrentProfileDir(), configFileName)
 }
 
 // agisDir returns the AGIS base directory: AGIS_HOME when set, otherwise
 // ~/.agis.
 func agisDir() string {
-	if home := os.Getenv("AGIS_HOME"); home != "" {
-		return home
-	}
-	userHome, err := os.UserHomeDir()
-	if err != nil {
-		return dotAgisDir
-	}
-	return filepath.Join(userHome, dotAgisDir)
+	return BaseHome()
 }
 
 func defaultDBPath() string {
-	return filepath.Join(agisDir(), dbFileName)
+	return filepath.Join(CurrentProfileDir(), dbFileName)
 }
 
 // warnPerms emits a warning when path's mode grants any permission to group
