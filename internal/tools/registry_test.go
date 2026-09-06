@@ -117,3 +117,13 @@ func TestFromWebConfig_DisabledReturnsNil(t *testing.T) {
 	}
 }
 
+func TestSkillRunners(t *testing.T) {
+	runners := SkillRunners(t.TempDir(), newFakeSkillHub())
+	if len(runners) != 2 {
+		t.Fatalf("SkillRunners returned %d runners, want 2", len(runners))
+	}
+	names := []string{runners[0].Name(), runners[1].Name()}
+	if names[0] != "read_skill" || names[1] != "create_skill" {
+		t.Errorf("SkillRunners names = %v, want ['read_skill', 'create_skill']", names)
+	}
+}

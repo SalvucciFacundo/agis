@@ -175,6 +175,13 @@ func (r *ephemeralRepository) RecordSkillUsage(ctx context.Context, name string)
 	return r.parent.RecordSkillUsage(ctx, name)
 }
 
+func (r *ephemeralRepository) DeleteSkill(ctx context.Context, name string) error {
+	if r.parent == nil {
+		return nil
+	}
+	return r.parent.DeleteSkill(ctx, name)
+}
+
 func (r *ephemeralRepository) AppendAudit(ctx context.Context, entry core.AuditEntry) error {
 	if r.parent == nil {
 		return nil

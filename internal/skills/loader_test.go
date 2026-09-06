@@ -36,12 +36,88 @@ Always mention dark roast.`)
 	}
 }
 
+func TestLoadDir_NestedLayout(t *testing.T) {
+	dir := t.TempDir()
+
+	// Nested skill with SKILL.md
+	nestedDir1 := filepath.Join(dir, "docker-build")
+	if err := os.MkdirAll(nestedDir1, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	writeSkill(t, nestedDir1, "SKILL.md", `---
+name: docker-build
+description: Build container images
+trigger: docker
+license: Apache-2.0
+metadata:
+  author: tester
+  version: "1.0"
+---
+
+## When to Use
+Building images.
+`)
+
+	// Nested skill with <name>.md
+	nestedDir2 := filepath.Join(dir, "deploy-staging")
+	if err := os.MkdirAll(nestedDir2, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	writeSkill(t, nestedDir2, "deploy-staging.md", `---
+name: deploy-staging
+description: Deploy to staging
+---
+
+## Steps
+1. Deploy.
+`)
+
+	// Flat skill alongside nested
+	writeSkill(t, dir, "flat-tool.md", `---
+name: flat-tool
+description: Flat layout skill
+---
+
+Flat instructions.
+`)
+
+	got, err := LoadDir(dir, discardLogger())
+	if err != nil {
+		t.Fatalf("LoadDir() error = %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d skills, want 3 (2 nested + 1 flat)", len(got))
+	}
+
+	found := make(map[string]core.Skill)
+	for _, s := range got {
+		found[s.Name] = s
+	}
+
+	if _, ok := found["docker-build"]; !ok {
+		t.Errorf("docker-build not found in loaded skills")
+	}
+	if _, ok := found["deploy-staging"]; !ok {
+		t.Errorf("deploy-staging not found in loaded skills")
+	}
+	if _, ok := found["flat-tool"]; !ok {
+		t.Errorf("flat-tool not found in loaded skills")
+	}
+}
+
 func TestLoadDir_InvalidFilesSkipped(t *testing.T) {
 	dir := t.TempDir()
 	writeSkill(t, dir, "no-name.md", "---\ndescription: x\n---\n\nbody\n")
 	writeSkill(t, dir, "no-desc.md", "---\nname: y\n---\n\nbody\n")
 	writeSkill(t, dir, "unclosed.md", "---\nname: z\ndescription: w\n\nbody forever")
 	writeSkill(t, dir, "not-skill.md", "just prose, no frontmatter\n")
+
+	// Nested invalid skill
+	badNested := filepath.Join(dir, "bad-nested")
+	if err := os.MkdirAll(badNested, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+	writeSkill(t, badNested, "SKILL.md", "not a valid frontmatter")
 
 	got, err := LoadDir(dir, discardLogger())
 	if err != nil {

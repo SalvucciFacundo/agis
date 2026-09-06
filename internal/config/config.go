@@ -43,16 +43,16 @@ const (
 
 // Config is the root AGIS configuration.
 type Config struct {
-	LLM     LLMConfig     `yaml:"llm"`
-	DB      DBConfig      `yaml:"db"`
-	Memory  MemoryConfig  `yaml:"memory"`
-	Agent   AgentConfig   `yaml:"agent"`
-	Skills  SkillsConfig  `yaml:"skills"`
-	Tools   ToolsConfig   `yaml:"tools"`
-	Gateway GatewayConfig `yaml:"gateway"`
-	Cron    CronConfig    `yaml:"cron"`
-	Plugins PluginsConfig  `yaml:"plugins"`
-	Webhook WebhookConfig  `yaml:"webhook"`
+	LLM        LLMConfig        `yaml:"llm"`
+	DB         DBConfig         `yaml:"db"`
+	Memory     MemoryConfig     `yaml:"memory"`
+	Agent      AgentConfig      `yaml:"agent"`
+	Skills     SkillsConfig     `yaml:"skills"`
+	Tools      ToolsConfig      `yaml:"tools"`
+	Gateway    GatewayConfig    `yaml:"gateway"`
+	Cron       CronConfig       `yaml:"cron"`
+	Plugins    PluginsConfig    `yaml:"plugins"`
+	Webhook    WebhookConfig    `yaml:"webhook"`
 	Embeddings EmbeddingsConfig `yaml:"embeddings"`
 	MCP        MCPConfig        `yaml:"mcp"`
 	Multimodal MultimodalConfig `yaml:"multimodal"`
@@ -70,7 +70,6 @@ type ServerConfig struct {
 	ReadTimeout  time.Duration `yaml:"read_timeout"`
 	WriteTimeout time.Duration `yaml:"write_timeout"`
 }
-
 
 // SubagentsConfig gates and tunes the native subagent delegation subsystem.
 type SubagentsConfig struct {
@@ -172,7 +171,6 @@ type CronTargetConfig struct {
 	Recipient string `yaml:"recipient"`
 }
 
-
 // GatewayConfig gates the M6 gateway subsystem for external chat platforms.
 type GatewayConfig struct {
 	Enabled  bool           `yaml:"enabled"`
@@ -236,9 +234,9 @@ type ToolSearchConfig struct {
 type WebConfig struct {
 	Enabled         bool          `yaml:"enabled"`
 	DefaultProvider string        `yaml:"default_provider"` // "duckduckgo", "brave", "tavily", "searxng"
-	FetchTimeout    time.Duration `yaml:"fetch_timeout"`   // default: 15s
-	MaxFetchBytes   int64         `yaml:"max_fetch_bytes"` // default: 2097152 (2MB)
-	UserAgent       string        `yaml:"user_agent"`      // default: "AGIS/1.0 (+https://github.com/SalvucciFacundo/agis)"
+	FetchTimeout    time.Duration `yaml:"fetch_timeout"`    // default: 15s
+	MaxFetchBytes   int64         `yaml:"max_fetch_bytes"`  // default: 2097152 (2MB)
+	UserAgent       string        `yaml:"user_agent"`       // default: "AGIS/1.0 (+https://github.com/SalvucciFacundo/agis)"
 	Providers       WebProviders  `yaml:"providers"`
 }
 
@@ -308,8 +306,9 @@ type AgentConfig struct {
 
 // SkillsConfig tunes the skill hub: master switch and where skill files live.
 type SkillsConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	Dir     string `yaml:"dir"`
+	Enabled     bool   `yaml:"enabled"`
+	Dir         string `yaml:"dir"`
+	LazyLoading bool   `yaml:"lazy_loading"`
 }
 
 // MemoryConfig tunes the M2 learning loop: whether curation runs at all, the
@@ -408,8 +407,9 @@ func defaults() *Config {
 			EvolutionEnabled: true,
 		},
 		Skills: SkillsConfig{
-			Enabled: true,
-			Dir:     defaultSkillsDir(),
+			Enabled:     true,
+			Dir:         defaultSkillsDir(),
+			LazyLoading: true,
 		},
 		Tools: ToolsConfig{
 			Docker: DockerConfig{Image: defaultDockerImage},

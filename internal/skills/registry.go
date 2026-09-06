@@ -48,7 +48,7 @@ func (h *Hub) SyncRegistry(path string) {
 	if path == "" || h == nil {
 		return
 	}
-	if err := WriteRegistry(path, h.skills); err != nil {
+	if err := WriteRegistry(path, h.Skills()); err != nil {
 		h.logger.Warn("skills: registry write failed", "path", path, "error", err)
 	}
 }

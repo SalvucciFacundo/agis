@@ -107,6 +107,8 @@ func (r *fakeRepo) ListSkills(context.Context) ([]core.Skill, error) { return ni
 
 func (r *fakeRepo) RecordSkillUsage(context.Context, string) error { return nil }
 
+func (r *fakeRepo) DeleteSkill(context.Context, string) error { return nil }
+
 
 func (r *fakeRepo) ListConversations(ctx context.Context, limit, offset int) ([]core.Conversation, error) { return nil, nil }
 func (r *fakeRepo) GetConversation(ctx context.Context, id string) (*core.Conversation, error) { return nil, core.ErrNotFound }

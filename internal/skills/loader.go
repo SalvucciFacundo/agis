@@ -13,16 +13,19 @@ import (
 )
 
 // frontMatter is the YAML header of an agentskills.io-compatible skill file.
-// Name and description are required; trigger is optional.
 type frontMatter struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Trigger     string `yaml:"trigger"`
+	Name        string            `yaml:"name"`
+	Description string            `yaml:"description"`
+	Trigger     string            `yaml:"trigger"`
+	License     string            `yaml:"license"`
+	Metadata    map[string]string `yaml:"metadata"`
 }
 
 // LoadDir loads every valid skill file from dir and returns them as imported
-// skills. Files with missing name/description or unparsable frontmatter are
-// skipped with a logged warning, never fatal (spec SKL-001). Skill contents
+// skills. Supports both flat layout (dir/<name>.md) and nested layout
+// (dir/<name>/SKILL.md or dir/<name>/<name>.md).
+// Files with missing name/description or unparsable frontmatter are
+// skipped with a logged warning, never fatal (spec SKL-001, SKL-IDX-003). Skill contents
 // pass through the injection scanner before returning; dropped lines are
 // logged too. A missing directory returns an empty result: no skills is a
 // normal state, not an error.
@@ -41,33 +44,58 @@ func LoadDir(dir string, logger *slog.Logger) ([]core.Skill, error) {
 
 	var out []core.Skill
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(strings.ToLower(e.Name()), ".md") {
+		if e.IsDir() {
+			// Check nested layout: <dir>/SKILL.md, or <dir>/<dirname>.md
+			subDirPath := filepath.Join(dir, e.Name())
+			targetPath := filepath.Join(subDirPath, "SKILL.md")
+			if _, err := os.Stat(targetPath); err != nil {
+				// Fallback to <subdirname>.md
+				targetPath = filepath.Join(subDirPath, e.Name()+".md")
+				if _, err := os.Stat(targetPath); err != nil {
+					continue
+				}
+			}
+
+			skill, ok := loadSkillFile(targetPath, logger)
+			if ok {
+				out = append(out, skill)
+			}
+			continue
+		}
+
+		if !strings.HasSuffix(strings.ToLower(e.Name()), ".md") {
 			continue
 		}
 		path := filepath.Join(dir, e.Name())
-
-		data, err := os.ReadFile(path)
-		if err != nil {
-			logger.Warn("skills: skipping unreadable file", "path", path, "error", err)
-			continue
+		skill, ok := loadSkillFile(path, logger)
+		if ok {
+			out = append(out, skill)
 		}
-
-		skill, err := parseFile(string(data))
-		if err != nil {
-			logger.Warn("skills: skipping invalid skill file", "path", path, "error", err)
-			continue
-		}
-		skill.Source = core.SourceImported
-
-		content, dropped := scan.Lines(skill.Content)
-		if dropped > 0 {
-			logger.Warn("skills: dropped injected lines", "path", path, "count", dropped)
-		}
-		skill.Content = content
-
-		out = append(out, skill)
 	}
 	return out, nil
+}
+
+func loadSkillFile(path string, logger *slog.Logger) (core.Skill, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		logger.Warn("skills: skipping unreadable file", "path", path, "error", err)
+		return core.Skill{}, false
+	}
+
+	skill, err := parseFile(string(data))
+	if err != nil {
+		logger.Warn("skills: skipping invalid skill file", "path", path, "error", err)
+		return core.Skill{}, false
+	}
+	skill.Source = core.SourceImported
+
+	content, dropped := scan.Lines(skill.Content)
+	if dropped > 0 {
+		logger.Warn("skills: dropped injected lines", "path", path, "count", dropped)
+	}
+	skill.Content = content
+
+	return skill, true
 }
 
 // parseFile splits a Markdown skill file into its YAML frontmatter and body,

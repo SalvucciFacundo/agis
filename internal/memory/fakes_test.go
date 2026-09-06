@@ -129,6 +129,11 @@ func (r *recordingRepo) RecordSkillUsage(_ context.Context, name string) error {
 	return nil
 }
 
+func (r *recordingRepo) DeleteSkill(_ context.Context, name string) error {
+	r.calls = append(r.calls, "DeleteSkill")
+	return nil
+}
+
 func (r *recordingRepo) UserModelRows(context.Context, int) ([]core.UserModel, error) {
 	r.calls = append(r.calls, "UserModelRows")
 	return r.userModelRows, nil

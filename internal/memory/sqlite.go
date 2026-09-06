@@ -781,6 +781,14 @@ func (r *Repository) RecordSkillUsage(ctx context.Context, name string) error {
 	return nil
 }
 
+// DeleteSkill permanently removes the named skill from the repository.
+func (r *Repository) DeleteSkill(ctx context.Context, name string) error {
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM skills WHERE name = ?`, name); err != nil {
+		return fmt.Errorf("deleting skill %q: %w", name, err)
+	}
+	return nil
+}
+
 // scanner is the subset of *sql.Row/*sql.Rows both skill readers use.
 type scanner interface {
 	Scan(dest ...any) error

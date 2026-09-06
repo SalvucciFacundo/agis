@@ -139,8 +139,9 @@ func runServeWithContext(ctx context.Context, args []string, stdout, stderr io.W
 		brainOpts = append(brainOpts, core.WithEvolution(evolution))
 	}
 
+	var hub *skills.Hub
 	if cfg.Skills.Enabled {
-		hub := skills.NewHub(repo, logger)
+		hub = skills.NewHub(repo, logger)
 		if err := hub.LoadDir(ctx, cfg.Skills.Dir); err != nil {
 			logger.Warn("skills: loading directory", "error", err)
 		}
@@ -148,7 +149,10 @@ func runServeWithContext(ctx context.Context, args []string, stdout, stderr io.W
 		if mkErr := os.MkdirAll(regDir, 0o700); mkErr == nil {
 			hub.SyncRegistry(filepath.Join(regDir, "skill-registry.md"))
 		}
-		brainOpts = append(brainOpts, core.WithSkills(hub))
+		brainOpts = append(brainOpts,
+			core.WithSkills(hub),
+			core.WithSkillsLazyLoading(cfg.Skills.LazyLoading),
+		)
 	}
 
 	if cfg.Memory.LearningEnabled {
@@ -176,6 +180,13 @@ func runServeWithContext(ctx context.Context, args []string, stdout, stderr io.W
 
 	if cfg.Tools.Enabled {
 		runners := tools.Select(cfg.Tools, logger)
+		if cfg.Skills.Enabled && hub != nil {
+			skillsDir := cfg.Skills.Dir
+			if skillsDir == "" {
+				skillsDir = filepath.Join(config.AgisHome(), "skills")
+			}
+			runners = append(runners, tools.SkillRunners(skillsDir, hub)...)
+		}
 		brainOpts = append(brainOpts, core.WithTools(
 			runners,
 			pstore,

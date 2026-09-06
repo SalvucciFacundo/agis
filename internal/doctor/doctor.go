@@ -334,17 +334,87 @@ func (d *Doctor) checkSkills(ctx context.Context) CheckResult {
 	}
 
 	skillsDir := filepath.Join(d.agisHome, "skills")
-	loadedSkills, err := skills.LoadDir(skillsDir, nil)
+	entries, err := os.ReadDir(skillsDir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			res.Status = StatusPass
+			res.Message = "0 skills loaded (directory not initialized)"
+			res.Details = append(res.Details, fmt.Sprintf("Directory: %s", skillsDir))
+			res.Duration = time.Since(start)
+			return res
+		}
 		res.Status = StatusWarn
 		res.Message = fmt.Sprintf("Skill directory warning: %v", err)
 		res.Duration = time.Since(start)
 		return res
 	}
 
-	res.Status = StatusPass
-	res.Message = fmt.Sprintf("%d skills loaded and validated", len(loadedSkills))
+	var validCount int
+	var warnings []string
+
+	for _, e := range entries {
+		if e.IsDir() {
+			subDirPath := filepath.Join(skillsDir, e.Name())
+			targetPath := filepath.Join(subDirPath, "SKILL.md")
+			if _, err := os.Stat(targetPath); err != nil {
+				targetPath = filepath.Join(subDirPath, e.Name()+".md")
+				if _, err := os.Stat(targetPath); err != nil {
+					continue
+				}
+			}
+
+			data, err := os.ReadFile(targetPath)
+			if err != nil {
+				warnings = append(warnings, fmt.Sprintf("%s: unreadable file: %v", filepath.Join(e.Name(), filepath.Base(targetPath)), err))
+				continue
+			}
+
+			if err := skills.ValidateSkillContent(string(data)); err != nil {
+				warnings = append(warnings, fmt.Sprintf("%s: %v", filepath.Join(e.Name(), filepath.Base(targetPath)), err))
+			} else {
+				validCount++
+			}
+			continue
+		}
+
+		if !strings.HasSuffix(strings.ToLower(e.Name()), ".md") {
+			continue
+		}
+
+		filePath := filepath.Join(skillsDir, e.Name())
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("%s: unreadable file: %v", e.Name(), err))
+			continue
+		}
+
+		if err := skills.ValidateSkillContent(string(data)); err != nil {
+			warnings = append(warnings, fmt.Sprintf("%s: %v", e.Name(), err))
+		} else {
+			validCount++
+		}
+	}
+
+	regPath := filepath.Join(d.agisHome, ".atl", "skill-registry.md")
+	if _, err := os.Stat(regPath); err == nil {
+		res.Details = append(res.Details, fmt.Sprintf("Registry: %s", regPath))
+	} else if validCount > 0 {
+		res.Details = append(res.Details, "Registry: .atl/skill-registry.md not generated yet")
+	}
+
 	res.Details = append(res.Details, fmt.Sprintf("Directory: %s", skillsDir))
+
+	if len(warnings) > 0 {
+		res.Status = StatusWarn
+		res.Message = fmt.Sprintf("%d valid skills, %d malformed skill(s) detected", validCount, len(warnings))
+		for _, w := range warnings {
+			res.Details = append(res.Details, fmt.Sprintf("Malformed: %s", w))
+		}
+		res.Details = append(res.Details, "Remediation: Ensure skills conform to agentskills.io standard with required frontmatter (name, description) and markdown sections (## When to Use, ## Critical Rules, ## Workflow, ## Examples).")
+	} else {
+		res.Status = StatusPass
+		res.Message = fmt.Sprintf("%d skills loaded and validated", validCount)
+	}
 
 	res.Duration = time.Since(start)
 	return res

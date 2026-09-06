@@ -91,6 +91,10 @@ type Brain struct {
 	// toolSearchThreshold sets the tool count threshold above which schema pruning activates (default 8).
 	toolSearchThreshold int
 
+	// lazySkills gates whether matched skills render as a compact Markdown table
+	// index (true, default) or full Markdown bodies (false).
+	lazySkills bool
+
 	// activeID tracks the session manager's active conversation when M5 is
 	// wired. Empty means "use LatestConversation" (M1 fallback).
 	activeID string
@@ -155,6 +159,12 @@ func WithSkills(h SkillHub) Option {
 	return func(b *Brain) { b.hub = h }
 }
 
+// WithSkillsLazyLoading configures whether matched skills are rendered as a compact
+// Markdown index table (true, default) or full Markdown bodies (false).
+func WithSkillsLazyLoading(lazy bool) Option {
+	return func(b *Brain) { b.lazySkills = lazy }
+}
+
 // WithSkillCreator wires close-time skill extraction. A nil creator (the
 // default) disables extraction.
 func WithSkillCreator(c SkillCreator) Option {
@@ -208,6 +218,7 @@ func NewBrain(repo Repository, provider Provider, opts ...Option) *Brain {
 		logger:      slog.Default(),
 		recallLimit: defaultRecallLimit,
 		nudgeEvery:  defaultNudgeEvery,
+		lazySkills:  true,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -422,7 +433,7 @@ func isCoreTool(r ToolRunner) bool {
 		name = "shell-" + backend
 	}
 	switch name {
-	case "tool_search", "load_tool", "web_search", "web_fetch", "delegate_task":
+	case "tool_search", "load_tool", "web_search", "web_fetch", "delegate_task", "read_skill", "create_skill":
 		return true
 	}
 	switch backend {
@@ -662,7 +673,7 @@ func (b *Brain) contextMessages(ctx context.Context, tail []Message, input strin
 	if b.hub != nil {
 		matched := b.hub.Match(input, defaultSkillMatchLimit)
 		if len(matched) > 0 {
-			head = append(head, Message{Role: RoleSystem, Content: skillsSystemMessage(matched)})
+			head = append(head, Message{Role: RoleSystem, Content: skillsSystemMessage(matched, b.lazySkills)})
 			for _, s := range matched {
 				b.hub.RecordUse(ctx, s.Name)
 			}

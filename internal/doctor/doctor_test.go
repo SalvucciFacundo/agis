@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,9 +52,23 @@ func TestDoctor_AllPass(t *testing.T) {
 name: test-skill
 trigger: test
 description: A test skill for doctor verification.
+license: Apache-2.0
+metadata:
+  author: tester
+  version: "1.0"
 ---
-# Test Skill
-Instructions here.
+
+## When to Use
+Use when testing doctor check.
+
+## Critical Rules
+1. Rule 1.
+
+## Workflow
+1. Step 1.
+
+## Examples
+Example 1.
 `
 	if err := os.WriteFile(filepath.Join(skillsDir, "test.md"), []byte(skillContent), 0o600); err != nil {
 		t.Fatalf("writing skill: %v", err)
@@ -473,4 +488,133 @@ func TestDoctor_FormatTerminalAndJSON(t *testing.T) {
 	if textPlain == "" {
 		t.Errorf("expected plain formatted text, got empty")
 	}
+}
+
+func TestDoctor_SkillsCheck(t *testing.T) {
+	t.Run("clean skills pass with count and registry check", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("AGIS_HOME", tmpDir)
+
+		skillsDir := filepath.Join(tmpDir, "skills")
+		_ = os.MkdirAll(skillsDir, 0o700)
+
+		validSkill := `---
+name: valid-one
+description: First valid skill
+---
+
+## When to Use
+When running test one.
+
+## Critical Rules
+1. Must pass.
+
+## Workflow
+1. Execute test.
+
+## Examples
+Example usage.
+`
+		_ = os.WriteFile(filepath.Join(skillsDir, "valid-one.md"), []byte(validSkill), 0o600)
+
+		// Nested layout
+		nestedDir := filepath.Join(skillsDir, "nested-two")
+		_ = os.MkdirAll(nestedDir, 0o700)
+		nestedSkill := `---
+name: nested-two
+description: Second nested valid skill
+---
+
+## When to Use
+When running nested test.
+
+## Critical Rules
+1. Must follow rules.
+
+## Workflow
+1. Step A.
+
+## Examples
+Example B.
+`
+		_ = os.WriteFile(filepath.Join(nestedDir, "SKILL.md"), []byte(nestedSkill), 0o600)
+
+		// Registry file
+		atlDir := filepath.Join(tmpDir, ".atl")
+		_ = os.MkdirAll(atlDir, 0o700)
+		_ = os.WriteFile(filepath.Join(atlDir, "skill-registry.md"), []byte("# Skill Registry\n"), 0o600)
+
+		cfg := &config.Config{
+			DB: config.DBConfig{Path: filepath.Join(tmpDir, "agis.db")},
+		}
+
+		doc := New(cfg, WithAgisHome(tmpDir))
+		res := doc.checkSkills(context.Background())
+
+		if res.Status != StatusPass {
+			t.Fatalf("expected StatusPass, got %s: %s (%v)", res.Status, res.Message, res.Details)
+		}
+		if !strings.Contains(res.Message, "2 skills loaded and validated") {
+			t.Errorf("unexpected message: %s", res.Message)
+		}
+	})
+
+	t.Run("malformed skills report warning with details and guidance", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("AGIS_HOME", tmpDir)
+
+		skillsDir := filepath.Join(tmpDir, "skills")
+		_ = os.MkdirAll(skillsDir, 0o700)
+
+		// Skill missing required sections
+		malformedSkill := `---
+name: bad-skill
+description: Missing sections
+---
+
+# Bad Skill
+Just arbitrary markdown without required H2 sections.
+`
+		_ = os.WriteFile(filepath.Join(skillsDir, "bad-skill.md"), []byte(malformedSkill), 0o600)
+
+		cfg := &config.Config{
+			DB: config.DBConfig{Path: filepath.Join(tmpDir, "agis.db")},
+		}
+
+		doc := New(cfg, WithAgisHome(tmpDir))
+		res := doc.checkSkills(context.Background())
+
+		if res.Status != StatusWarn {
+			t.Fatalf("expected StatusWarn on malformed skill, got %s: %s", res.Status, res.Message)
+		}
+		if len(res.Details) == 0 {
+			t.Errorf("expected details with guidance on malformed skill")
+		}
+		foundGuidance := false
+		for _, d := range res.Details {
+			if strings.Contains(d, "bad-skill") || strings.Contains(d, "remediation") || strings.Contains(d, "missing") {
+				foundGuidance = true
+				break
+			}
+		}
+		if !foundGuidance {
+			t.Errorf("expected remediation/details for bad-skill, got: %v", res.Details)
+		}
+	})
+
+	t.Run("missing skills directory returns pass with zero skills", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("AGIS_HOME", tmpDir)
+
+		cfg := &config.Config{
+			DB: config.DBConfig{Path: filepath.Join(tmpDir, "agis.db")},
+		}
+
+		doc := New(cfg, WithAgisHome(tmpDir))
+		res := doc.checkSkills(context.Background())
+
+		if res.Status != StatusPass {
+			t.Fatalf("expected StatusPass when skills dir does not exist, got %s: %s", res.Status, res.Message)
+		}
+	})
 }

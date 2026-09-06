@@ -80,7 +80,7 @@ go run ./cmd/agis
 - **🔌 Multi-Provider LLM & Resilience** — Ollama, OpenAI, OpenRouter, and any OpenAI-compatible API over a unified client with streaming SSE, multi-key credential pooling with reactive HTTP 429 rotation, ordered fallback provider chains with pre-token failover, and independent auxiliary model overrides (memory, vision, audio, embeddings).
 - **💾 SQLite + FTS5 & Hybrid Search** — Pure Go SQLite with full-text search and dense vector embeddings (Ollama / OpenAI) combined via Reciprocal Rank Fusion (RRF).
 - **🔄 Learning & Memory Loop** — Continuous observation extraction (Curator), session summarization, and user model confidence synthesis.
-- **🎭 Skill Hub & Persona** — Agentskills.io-compatible Markdown skill loading, runtime skill distillation, durable `SOUL.md`, and dynamic personality overlays.
+- **🎭 Skill Hub, Lazy Index & Autonomous Creator** — Agentskills.io-compatible Markdown skill loading (flat & nested), lazy prompt indexing (`read_skill`), autonomous tool creation (`create_skill`), runtime skill distillation, durable `SOUL.md`, and dynamic personality overlays.
 - **🛡️ Policy Guard & Tool Backends** — Multi-tier security postures (`sandbox`, `standard`, `full`), fail-closed approval, audit logging, and Local/Docker/SSH tool backends.
 - **🌐 Native Web Search & Content Extraction** — Pure Go multi-provider search (DuckDuckGo, Brave, Tavily, SearXNG) and safe HTML-to-Markdown extractor with SSRF prevention and size guards.
 - **🔌 Model Context Protocol (MCP) Client** — Native JSON-RPC 2.0 client supporting `stdio` subprocesses with process group isolation and `sse` network streams, dynamic tool discovery, and Policy Guard integration.
@@ -180,6 +180,12 @@ AGIS provides modular daemons and management subcommands alongside the default i
 # 13. OpenAI-Compatible REST API Server
 ./bin/agis serve [--port 8080] [--host 127.0.0.1] [--api-key sk-...]
 ./bin/agis api -cors "http://localhost:3000"
+
+# 14. Skill Management & agentskills.io Scaffolding
+./bin/agis skill list [--json]
+./bin/agis skill create <name> [-desc "<desc>"] [-trigger "<trigger>"] [-force]
+./bin/agis skill show <name> [--raw] [--json]
+./bin/agis skill delete <name> [--yes]
 ```
 
 Full CLI reference in [docs/cli.md](docs/cli.md).

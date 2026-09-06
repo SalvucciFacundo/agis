@@ -10,6 +10,7 @@ import (
 // fakeHub is a SkillHub double returning fixed matches and recording usage.
 type fakeHub struct {
 	matches []Skill
+	skills  []Skill
 	used    []string
 }
 
@@ -20,7 +21,29 @@ func (f *fakeHub) Match(input string, limit int) []Skill {
 	return f.matches
 }
 
+func (f *fakeHub) Skills() []Skill {
+	return f.skills
+}
+
 func (f *fakeHub) RecordUse(_ context.Context, name string) { f.used = append(f.used, name) }
+
+func (f *fakeHub) GetSkill(name string) (*Skill, bool) {
+	for _, s := range f.skills {
+		if s.Name == name {
+			return &s, true
+		}
+	}
+	for _, s := range f.matches {
+		if s.Name == name {
+			return &s, true
+		}
+	}
+	return nil, false
+}
+
+func (f *fakeHub) Reload(_ context.Context, _ string) error {
+	return nil
+}
 
 // fakeEvolution is an EvolutionLayer double with configurable text.
 type fakeEvolution struct{ text string }
@@ -95,6 +118,93 @@ func TestBrainStep_BareMinimumSlots(t *testing.T) {
 	msgs := provider.requests[0].Messages
 	if len(msgs) != 1 || msgs[0].Role != RoleUser {
 		t.Errorf("messages = %+v, want just the user message with all slots empty", msgs)
+	}
+}
+
+func TestBrainStep_SkillsLazyLoadingPrompt(t *testing.T) {
+	repo := newFakeRepo()
+	hub := &fakeHub{matches: []Skill{
+		{
+			Name:        "deploy-notes",
+			Description: "Procedures to ship",
+			Trigger:     "deploy",
+			Source:      "imported",
+			Content:     "## Workflow\n1. tag then push",
+		},
+	}}
+	provider := &capturingProvider{events: []StreamEvent{{Text: "ok"}}}
+	brain := NewBrain(
+		repo,
+		provider,
+		WithSkills(hub),
+		WithSkillsLazyLoading(true),
+	)
+
+	if err := brain.Step(context.Background(), "help me deploy"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	msgs := provider.requests[0].Messages
+	var skillMsg string
+	for _, m := range msgs {
+		if m.Role == RoleSystem && strings.Contains(m.Content, "Applicable skills") {
+			skillMsg = m.Content
+			break
+		}
+	}
+	if skillMsg == "" {
+		t.Fatalf("no skills system message found in %+v", msgs)
+	}
+	if !strings.Contains(skillMsg, "| Skill | Trigger / Description | Scope / Version |") {
+		t.Errorf("skillMsg = %q, want compact table header", skillMsg)
+	}
+	if !strings.Contains(skillMsg, "To read complete procedural instructions, call read_skill(name)") {
+		t.Errorf("skillMsg = %q, want read_skill instructions", skillMsg)
+	}
+	if strings.Contains(skillMsg, "tag then push") {
+		t.Errorf("skillMsg contains full body %q, want lazy index only", skillMsg)
+	}
+}
+
+func TestBrainStep_SkillsFullBodyPrompt(t *testing.T) {
+	repo := newFakeRepo()
+	hub := &fakeHub{matches: []Skill{
+		{
+			Name:        "deploy-notes",
+			Description: "Procedures to ship",
+			Trigger:     "deploy",
+			Source:      "imported",
+			Content:     "## Workflow\n1. tag then push",
+		},
+	}}
+	provider := &capturingProvider{events: []StreamEvent{{Text: "ok"}}}
+	brain := NewBrain(
+		repo,
+		provider,
+		WithSkills(hub),
+		WithSkillsLazyLoading(false),
+	)
+
+	if err := brain.Step(context.Background(), "help me deploy"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	msgs := provider.requests[0].Messages
+	var skillMsg string
+	for _, m := range msgs {
+		if m.Role == RoleSystem && strings.Contains(m.Content, "Applicable skills") {
+			skillMsg = m.Content
+			break
+		}
+	}
+	if skillMsg == "" {
+		t.Fatalf("no skills system message found in %+v", msgs)
+	}
+	if !strings.Contains(skillMsg, "- deploy-notes: ## Workflow\n1. tag then push") {
+		t.Errorf("skillMsg = %q, want full body injection", skillMsg)
+	}
+	if strings.Contains(skillMsg, "call read_skill(name)") {
+		t.Errorf("skillMsg = %q, should not contain lazy prompt when disabled", skillMsg)
 	}
 }
 

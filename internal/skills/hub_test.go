@@ -3,7 +3,10 @@ package skills
 import (
 	"context"
 	"errors"
+	"fmt"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/SalvucciFacundo/agis/internal/core"
@@ -12,6 +15,7 @@ import (
 // fakeSkillRepo is a stateful core.Repository double for hub tests. Only the
 // skill methods carry behavior; the rest are inert.
 type fakeSkillRepo struct {
+	mu       sync.Mutex
 	store    []core.Skill
 	failSave error
 }
@@ -29,6 +33,8 @@ func (r *fakeSkillRepo) AuditTail(context.Context, int) ([]core.AuditEntry, erro
 }
 
 func (r *fakeSkillRepo) SaveSkill(_ context.Context, s core.Skill) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.failSave != nil {
 		return r.failSave
 	}
@@ -43,6 +49,8 @@ func (r *fakeSkillRepo) SaveSkill(_ context.Context, s core.Skill) error {
 }
 
 func (r *fakeSkillRepo) ListSkills(context.Context) ([]core.Skill, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	out := make([]core.Skill, len(r.store))
 	copy(out, r.store)
 	return out, nil
@@ -74,17 +82,37 @@ func (r *fakeSkillRepo) UpdateConversationSummary(context.Context, string, strin
 }
 func (r *fakeSkillRepo) UpsertUserModel(context.Context, []core.UserModel) error { return nil }
 func (r *fakeSkillRepo) RecordSkillUsage(context.Context, string) error          { return nil }
+func (r *fakeSkillRepo) DeleteSkill(_ context.Context, name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var next []core.Skill
+	for _, s := range r.store {
+		if s.Name != name {
+			next = append(next, s)
+		}
+	}
+	r.store = next
+	return nil
+}
 
 func (r *fakeSkillRepo) RecordSessionEvent(context.Context, string, string, string) error {
 	return nil
 }
 
-func (r *fakeSkillRepo) ListConversations(ctx context.Context, limit, offset int) ([]core.Conversation, error) { return nil, nil }
-func (r *fakeSkillRepo) GetConversation(ctx context.Context, id string) (*core.Conversation, error) { return nil, core.ErrNotFound }
+func (r *fakeSkillRepo) ListConversations(ctx context.Context, limit, offset int) ([]core.Conversation, error) {
+	return nil, nil
+}
+func (r *fakeSkillRepo) GetConversation(ctx context.Context, id string) (*core.Conversation, error) {
+	return nil, core.ErrNotFound
+}
 func (r *fakeSkillRepo) RenameConversation(ctx context.Context, id, title string) error { return nil }
-func (r *fakeSkillRepo) DeleteConversation(ctx context.Context, id string) error { return nil }
-func (r *fakeSkillRepo) CreateSnapshot(ctx context.Context, convID string) (*core.Snapshot, error) { return &core.Snapshot{ID: "snap-1"}, nil }
-func (r *fakeSkillRepo) ListSnapshots(ctx context.Context, convID string) ([]core.Snapshot, error) { return nil, nil }
+func (r *fakeSkillRepo) DeleteConversation(ctx context.Context, id string) error        { return nil }
+func (r *fakeSkillRepo) CreateSnapshot(ctx context.Context, convID string) (*core.Snapshot, error) {
+	return &core.Snapshot{ID: "snap-1"}, nil
+}
+func (r *fakeSkillRepo) ListSnapshots(ctx context.Context, convID string) ([]core.Snapshot, error) {
+	return nil, nil
+}
 
 func (r *fakeSkillRepo) Close() error { return nil }
 
@@ -114,6 +142,61 @@ func TestHub_LoadDirSyncsImportsAndIndexesAll(t *testing.T) {
 	if len(hub.Skills()) != 2 {
 		t.Fatalf("index has %d skills, want 2 (import + existing agent)", len(hub.Skills()))
 	}
+}
+
+func TestHub_GetSkill(t *testing.T) {
+	repo := &fakeSkillRepo{store: []core.Skill{
+		{Name: "docker-build", Description: "Build image", Content: "docker build steps"},
+	}}
+	hub := NewHub(repo, discardLogger())
+	hub.skills = repo.store
+
+	skill, found := hub.GetSkill("docker-build")
+	if !found || skill == nil {
+		t.Fatalf("GetSkill(docker-build) = nil, %v; want found", found)
+	}
+	if skill.Name != "docker-build" || skill.Content != "docker build steps" {
+		t.Errorf("skill = %+v, want docker-build", skill)
+	}
+
+	notFoundSkill, found := hub.GetSkill("unknown-skill")
+	if found || notFoundSkill != nil {
+		t.Errorf("GetSkill(unknown-skill) = %+v, %v; want nil, false", notFoundSkill, found)
+	}
+}
+
+func TestHub_Reload_ConcurrentThreadSafety(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	writeSkill(t, dir, "initial.md", "---\nname: initial-skill\ndescription: initial\n---\n\ncontent\n")
+
+	regPath := filepath.Join(dir, ".skill-registry.md")
+	repo := &fakeSkillRepo{}
+	hub := NewHub(repo, discardLogger())
+	hub.registryPath = regPath
+
+	if err := hub.Reload(ctx, dir); err != nil {
+		t.Fatalf("Initial Reload() error = %v", err)
+	}
+
+	var wg sync.WaitGroup
+	// Concurrently read and reload
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			if idx%2 == 0 {
+				_ = hub.Skills()
+				_, _ = hub.GetSkill("initial-skill")
+				_ = hub.Match("initial", 5)
+			} else {
+				filename := fmt.Sprintf("skill-%d.md", idx)
+				writeSkill(t, dir, filename, fmt.Sprintf("---\nname: skill-%d\ndescription: skill %d\n---\n\ncontent\n", idx, idx))
+				_ = hub.Reload(ctx, dir)
+			}
+		}(i)
+	}
+	wg.Wait()
 }
 
 func TestHub_MatchANDSemantics(t *testing.T) {

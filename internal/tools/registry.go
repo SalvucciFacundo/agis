@@ -76,6 +76,13 @@ func FromWebConfig(cfg config.WebConfig) []core.ToolRunner {
 	}
 }
 
+// SkillRunners returns the skill management tool runners (read_skill, create_skill).
+func SkillRunners(skillsDir string, hub core.SkillHub) []core.ToolRunner {
+	return []core.ToolRunner{
+		NewReadSkillRunner(hub),
+		NewCreateSkillRunner(skillsDir, hub),
+	}
+}
 
 // available reports whether a binary is on PATH.
 func available(bin string) bool {

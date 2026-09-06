@@ -37,6 +37,7 @@ agent:
 
 skills:
   enabled: true                   # skill hub: loading, matching, creation
+  lazy_loading: true              # inject compact index table; model calls read_skill on demand
   dir: ~/.agis/skills             # where skill files live
 
 tools:

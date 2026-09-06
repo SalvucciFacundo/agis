@@ -92,6 +92,8 @@ func main() {
 			os.Exit(RunDoctorCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "session":
 			os.Exit(RunSessionCLI(remainingArgs[1:], os.Stdout, os.Stderr))
+		case "skill", "skills":
+			os.Exit(RunSkillCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "update":
 			os.Exit(RunUpdateCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		}
@@ -154,8 +156,9 @@ func main() {
 		evolution = persona.NewEvolution(repo, slog.Default())
 		brainOpts = append(brainOpts, core.WithEvolution(evolution))
 	}
+	var hub *skills.Hub
 	if cfg.Skills.Enabled {
-		hub := skills.NewHub(repo, slog.Default())
+		hub = skills.NewHub(repo, slog.Default())
 		if err := hub.LoadDir(ctx, cfg.Skills.Dir); err != nil {
 			slog.Warn("skills: loading directory", "error", err)
 		}
@@ -165,7 +168,10 @@ func main() {
 		} else {
 			slog.Warn("skills: creating registry directory", "error", mkErr)
 		}
-		brainOpts = append(brainOpts, core.WithSkills(hub))
+		brainOpts = append(brainOpts,
+			core.WithSkills(hub),
+			core.WithSkillsLazyLoading(cfg.Skills.LazyLoading),
+		)
 	}
 	var summarizer *memory.Summarizer
 	if cfg.Memory.LearningEnabled {
@@ -215,6 +221,13 @@ func main() {
 			approvalResp = make(chan core.Scope)
 		}
 		runners := tools.Select(cfg.Tools, slog.Default())
+		if cfg.Skills.Enabled && hub != nil {
+			skillsDir := cfg.Skills.Dir
+			if skillsDir == "" {
+				skillsDir = filepath.Join(config.AgisHome(), "skills")
+			}
+			runners = append(runners, tools.SkillRunners(skillsDir, hub)...)
+		}
 		resolvedApprover := func(ctx context.Context, req core.GuardRequest) core.Scope {
 			sc := approver(ctx, req)
 			switch sc {

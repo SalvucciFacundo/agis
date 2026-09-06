@@ -144,6 +144,13 @@ func (r *fakeParentRepo) RecordSkillUsage(_ context.Context, name string) error 
 	return nil
 }
 
+func (r *fakeParentRepo) DeleteSkill(_ context.Context, name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.skills, name)
+	return nil
+}
+
 func (r *fakeParentRepo) AppendAudit(_ context.Context, entry core.AuditEntry) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

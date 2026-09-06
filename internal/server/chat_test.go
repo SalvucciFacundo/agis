@@ -168,6 +168,10 @@ func (r *mockRepo) RecordSkillUsage(_ context.Context, _ string) error {
 	return nil
 }
 
+func (r *mockRepo) DeleteSkill(_ context.Context, _ string) error {
+	return nil
+}
+
 func (r *mockRepo) AppendAudit(_ context.Context, _ core.AuditEntry) error {
 	return nil
 }

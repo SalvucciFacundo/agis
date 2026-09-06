@@ -19,6 +19,7 @@ agis policy [init|show|set|rm|tier|test]   # Policy Guard security & permissions
 agis mcp [list|test] [flags]               # Model Context Protocol (MCP) server & tool inspection
 agis session [list|show|delete|rename|export|snapshot] # Conversation session manager, export & backups
 agis update [flags]                        # In-place self-updater & release inspector
+agis skill [list|create|show|delete]       # Skill lifecycle management & agentskills.io scaffolding
 agis config [show|get|set|path] [flags]    # Inspect, query, and safely modify configuration
 agis serve [flags]                         # OpenAI-compatible REST API HTTP server (alias: agis api)
 ```
@@ -486,6 +487,44 @@ agis serve -cors "http://localhost:3000,http://localhost:5173"
 - `POST /v1/chat/completions`: OpenAI-compatible completions with streaming (`stream: true`) SSE chunks (`data: [DONE]`) or non-streaming JSON. Supports `X-Session-ID` header and `user` field for multi-turn session persistence.
 - `GET /v1/models`: Enumerate active and auxiliary models in standard OpenAI list format.
 - `GET /v1/health` & `GET /healthz`: Health check returning system status, active provider, model, and version.
+
+---
+
+## 14. Skill Management Subsystem (`agis skill`)
+
+Manages procedural knowledge, skills discovery, and `agentskills.io` standard conformance for local skills in `$AGIS_HOME/skills/`.
+
+```bash
+# List all installed skills in tabular format
+agis skill list
+
+# Output skills in JSON format
+agis skill list -json
+
+# Scaffold a new skill adhering to agentskills.io standard
+agis skill create deploy-prod -desc "Production deployment workflow" -trigger "deploy,prod"
+
+# Overwrite existing skill
+agis skill create deploy-prod -desc "Updated workflow" -force
+
+# Show formatted skill instructions and metadata
+agis skill show deploy-prod
+
+# Display raw file with YAML frontmatter
+agis skill show deploy-prod -raw
+
+# Delete an installed skill
+agis skill delete deploy-prod
+
+# Force deletion without confirmation prompt
+agis skill delete deploy-prod -yes
+```
+
+### Subcommands & Flags:
+- `agis skill list [-json]`: Enumerate all discovered skills (Name, Trigger, Source, Uses, Description).
+- `agis skill create <name> [-desc <desc>] [-trigger <trigger>] [-force]`: Scaffold a new skill file in `$AGIS_HOME/skills/<name>/SKILL.md` populated with required Markdown sections (`## When to Use`, `## Critical Rules`, `## Workflow`, `## Examples`).
+- `agis skill show <name> [-raw] [-json]`: Inspect a specific skill's instructions or raw frontmatter.
+- `agis skill delete <name> [-yes|-force]`: Remove a skill from disk and database repository.
 
 ---
 

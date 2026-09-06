@@ -64,6 +64,9 @@ type Repository interface {
 	// the named skill. An unknown name returns an error wrapping ErrNotFound.
 	RecordSkillUsage(ctx context.Context, name string) error
 
+	// DeleteSkill permanently removes the named skill from the repository.
+	DeleteSkill(ctx context.Context, name string) error
+
 	// AppendAudit records one security-relevant event (policy decision, grant,
 	// revocation, tier change). Audit failures never block decisions; the
 	// guard logs them.

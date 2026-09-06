@@ -272,8 +272,36 @@ func TestLoad_AgentAndSkillsDefaults(t *testing.T) {
 	if !cfg.Skills.Enabled {
 		t.Error("Skills.Enabled = false, want default true")
 	}
+	if !cfg.Skills.LazyLoading {
+		t.Error("Skills.LazyLoading = false, want default true")
+	}
 	if cfg.Skills.Dir != filepath.Join(home, "skills") {
 		t.Errorf("Skills.Dir = %q, want %q", cfg.Skills.Dir, filepath.Join(home, "skills"))
+	}
+}
+
+func TestLoad_SkillsLazyLoadingExplicit(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("AGIS_HOME", home)
+
+	// Explicit false
+	writeConfig(t, home, "skills:\n  lazy_loading: false\n", 0o600)
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Skills.LazyLoading {
+		t.Errorf("Skills.LazyLoading = true, want false")
+	}
+
+	// Explicit true
+	writeConfig(t, home, "skills:\n  lazy_loading: true\n", 0o600)
+	cfg, err = Load("")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.Skills.LazyLoading {
+		t.Errorf("Skills.LazyLoading = false, want true")
 	}
 }
 
@@ -421,15 +449,15 @@ func TestLoad_CronDefaultsAndExplicit(t *testing.T) {
 
 func TestLoad_GatewayDefaultsAndExplicit(t *testing.T) {
 	tests := []struct {
-		name       string
-		yaml       string
-		wantGtw    bool
-		wantTg     bool
-		wantTgTok  string
-		wantTgLen  int
-		wantDc     bool
-		wantDcTok  string
-		wantDcLen  int
+		name      string
+		yaml      string
+		wantGtw   bool
+		wantTg    bool
+		wantTgTok string
+		wantTgLen int
+		wantDc    bool
+		wantDcTok string
+		wantDcLen int
 	}{
 		{
 			name:    "empty config uses defaults",
@@ -1061,20 +1089,20 @@ func TestLoad_WebDefaultsAndExplicit(t *testing.T) {
 
 func TestLoad_SubagentsDefaultsAndClamping(t *testing.T) {
 	tests := []struct {
-		name              string
-		yaml              string
-		wantEnabled       bool
-		wantMaxConcurrent int
-		wantMaxDepth      int
+		name               string
+		yaml               string
+		wantEnabled        bool
+		wantMaxConcurrent  int
+		wantMaxDepth       int
 		wantDefaultTimeout time.Duration
 		wantMaxTurns       int
 	}{
 		{
-			name:              "empty config has subagents enabled with defaults",
-			yaml:              "",
-			wantEnabled:       true,
-			wantMaxConcurrent: 3,
-			wantMaxDepth:      1,
+			name:               "empty config has subagents enabled with defaults",
+			yaml:               "",
+			wantEnabled:        true,
+			wantMaxConcurrent:  3,
+			wantMaxDepth:       1,
 			wantDefaultTimeout: 60 * time.Second,
 			wantMaxTurns:       8,
 		},
@@ -1087,9 +1115,9 @@ func TestLoad_SubagentsDefaultsAndClamping(t *testing.T) {
   default_timeout: 45s
   max_turns: 12
 `,
-			wantEnabled:       false,
-			wantMaxConcurrent: 5,
-			wantMaxDepth:      2,
+			wantEnabled:        false,
+			wantMaxConcurrent:  5,
+			wantMaxDepth:       2,
 			wantDefaultTimeout: 45 * time.Second,
 			wantMaxTurns:       12,
 		},
@@ -1102,9 +1130,9 @@ func TestLoad_SubagentsDefaultsAndClamping(t *testing.T) {
   default_timeout: 0s
   max_turns: 0
 `,
-			wantEnabled:       true,
-			wantMaxConcurrent: 1,
-			wantMaxDepth:      1,
+			wantEnabled:        true,
+			wantMaxConcurrent:  1,
+			wantMaxDepth:       1,
 			wantDefaultTimeout: 60 * time.Second,
 			wantMaxTurns:       8,
 		},
@@ -1117,9 +1145,9 @@ func TestLoad_SubagentsDefaultsAndClamping(t *testing.T) {
   default_timeout: 600s
   max_turns: 50
 `,
-			wantEnabled:       true,
-			wantMaxConcurrent: 10,
-			wantMaxDepth:      2,
+			wantEnabled:        true,
+			wantMaxConcurrent:  10,
+			wantMaxDepth:       2,
 			wantDefaultTimeout: 300 * time.Second,
 			wantMaxTurns:       15,
 		},
@@ -1326,20 +1354,20 @@ func TestLoad_ServerDefaultsAndExplicit(t *testing.T) {
 
 func TestLoad_GatewaySlackAndWhatsAppDefaultsAndExplicit(t *testing.T) {
 	tests := []struct {
-		name                 string
-		yaml                 string
-		wantSlackEnabled     bool
-		wantSlackBotToken    string
-		wantSlackSecret      string
-		wantSlackListenAddr  string
-		wantSlackAllowlist   []string
-		wantWAEnabled        bool
-		wantWAAPIToken       string
-		wantWAPhoneNumberID  string
-		wantWAVerifyToken    string
-		wantWAAppSecret      string
-		wantWAListenAddr     string
-		wantWAAllowlist      []string
+		name                string
+		yaml                string
+		wantSlackEnabled    bool
+		wantSlackBotToken   string
+		wantSlackSecret     string
+		wantSlackListenAddr string
+		wantSlackAllowlist  []string
+		wantWAEnabled       bool
+		wantWAAPIToken      string
+		wantWAPhoneNumberID string
+		wantWAVerifyToken   string
+		wantWAAppSecret     string
+		wantWAListenAddr    string
+		wantWAAllowlist     []string
 	}{
 		{
 			name:                "empty config has slack and whatsapp disabled with defaults",
@@ -1498,8 +1526,3 @@ func TestLoad_ToolSearchDefaultsAndExplicit(t *testing.T) {
 		})
 	}
 }
-
-
-
-
-
