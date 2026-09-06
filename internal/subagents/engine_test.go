@@ -218,3 +218,171 @@ func TestEngine_TimeoutPropagationAndCancellation(t *testing.T) {
 		t.Fatalf("expected context.Canceled, got: %v", err)
 	}
 }
+
+func TestEngine_DistillationAndPersistence(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	ctx := context.Background()
+	parent := newFakeParentRepo()
+	prov := &testProvider{
+		replyText: "Task complete.\n\n## Key Learnings\n1. Redis v7 requires ACL rules.\n2. Connection pools must be sized to 20.\n",
+	}
+	cfg := config.SubagentsConfig{
+		Enabled:         true,
+		MaxConcurrent:   3,
+		MaxDepth:        1,
+		DefaultTimeout:  5 * time.Second,
+		MaxTurns:        8,
+		LearningEnabled: true,
+		MaxObservations: 3,
+	}
+
+	engine := subagents.NewEngine(cfg, parent, prov, &testGuard{decision: core.DecisionAllow}, nil, nil)
+
+	task := "Investigate Redis setup"
+	res, err := engine.Spawn(ctx, task, "Context info", 8)
+	if err != nil {
+		t.Fatalf("Spawn failed: %v", err)
+	}
+	if !strings.Contains(res, "Task complete.") {
+		t.Errorf("Spawn result = %q, want containing 'Task complete.'", res)
+	}
+
+	parent.mu.Lock()
+	defer parent.mu.Unlock()
+
+	if len(parent.observations) != 2 {
+		t.Fatalf("parent.observations len = %d, want 2", len(parent.observations))
+	}
+	if parent.observations[0].TopicKey != "subagent/investigate-redis-setup/1" {
+		t.Errorf("obs[0].TopicKey = %q, want 'subagent/investigate-redis-setup/1'", parent.observations[0].TopicKey)
+	}
+	if parent.observations[0].Type != "discovery" {
+		t.Errorf("obs[0].Type = %q, want 'discovery'", parent.observations[0].Type)
+	}
+	if parent.observations[0].Content != "Redis v7 requires ACL rules." {
+		t.Errorf("obs[0].Content = %q, want 'Redis v7 requires ACL rules.'", parent.observations[0].Content)
+	}
+	if parent.observations[0].Importance != 3 {
+		t.Errorf("obs[0].Importance = %d, want 3", parent.observations[0].Importance)
+	}
+
+	var foundAudit bool
+	for _, entry := range parent.auditEntries {
+		if entry.Category == "learning" && entry.Backend == "subagent" {
+			foundAudit = true
+			if entry.Decision != "allow" {
+				t.Errorf("audit.Decision = %q, want 'allow'", entry.Decision)
+			}
+			if !strings.Contains(entry.Subject, "distilled 2 observations") {
+				t.Errorf("audit.Subject = %q, want containing 'distilled 2 observations'", entry.Subject)
+			}
+			if !strings.Contains(entry.Subject, task) {
+				t.Errorf("audit.Subject = %q, want containing task name %q", entry.Subject, task)
+			}
+		}
+	}
+	if !foundAudit {
+		t.Errorf("expected audit entry with category 'learning' and backend 'subagent', got: %+v", parent.auditEntries)
+	}
+}
+
+func TestEngine_DistillationSkippedWhenLearningDisabled(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	ctx := context.Background()
+	parent := newFakeParentRepo()
+	prov := &testProvider{
+		replyText: "Output\n## Key Learnings\n1. Skip me.\n",
+	}
+	cfg := config.SubagentsConfig{
+		Enabled:         true,
+		MaxConcurrent:   3,
+		MaxDepth:        1,
+		DefaultTimeout:  5 * time.Second,
+		MaxTurns:        8,
+		LearningEnabled: false,
+		MaxObservations: 3,
+	}
+
+	engine := subagents.NewEngine(cfg, parent, prov, &testGuard{decision: core.DecisionAllow}, nil, nil)
+
+	_, err := engine.Spawn(ctx, "Do work", "", 8)
+	if err != nil {
+		t.Fatalf("Spawn failed: %v", err)
+	}
+
+	parent.mu.Lock()
+	defer parent.mu.Unlock()
+
+	if len(parent.observations) != 0 {
+		t.Errorf("expected 0 observations when LearningEnabled is false, got %d", len(parent.observations))
+	}
+	for _, entry := range parent.auditEntries {
+		if entry.Category == "learning" {
+			t.Errorf("expected no learning audit entry when LearningEnabled is false, got %+v", entry)
+		}
+	}
+}
+
+func TestEngine_DistillationGracefulDegradationOnSaveError(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	ctx := context.Background()
+	parent := newFakeParentRepo()
+	parent.saveObsErr = errors.New("sqlite database locked")
+
+	prov := &testProvider{
+		replyText: "Finished.\n## Key Learnings\n1. Handled gracefully.\n",
+	}
+	cfg := config.SubagentsConfig{
+		Enabled:         true,
+		MaxConcurrent:   3,
+		MaxDepth:        1,
+		DefaultTimeout:  5 * time.Second,
+		MaxTurns:        8,
+		LearningEnabled: true,
+		MaxObservations: 3,
+	}
+
+	engine := subagents.NewEngine(cfg, parent, prov, &testGuard{decision: core.DecisionAllow}, nil, nil)
+
+	res, err := engine.Spawn(ctx, "Degradation test", "", 8)
+	if err != nil {
+		t.Fatalf("Spawn should succeed even if SaveObservations fails, got: %v", err)
+	}
+	if !strings.Contains(res, "Finished.") {
+		t.Errorf("Spawn result = %q, want containing 'Finished.'", res)
+	}
+}
+
+func TestEngine_DistillationGracefulDegradationOnAuditError(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	ctx := context.Background()
+	parent := newFakeParentRepo()
+	parent.appendAuditErr = errors.New("audit log write error")
+
+	prov := &testProvider{
+		replyText: "Finished.\n## Key Learnings\n1. Audit fail gracefully.\n",
+	}
+	cfg := config.SubagentsConfig{
+		Enabled:         true,
+		MaxConcurrent:   3,
+		MaxDepth:        1,
+		DefaultTimeout:  5 * time.Second,
+		MaxTurns:        8,
+		LearningEnabled: true,
+		MaxObservations: 3,
+	}
+
+	engine := subagents.NewEngine(cfg, parent, prov, &testGuard{decision: core.DecisionAllow}, nil, nil)
+
+	res, err := engine.Spawn(ctx, "Audit degradation test", "", 8)
+	if err != nil {
+		t.Fatalf("Spawn should succeed even if AppendAudit fails, got: %v", err)
+	}
+	if !strings.Contains(res, "Finished.") {
+		t.Errorf("Spawn result = %q, want containing 'Finished.'", res)
+	}
+}

@@ -73,11 +73,13 @@ type ServerConfig struct {
 
 // SubagentsConfig gates and tunes the native subagent delegation subsystem.
 type SubagentsConfig struct {
-	Enabled        bool          `yaml:"enabled"`
-	MaxConcurrent  int           `yaml:"max_concurrent"`
-	MaxDepth       int           `yaml:"max_depth"`
-	DefaultTimeout time.Duration `yaml:"default_timeout"`
-	MaxTurns       int           `yaml:"max_turns"`
+	Enabled         bool          `yaml:"enabled"`
+	MaxConcurrent   int           `yaml:"max_concurrent"`
+	MaxDepth        int           `yaml:"max_depth"`
+	DefaultTimeout  time.Duration `yaml:"default_timeout"`
+	MaxTurns        int           `yaml:"max_turns"`
+	LearningEnabled bool          `yaml:"learning_enabled"`
+	MaxObservations int           `yaml:"max_observations"`
 }
 
 // MultimodalConfig gates and configures the M9 multimodal vision and audio subsystem.
@@ -464,11 +466,13 @@ func defaults() *Config {
 			},
 		},
 		Subagents: SubagentsConfig{
-			Enabled:        true,
-			MaxConcurrent:  3,
-			MaxDepth:       1,
-			DefaultTimeout: 60 * time.Second,
-			MaxTurns:       8,
+			Enabled:         true,
+			MaxConcurrent:   3,
+			MaxDepth:        1,
+			DefaultTimeout:  60 * time.Second,
+			MaxTurns:        8,
+			LearningEnabled: true,
+			MaxObservations: 3,
 		},
 		Server: ServerConfig{
 			Enabled:      false,
@@ -598,6 +602,11 @@ func applyDefaults(cfg *Config) {
 		cfg.Subagents.DefaultTimeout = 60 * time.Second
 	} else if cfg.Subagents.DefaultTimeout > 300*time.Second {
 		cfg.Subagents.DefaultTimeout = 300 * time.Second
+	}
+	if cfg.Subagents.MaxObservations <= 0 {
+		cfg.Subagents.MaxObservations = 3
+	} else if cfg.Subagents.MaxObservations > 5 {
+		cfg.Subagents.MaxObservations = 5
 	}
 	if cfg.Server.Host == "" {
 		cfg.Server.Host = "127.0.0.1"

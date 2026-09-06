@@ -13,15 +13,17 @@ import (
 
 // fakeParentRepo tracks parent repository calls to verify isolation and proxying.
 type fakeParentRepo struct {
-	mu            sync.Mutex
-	convs         map[string]*core.Conversation
-	messages      map[string][]core.Message
-	observations  []core.Observation
-	userModels    []core.UserModel
-	skills        map[string]core.Skill
-	auditEntries  []core.AuditEntry
-	sessionEvents []string
-	closed        bool
+	mu             sync.Mutex
+	convs          map[string]*core.Conversation
+	messages       map[string][]core.Message
+	observations   []core.Observation
+	saveObsErr     error
+	appendAuditErr error
+	userModels     []core.UserModel
+	skills         map[string]core.Skill
+	auditEntries   []core.AuditEntry
+	sessionEvents  []string
+	closed         bool
 }
 
 func newFakeParentRepo() *fakeParentRepo {
@@ -74,6 +76,9 @@ func (r *fakeParentRepo) Search(_ context.Context, query string, _ int) ([]core.
 func (r *fakeParentRepo) SaveObservations(_ context.Context, _ string, obs []core.Observation) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.saveObsErr != nil {
+		return r.saveObsErr
+	}
 	r.observations = append(r.observations, obs...)
 	return nil
 }
@@ -154,6 +159,9 @@ func (r *fakeParentRepo) DeleteSkill(_ context.Context, name string) error {
 func (r *fakeParentRepo) AppendAudit(_ context.Context, entry core.AuditEntry) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.appendAuditErr != nil {
+		return r.appendAuditErr
+	}
 	r.auditEntries = append(r.auditEntries, entry)
 	return nil
 }

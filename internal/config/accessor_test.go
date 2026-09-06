@@ -300,6 +300,18 @@ func TestSet(t *testing.T) {
 		if cfg.Subagents.DefaultTimeout != 120*time.Second {
 			t.Errorf("Subagents.DefaultTimeout = %v, want 120s", cfg.Subagents.DefaultTimeout)
 		}
+		if err := config.Set(cfg, "subagents.learning_enabled", "false"); err != nil {
+			t.Fatalf("Set(subagents.learning_enabled) error: %v", err)
+		}
+		if cfg.Subagents.LearningEnabled != false {
+			t.Errorf("Subagents.LearningEnabled = %v, want false", cfg.Subagents.LearningEnabled)
+		}
+		if err := config.Set(cfg, "subagents.max_observations", "5"); err != nil {
+			t.Fatalf("Set(subagents.max_observations) error: %v", err)
+		}
+		if cfg.Subagents.MaxObservations != 5 {
+			t.Errorf("Subagents.MaxObservations = %d, want 5", cfg.Subagents.MaxObservations)
+		}
 
 		// Gateway Slack and WhatsApp Set operations
 		if err := config.Set(cfg, "gateway.slack.bot_token", "xoxb-new-token"); err != nil {

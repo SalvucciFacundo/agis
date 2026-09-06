@@ -52,10 +52,19 @@ func (d *Doctor) checkSubagents(_ context.Context) CheckResult {
 		timeout = 300 * time.Second
 	}
 
+	maxObs := subCfg.MaxObservations
+	if maxObs <= 0 {
+		maxObs = 3
+	} else if maxObs > 5 {
+		maxObs = 5
+	}
+
 	res.Details = append(res.Details, fmt.Sprintf("Max concurrency: %d", maxConcurrent))
 	res.Details = append(res.Details, fmt.Sprintf("Max depth: %d (hard limit: 2)", maxDepth))
 	res.Details = append(res.Details, fmt.Sprintf("Default timeout: %v", timeout))
 	res.Details = append(res.Details, fmt.Sprintf("Max turns per task: %d", maxTurns))
+	res.Details = append(res.Details, fmt.Sprintf("Learning enabled: %t", subCfg.LearningEnabled))
+	res.Details = append(res.Details, fmt.Sprintf("Max observations per task: %d", maxObs))
 
 	res.Duration = time.Since(start)
 	return res

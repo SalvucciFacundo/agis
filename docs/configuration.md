@@ -153,6 +153,8 @@ subagents:
   max_depth: 1                    # maximum recursion depth limit (clamped 1-2)
   default_timeout: 60s            # execution timeout per subagent task (clamped 1s-300s)
   max_turns: 8                    # default maximum turns per subagent task (clamped 1-15)
+  learning_enabled: true          # distill key learnings from completed subagents into parent memory
+  max_observations: 3             # maximum memory observations extracted per subagent task (clamped 1-5)
 
 server:
   enabled: false                  # master switch for OpenAI-compatible REST API server
@@ -222,6 +224,8 @@ A missing file is **not an error**: the loader falls back to built-in defaults. 
 | `subagents.max_depth` | `1` |
 | `subagents.default_timeout` | `60s` |
 | `subagents.max_turns` | `8` |
+| `subagents.learning_enabled` | `true` |
+| `subagents.max_observations` | `3` |
 | `server.enabled` | `false` |
 | `server.host` | `127.0.0.1` |
 | `server.port` | `8080` |
@@ -328,6 +332,16 @@ AGIS includes built-in canonical endpoints for major LLM providers. Setting `pro
 - `xai`: `https://api.x.ai/v1`
 - `together`: `https://api.together.xyz/v1`
 - `cohere`: `https://api.cohere.com/v2`
+
+### 11. Subagents & Knowledge Distillation (`subagents`)
+The `subagents` block configures native subagent task delegation and automatic knowledge learning:
+- `subagents.enabled`: Master switch for the `delegate_task` tool.
+- `subagents.max_concurrent`: Concurrency bounded semaphore limit (clamped `1-10`, default: `3`).
+- `subagents.max_depth`: Maximum recursion depth (clamped `1-2`, default: `1`).
+- `subagents.default_timeout`: Execution deadline per subagent task (clamped `1s-300s`, default: `60s`).
+- `subagents.max_turns`: Maximum turns per child execution loop (clamped `1-15`, default: `8`).
+- `subagents.learning_enabled`: When `true`, automatically distills key learnings (`## Key Learnings`, `## Discoveries`, `## Key Takeaways`, `## Decisions`) from subagent output into parent SQLite memory (default: `true`).
+- `subagents.max_observations`: Ceiling on extracted memory observations per task (clamped `1-5`, default: `3`).
 
 ---
 

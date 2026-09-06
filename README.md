@@ -267,6 +267,15 @@ plugins:
   enabled: false
   dir: "~/.agis/plugins"
 
+subagents:
+  enabled: true
+  max_concurrent: 3
+  max_depth: 1
+  default_timeout: 60s
+  max_turns: 8
+  learning_enabled: true
+  max_observations: 3
+
 webhook:
   enabled: false
   port: 8080

@@ -33,11 +33,13 @@ func TestDoctor_CheckSubagents_Disabled(t *testing.T) {
 func TestDoctor_CheckSubagents_Enabled(t *testing.T) {
 	cfg := &config.Config{
 		Subagents: config.SubagentsConfig{
-			Enabled:        true,
-			MaxConcurrent:  4,
-			MaxDepth:       1,
-			DefaultTimeout: 45 * time.Second,
-			MaxTurns:       10,
+			Enabled:         true,
+			MaxConcurrent:   4,
+			MaxDepth:        1,
+			DefaultTimeout:  45 * time.Second,
+			MaxTurns:        10,
+			LearningEnabled: true,
+			MaxObservations: 4,
 		},
 	}
 
@@ -66,6 +68,41 @@ func TestDoctor_CheckSubagents_Enabled(t *testing.T) {
 	}
 	if !strings.Contains(detailsJoined, "Max turns per task: 10") {
 		t.Errorf("expected max turns detail, got: %v", res.Details)
+	}
+	if !strings.Contains(detailsJoined, "Learning enabled: true") {
+		t.Errorf("expected learning enabled detail, got: %v", res.Details)
+	}
+	if !strings.Contains(detailsJoined, "Max observations per task: 4") {
+		t.Errorf("expected max observations detail, got: %v", res.Details)
+	}
+}
+
+func TestDoctor_CheckSubagents_LearningDisabledAndClamping(t *testing.T) {
+	cfg := &config.Config{
+		Subagents: config.SubagentsConfig{
+			Enabled:         true,
+			MaxConcurrent:   3,
+			MaxDepth:        1,
+			DefaultTimeout:  60 * time.Second,
+			MaxTurns:        8,
+			LearningEnabled: false,
+			MaxObservations: -1,
+		},
+	}
+
+	doc := New(cfg)
+	res := doc.checkSubagents(context.Background())
+
+	if res.Status != StatusPass {
+		t.Errorf("checkSubagents() status = %v, want %v", res.Status, StatusPass)
+	}
+
+	detailsJoined := strings.Join(res.Details, "\n")
+	if !strings.Contains(detailsJoined, "Learning enabled: false") {
+		t.Errorf("expected learning enabled false detail, got: %v", res.Details)
+	}
+	if !strings.Contains(detailsJoined, "Max observations per task: 3") {
+		t.Errorf("expected max observations clamped to 3, got: %v", res.Details)
 	}
 }
 

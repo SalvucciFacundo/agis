@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -178,6 +179,24 @@ func (e *Engine) Spawn(ctx context.Context, task string, contextInfo string, max
 
 	if childBrain.TurnLimitReached() {
 		reply += fmt.Sprintf("\n[subagent reached maximum turn limit (%d)]", effectiveMaxTurns)
+	}
+
+	if e.cfg.LearningEnabled && e.parent != nil {
+		observations := ExtractKeyLearnings(trimmedTask, reply, e.cfg.MaxObservations, conv.ID)
+		if len(observations) > 0 {
+			if err := e.parent.SaveObservations(childCtx, conv.ID, observations); err != nil {
+				slog.Warn("failed to persist subagent learnings", "err", err, "task", trimmedTask)
+			} else {
+				if err := e.parent.AppendAudit(childCtx, core.AuditEntry{
+					Backend:  "subagent",
+					Category: "learning",
+					Subject:  fmt.Sprintf("distilled %d observations from subagent task: %s", len(observations), trimmedTask),
+					Decision: "allow",
+				}); err != nil {
+					slog.Warn("failed to record subagent learning audit entry", "err", err, "task", trimmedTask)
+				}
+			}
+		}
 	}
 
 	return reply, nil

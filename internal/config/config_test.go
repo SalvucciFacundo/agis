@@ -1089,22 +1089,26 @@ func TestLoad_WebDefaultsAndExplicit(t *testing.T) {
 
 func TestLoad_SubagentsDefaultsAndClamping(t *testing.T) {
 	tests := []struct {
-		name               string
-		yaml               string
-		wantEnabled        bool
-		wantMaxConcurrent  int
-		wantMaxDepth       int
-		wantDefaultTimeout time.Duration
-		wantMaxTurns       int
+		name                string
+		yaml                string
+		wantEnabled         bool
+		wantMaxConcurrent   int
+		wantMaxDepth        int
+		wantDefaultTimeout  time.Duration
+		wantMaxTurns        int
+		wantLearningEnabled bool
+		wantMaxObservations int
 	}{
 		{
-			name:               "empty config has subagents enabled with defaults",
-			yaml:               "",
-			wantEnabled:        true,
-			wantMaxConcurrent:  3,
-			wantMaxDepth:       1,
-			wantDefaultTimeout: 60 * time.Second,
-			wantMaxTurns:       8,
+			name:                "empty config has subagents enabled with defaults",
+			yaml:                "",
+			wantEnabled:         true,
+			wantMaxConcurrent:   3,
+			wantMaxDepth:        1,
+			wantDefaultTimeout:  60 * time.Second,
+			wantMaxTurns:        8,
+			wantLearningEnabled: true,
+			wantMaxObservations: 3,
 		},
 		{
 			name: "explicit valid subagents configuration",
@@ -1114,12 +1118,16 @@ func TestLoad_SubagentsDefaultsAndClamping(t *testing.T) {
   max_depth: 2
   default_timeout: 45s
   max_turns: 12
+  learning_enabled: false
+  max_observations: 4
 `,
-			wantEnabled:        false,
-			wantMaxConcurrent:  5,
-			wantMaxDepth:       2,
-			wantDefaultTimeout: 45 * time.Second,
-			wantMaxTurns:       12,
+			wantEnabled:         false,
+			wantMaxConcurrent:   5,
+			wantMaxDepth:        2,
+			wantDefaultTimeout:  45 * time.Second,
+			wantMaxTurns:        12,
+			wantLearningEnabled: false,
+			wantMaxObservations: 4,
 		},
 		{
 			name: "clamping under minimum boundaries",
@@ -1129,12 +1137,16 @@ func TestLoad_SubagentsDefaultsAndClamping(t *testing.T) {
   max_depth: -1
   default_timeout: 0s
   max_turns: 0
+  learning_enabled: true
+  max_observations: -5
 `,
-			wantEnabled:        true,
-			wantMaxConcurrent:  1,
-			wantMaxDepth:       1,
-			wantDefaultTimeout: 60 * time.Second,
-			wantMaxTurns:       8,
+			wantEnabled:         true,
+			wantMaxConcurrent:   1,
+			wantMaxDepth:        1,
+			wantDefaultTimeout:  60 * time.Second,
+			wantMaxTurns:        8,
+			wantLearningEnabled: true,
+			wantMaxObservations: 3,
 		},
 		{
 			name: "clamping over maximum boundaries",
@@ -1144,12 +1156,16 @@ func TestLoad_SubagentsDefaultsAndClamping(t *testing.T) {
   max_depth: 10
   default_timeout: 600s
   max_turns: 50
+  learning_enabled: true
+  max_observations: 20
 `,
-			wantEnabled:        true,
-			wantMaxConcurrent:  10,
-			wantMaxDepth:       2,
-			wantDefaultTimeout: 300 * time.Second,
-			wantMaxTurns:       15,
+			wantEnabled:         true,
+			wantMaxConcurrent:   10,
+			wantMaxDepth:        2,
+			wantDefaultTimeout:  300 * time.Second,
+			wantMaxTurns:        15,
+			wantLearningEnabled: true,
+			wantMaxObservations: 5,
 		},
 	}
 
@@ -1178,6 +1194,12 @@ func TestLoad_SubagentsDefaultsAndClamping(t *testing.T) {
 			}
 			if cfg.Subagents.MaxTurns != tt.wantMaxTurns {
 				t.Errorf("Subagents.MaxTurns = %d, want %d", cfg.Subagents.MaxTurns, tt.wantMaxTurns)
+			}
+			if cfg.Subagents.LearningEnabled != tt.wantLearningEnabled {
+				t.Errorf("Subagents.LearningEnabled = %v, want %v", cfg.Subagents.LearningEnabled, tt.wantLearningEnabled)
+			}
+			if cfg.Subagents.MaxObservations != tt.wantMaxObservations {
+				t.Errorf("Subagents.MaxObservations = %d, want %d", cfg.Subagents.MaxObservations, tt.wantMaxObservations)
 			}
 		})
 	}
