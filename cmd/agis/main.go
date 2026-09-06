@@ -235,6 +235,12 @@ func main() {
 			resolvedApprover,
 		))
 	}
+	if cfg.Tools.ToolSearch.Enabled {
+		brainOpts = append(brainOpts, core.WithToolSearch(
+			cfg.Tools.ToolSearch.Enabled,
+			cfg.Tools.ToolSearch.Threshold,
+		))
+	}
 
 	brain := core.NewBrain(repo, provider, brainOpts...)
 

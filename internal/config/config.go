@@ -178,6 +178,8 @@ type GatewayConfig struct {
 	Enabled  bool           `yaml:"enabled"`
 	Telegram TelegramConfig `yaml:"telegram"`
 	Discord  DiscordConfig  `yaml:"discord"`
+	Slack    SlackConfig    `yaml:"slack"`
+	WhatsApp WhatsAppConfig `yaml:"whatsapp"`
 }
 
 // TelegramConfig configures the Telegram chat gateway adapter.
@@ -194,13 +196,40 @@ type DiscordConfig struct {
 	Allowlist []string `yaml:"allowlist"`
 }
 
+// SlackConfig configures the Slack Events API chat gateway adapter.
+type SlackConfig struct {
+	Enabled       bool     `yaml:"enabled"`
+	BotToken      string   `yaml:"bot_token"`
+	SigningSecret string   `yaml:"signing_secret"`
+	AllowedUsers  []string `yaml:"allowed_users"`
+	ListenAddr    string   `yaml:"listen_addr"` // default: ":3002"
+}
+
+// WhatsAppConfig configures the Meta Cloud API WhatsApp chat gateway adapter.
+type WhatsAppConfig struct {
+	Enabled       bool     `yaml:"enabled"`
+	APIToken      string   `yaml:"api_token"`
+	PhoneNumberID string   `yaml:"phone_number_id"`
+	VerifyToken   string   `yaml:"verify_token"`
+	AppSecret     string   `yaml:"app_secret"`
+	AllowedUsers  []string `yaml:"allowed_users"`
+	ListenAddr    string   `yaml:"listen_addr"` // default: ":3003"
+}
+
 // ToolsConfig gates the M4 execution subsystem. Disabled by default: tools
 // are strictly opt-in.
 type ToolsConfig struct {
-	Enabled bool         `yaml:"enabled"`
-	Docker  DockerConfig `yaml:"docker"`
-	SSH     SSHConfig    `yaml:"ssh"`
-	Web     WebConfig    `yaml:"web"`
+	Enabled    bool             `yaml:"enabled"`
+	Docker     DockerConfig     `yaml:"docker"`
+	SSH        SSHConfig        `yaml:"ssh"`
+	Web        WebConfig        `yaml:"web"`
+	ToolSearch ToolSearchConfig `yaml:"tool_search"`
+}
+
+// ToolSearchConfig tunes the dynamic tool search and lazy schema loading subsystem.
+type ToolSearchConfig struct {
+	Enabled   bool `yaml:"enabled"`
+	Threshold int  `yaml:"threshold"` // default: 8
 }
 
 // WebConfig gates and configures the native web tools (web_search, web_fetch).
@@ -391,6 +420,18 @@ func defaults() *Config {
 				MaxFetchBytes:   defaultWebMaxFetchBytes,
 				UserAgent:       defaultWebUserAgent,
 			},
+			ToolSearch: ToolSearchConfig{
+				Enabled:   false,
+				Threshold: 8,
+			},
+		},
+		Gateway: GatewayConfig{
+			Slack: SlackConfig{
+				ListenAddr: ":3002",
+			},
+			WhatsApp: WhatsAppConfig{
+				ListenAddr: ":3003",
+			},
 		},
 		Plugins: PluginsConfig{
 			Dir: defaultPluginsDir(),
@@ -528,6 +569,15 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Tools.Web.UserAgent == "" {
 		cfg.Tools.Web.UserAgent = defaultWebUserAgent
+	}
+	if cfg.Tools.ToolSearch.Threshold <= 0 {
+		cfg.Tools.ToolSearch.Threshold = 8
+	}
+	if cfg.Gateway.Slack.ListenAddr == "" {
+		cfg.Gateway.Slack.ListenAddr = ":3002"
+	}
+	if cfg.Gateway.WhatsApp.ListenAddr == "" {
+		cfg.Gateway.WhatsApp.ListenAddr = ":3003"
 	}
 	if cfg.Subagents.MaxConcurrent <= 0 {
 		cfg.Subagents.MaxConcurrent = 1

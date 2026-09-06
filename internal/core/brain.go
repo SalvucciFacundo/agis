@@ -86,6 +86,11 @@ type Brain struct {
 	// turnLimitReached records whether the last Step reached the turn limit cap.
 	turnLimitReached bool
 
+	// toolSearchEnabled gates dynamic tool search and lazy schema loading.
+	toolSearchEnabled bool
+	// toolSearchThreshold sets the tool count threshold above which schema pruning activates (default 8).
+	toolSearchThreshold int
+
 	// activeID tracks the session manager's active conversation when M5 is
 	// wired. Empty means "use LatestConversation" (M1 fallback).
 	activeID string
@@ -93,6 +98,17 @@ type Brain struct {
 
 // Option configures a Brain.
 type Option func(*Brain)
+
+// WithToolSearch configures dynamic tool search and threshold-based schema pruning.
+func WithToolSearch(enabled bool, threshold int) Option {
+	return func(b *Brain) {
+		b.toolSearchEnabled = enabled
+		b.toolSearchThreshold = threshold
+		if b.toolSearchThreshold <= 0 {
+			b.toolSearchThreshold = 8
+		}
+	}
+}
 
 // WithSink sets the token sink. A nil sink discards streamed text.
 func WithSink(s Sink) Option {
@@ -288,6 +304,13 @@ func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message
 		limit = maxToolRounds
 	}
 
+	threshold := b.toolSearchThreshold
+	if threshold <= 0 {
+		threshold = 8
+	}
+	pruningActive := toolsEnabled && b.toolSearchEnabled && len(b.runners) > threshold
+	loadedTools := make(map[string]bool)
+
 	for round := 0; ; round++ {
 		req := ChatRequest{Messages: *messages}
 		capReached := toolsEnabled && round >= limit
@@ -295,7 +318,21 @@ func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message
 			b.turnLimitReached = true
 		}
 		if toolsEnabled && !capReached {
-			req.Tools = toolDefs(b.runners)
+			if pruningActive {
+				var activeRunners []ToolRunner
+				for _, r := range b.runners {
+					rName := r.Name()
+					if rName == "" {
+						rName = "shell-" + r.Backend()
+					}
+					if isCoreTool(r) || loadedTools[rName] || loadedTools[r.Name()] {
+						activeRunners = append(activeRunners, r)
+					}
+				}
+				req.Tools = toolDefs(activeRunners)
+			} else {
+				req.Tools = toolDefs(b.runners)
+			}
 		}
 
 		events, err := b.provider.Stream(ctx, req)
@@ -359,6 +396,14 @@ func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message
 
 		for _, c := range calls {
 			out := b.executeTool(ctx, *c)
+			if c.Name == "load_tool" && !strings.HasPrefix(out, "error:") && !strings.HasPrefix(out, "blocked by policy") {
+				var parsed struct {
+					Name string `json:"name"`
+				}
+				if err := json.Unmarshal([]byte(c.Arguments), &parsed); err == nil && parsed.Name != "" {
+					loadedTools[parsed.Name] = true
+				}
+			}
 			*messages = append(*messages, Message{
 				Role:       RoleTool,
 				Content:    out,
@@ -367,6 +412,24 @@ func (b *Brain) runTurns(ctx context.Context, convID string, messages *[]Message
 		}
 		_ = convID
 	}
+}
+
+// isCoreTool reports whether a tool runner belongs to the core baseline toolset.
+func isCoreTool(r ToolRunner) bool {
+	name := r.Name()
+	backend := r.Backend()
+	if name == "" {
+		name = "shell-" + backend
+	}
+	switch name {
+	case "tool_search", "load_tool", "web_search", "web_fetch", "delegate_task":
+		return true
+	}
+	switch backend {
+	case "local", "docker", "ssh", "internal", "subagent":
+		return true
+	}
+	return strings.HasPrefix(name, "shell-")
 }
 
 // runnerFor routes a tool name to its runner.
@@ -402,6 +465,21 @@ func (b *Brain) executeTool(ctx context.Context, call ToolCall) string {
 	} else if strings.HasPrefix(runner.Backend(), "mcp:") {
 		subject = runner.Name()
 		input = call.Arguments
+	} else if runner.Backend() == "internal" {
+		category = CategoryCommands
+		input = call.Arguments
+		subject = call.Arguments
+		var parsed struct {
+			Name  string `json:"name"`
+			Query string `json:"query"`
+		}
+		if err := json.Unmarshal([]byte(call.Arguments), &parsed); err == nil {
+			if parsed.Name != "" {
+				subject = parsed.Name
+			} else if parsed.Query != "" {
+				subject = parsed.Query
+			}
+		}
 	} else if runner.Backend() == "web" {
 		category = CategoryNetwork
 		input = call.Arguments

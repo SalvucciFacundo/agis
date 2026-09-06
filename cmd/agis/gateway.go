@@ -71,8 +71,8 @@ func runGatewayWithContext(ctx context.Context, args []string, stdout, stderr io
 		return 1
 	}
 
-	if !cfg.Gateway.Telegram.Enabled && !cfg.Gateway.Discord.Enabled {
-		fmt.Fprintf(stderr, "agis gateway: no chat adapters (telegram, discord) enabled\n")
+	if !cfg.Gateway.Telegram.Enabled && !cfg.Gateway.Discord.Enabled && !cfg.Gateway.Slack.Enabled && !cfg.Gateway.WhatsApp.Enabled {
+		fmt.Fprintf(stderr, "agis gateway: no chat adapters (telegram, discord, slack, whatsapp) enabled\n")
 		return 1
 	}
 
@@ -156,6 +156,12 @@ func runGatewayWithContext(ctx context.Context, args []string, stdout, stderr io
 			autoApprover,
 		))
 	}
+	if cfg.Tools.ToolSearch.Enabled {
+		brainOpts = append(brainOpts, core.WithToolSearch(
+			cfg.Tools.ToolSearch.Enabled,
+			cfg.Tools.ToolSearch.Threshold,
+		))
+	}
 
 	brain := core.NewBrain(repo, provider, brainOpts...)
 
@@ -226,6 +232,40 @@ func runGatewayWithContext(ctx context.Context, args []string, stdout, stderr io
 			dcOpts...,
 		)
 		mux.RegisterAdapter(dc)
+	}
+
+	if cfg.Gateway.Slack.Enabled {
+		var slOpts []gateway.SlackOption
+		slOpts = append(slOpts,
+			gateway.WithSlackHandler(mux.HandleEvent),
+			gateway.WithSlackLogger(logger),
+		)
+
+		sl := gateway.NewSlackAdapter(
+			cfg.Gateway.Slack,
+			slOpts...,
+		)
+		mux.RegisterAdapter(sl)
+	}
+
+	if cfg.Gateway.WhatsApp.Enabled {
+		var waOpts []gateway.WhatsAppOption
+		waOpts = append(waOpts,
+			gateway.WithWhatsAppHandler(mux.HandleEvent),
+			gateway.WithWhatsAppLogger(logger),
+		)
+		if transcriber != nil {
+			waOpts = append(waOpts, gateway.WithWhatsAppTranscriber(transcriber))
+		}
+		if cfg.Multimodal.Audio.MaxAudioSizeMB > 0 {
+			waOpts = append(waOpts, gateway.WithWhatsAppMaxAudioSize(int64(cfg.Multimodal.Audio.MaxAudioSizeMB)*1024*1024))
+		}
+
+		wa := gateway.NewWhatsAppAdapter(
+			cfg.Gateway.WhatsApp,
+			waOpts...,
+		)
+		mux.RegisterAdapter(wa)
 	}
 
 	if err := mux.Start(ctx); err != nil {

@@ -164,8 +164,39 @@ func TestMultiplexer_Send(t *testing.T) {
 	dc.sentMu.Unlock()
 
 	// Send to unknown adapter
-	if err := mux.Send(ctx, "slack", "user-1", "hello"); !errors.Is(err, gateway.ErrAdapterNotFound) {
-		t.Errorf("Send(slack) error = %v, want %v", err, gateway.ErrAdapterNotFound)
+	if err := mux.Send(ctx, "unknown-adapter", "user-1", "hello"); !errors.Is(err, gateway.ErrAdapterNotFound) {
+		t.Errorf("Send(unknown-adapter) error = %v, want %v", err, gateway.ErrAdapterNotFound)
+	}
+}
+
+func TestMultiplexer_AllFourAdapters(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	tg := newMockAdapter("telegram")
+	dc := newMockAdapter("discord")
+	sl := newMockAdapter("slack")
+	wa := newMockAdapter("whatsapp")
+
+	mux := gateway.NewMultiplexer()
+	mux.RegisterAdapter(tg)
+	mux.RegisterAdapter(dc)
+	mux.RegisterAdapter(sl)
+	mux.RegisterAdapter(wa)
+
+	ctx := context.Background()
+
+	adapters := []string{"telegram", "discord", "slack", "whatsapp"}
+	for _, name := range adapters {
+		if err := mux.Send(ctx, name, "target-123", "msg for "+name); err != nil {
+			t.Errorf("Send(%s) failed: %v", name, err)
+		}
+	}
+
+	if len(sl.sentCalls) != 1 || sl.sentCalls[0].target != "target-123" {
+		t.Errorf("sl sentCalls = %+v", sl.sentCalls)
+	}
+	if len(wa.sentCalls) != 1 || wa.sentCalls[0].target != "target-123" {
+		t.Errorf("wa sentCalls = %+v", wa.sentCalls)
 	}
 }
 

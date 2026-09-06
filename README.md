@@ -234,6 +234,18 @@ gateway:
     enabled: false
     token: ""
     allowlist: []
+  slack:
+    enabled: false
+    bot_token: ""
+    signing_secret: ""
+    allowed_users: []
+  whatsapp:
+    enabled: false
+    api_token: ""
+    phone_number_id: ""
+    verify_token: ""
+    app_secret: ""
+    allowed_users: []
 
 cron:
   enabled: false
@@ -275,7 +287,7 @@ Detailed technical documentation and subsystem guides:
 
 ### Integrations & Ecosystem
 - [docs/mcp.md](docs/mcp.md) — Model Context Protocol (MCP) Client guide (stdio/sse transports, tool discovery, Policy Guard)
-- [docs/gateway.md](docs/gateway.md) — Multi-platform Chat Gateway guide (Telegram & Discord setup, chunking, allowlists)
+- [docs/gateway.md](docs/gateway.md) — Multi-platform Chat Gateway guide (Telegram, Discord, Slack & WhatsApp setup, chunking, allowlists)
 - [docs/cron.md](docs/cron.md) — Autonomous Cron Scheduler guide (5-field syntax, interval macros, target delivery)
 - [docs/plugins.md](docs/plugins.md) — External Plugin System guide (`plugin.json` schema, stdio bridge, state management)
 - [docs/webhook.md](docs/webhook.md) — Webhook Event Ingestion guide (HMAC-SHA256 constant-time authentication, dispatch)

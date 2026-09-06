@@ -11,7 +11,7 @@ agis [flags]                               # Launch interactive TUI (default)
 agis setup [flags]                         # Setup wizard for interactive LLM provider onboarding (alias: agis init)
 agis profile [list|create|show|use|delete] # Isolated profile management subsystem
 agis doctor [flags]                        # System diagnostics & environment health probe
-agis gateway [run] [flags]                 # Chat Gateway Multiplexer daemon (Telegram & Discord)
+agis gateway [run] [flags]                 # Chat Gateway Multiplexer daemon (Telegram, Discord, Slack, WhatsApp)
 agis cron [run|list] [flags]               # Autonomous Cron Scheduler daemon & job inspector
 agis plugins [list|enable|disable|inspect] # External Plugin Manager & tool bridge
 agis webhook [run] [flags]                 # Secure HTTP Webhook event listener daemon
@@ -56,7 +56,7 @@ The default command launches the Bubbletea-based terminal user interface with st
 
 ## 2. Chat Gateway Daemon (`agis gateway`)
 
-Runs the multi-surface chat gateway multiplexer, connecting AGIS concurrently to configured chat platforms (Telegram, Discord) with static user allowlists and non-interactive sandbox policy enforcement.
+Runs the multi-surface chat gateway multiplexer, connecting AGIS concurrently to configured chat platforms (Telegram, Discord, Slack, WhatsApp) with static user allowlists, signature verification, and non-interactive sandbox policy enforcement.
 
 ```bash
 # Start the chat gateway daemon
@@ -360,6 +360,8 @@ agis config set llm.model llama3.3
 agis config set agent.evolution_enabled false
 agis config set memory.close_timeout 45s
 agis config set gateway.telegram.allowlist "admin,ops,user"
+agis config set tools.tool_search.enabled true
+agis config set tools.tool_search.threshold 10
 
 # Print resolved active configuration file path
 agis config path

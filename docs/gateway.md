@@ -1,6 +1,6 @@
-# Chat Gateway Guide (Telegram & Discord)
+# Chat Gateway Guide (Telegram, Discord, Slack & WhatsApp)
 
-AGIS features a built-in **Gateway Multiplexer** (`internal/gateway`) that allows your autonomous agent to connect simultaneously to external chat platforms, including **Telegram** and **Discord**, while sharing the exact same conversation memory, skills, identity, and tool execution engine as the local TUI.
+AGIS features a built-in **Gateway Multiplexer** (`internal/gateway`) that allows your autonomous agent to connect simultaneously to external chat platforms, including **Telegram**, **Discord**, **Slack**, and **WhatsApp**, while sharing the exact same conversation memory, skills, identity, and tool execution engine as the local TUI.
 
 ---
 
@@ -91,6 +91,66 @@ gateway:
 
 ### Message Chunking:
 Discord enforces a 2000-character limit per message. AGIS automatically chunks messages into parts under 2000 runes and sends them in sequential order.
+
+---
+
+## 3. Slack Adapter Setup
+
+### Step 1: Create a Slack App
+1. Go to [Slack API: Your Apps](https://api.slack.com/apps) and click **Create New App** (from scratch).
+2. Under **Basic Information > App Credentials**, copy the **Signing Secret**.
+3. Under **OAuth & Permissions**, add bot token scopes (`chat:write`, `app_mentions:read`, `channels:history`, `im:history`).
+4. Install the App to your workspace and copy the **Bot User OAuth Token** (`xoxb-...`).
+5. Under **Event Subscriptions**, enable events and set the Request URL to `https://<your-domain>/slack/events` (or test with local tunneling). Subscribe to bot events `message.channels`, `message.im`, `app_mention`.
+
+### Step 2: Configure `config.yaml`
+```yaml
+gateway:
+  enabled: true
+  slack:
+    enabled: true
+    bot_token: "xoxb-your-bot-token"
+    signing_secret: "your-signing-secret"
+    listen_addr: ":3002"
+    allowed_users:
+      - "U12345678"  # Your Slack User ID
+```
+
+### Security & Chunking:
+- **HMAC Verification**: All inbound webhooks verify `X-Slack-Signature` using constant-time comparison (`crypto/subtle.ConstantTimeCompare`).
+- **Replay Mitigation**: Rejects requests older than 300 seconds based on `X-Slack-Request-Timestamp`.
+- **Chunking**: Messages over 4000 runes are chunked cleanly and delivered via `chat.postMessage`.
+
+---
+
+## 4. WhatsApp Adapter Setup (Meta Cloud API)
+
+### Step 1: Set Up WhatsApp Cloud API
+1. Navigate to the [Meta for Developers Portal](https://developers.facebook.com/).
+2. Create a Business App and configure WhatsApp Cloud API.
+3. Obtain your **Phone Number ID**, **Permanent System User Access Token** (`api_token`), and **App Secret**.
+4. In Webhook configuration, set the Callback URL to `https://<your-domain>/whatsapp/webhook` and enter a secure **Verify Token**. Subscribe to the `messages` field.
+
+### Step 2: Configure `config.yaml`
+```yaml
+gateway:
+  enabled: true
+  whatsapp:
+    enabled: true
+    api_token: "your-meta-bearer-token"
+    phone_number_id: "your-phone-number-id"
+    verify_token: "your-webhook-verify-token"
+    app_secret: "your-meta-app-secret"
+    listen_addr: ":3003"
+    allowed_users:
+      - "+15551234567"  # Allowed sender phone number
+```
+
+### Security & Media Handling:
+- **Challenge Verification**: Handles `hub.challenge` handshake via constant-time token comparison.
+- **HMAC Verification**: Enforces `X-Hub-Signature-256` SHA256 HMAC check.
+- **Voice Notes**: Inbound voice messages/audio notes are automatically downloaded, bounded to 25MB, and transcribed via Whisper (`core.Transcriber`).
+- **Chunking**: Messages over 4096 runes are chunked and delivered via Meta Graph API.
 
 ---
 

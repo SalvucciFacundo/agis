@@ -59,6 +59,9 @@ tools:
     host: ""                      # e.g. vps.example
     user: ""                      # remote user
     key_path: ""                  # path to private key
+  tool_search:
+    enabled: false                # dynamic tool search & lazy schema loading
+    threshold: 8                  # prune tool definitions if count > threshold
 
 gateway:
   enabled: false                  # master switch for external chat gateways
@@ -70,6 +73,20 @@ gateway:
     enabled: false
     token: ""                     # bot token from Discord Developer Portal
     allowlist: []                 # permitted Discord user IDs (fail-closed)
+  slack:
+    enabled: false
+    bot_token: ""                 # Slack bot token (xoxb-...)
+    signing_secret: ""            # Slack signing secret for HMAC verification
+    allowed_users: []             # permitted Slack user IDs (fail-closed)
+    listen_addr: ":3002"          # webhook HTTP server listen address
+  whatsapp:
+    enabled: false
+    api_token: ""                 # Meta Graph API Bearer token
+    phone_number_id: ""           # WhatsApp Business Phone Number ID
+    verify_token: ""              # Webhook verification challenge token
+    app_secret: ""                # Meta App Secret for X-Hub-Signature-256 HMAC
+    allowed_users: []             # permitted WhatsApp phone numbers (fail-closed)
+    listen_addr: ":3003"          # webhook HTTP server listen address
 
 cron:
   enabled: false                  # master switch for background cron scheduler
@@ -223,6 +240,15 @@ The `gateway` block configures chat platform adapters:
 - `gateway.enabled`: Master switch. Must be `true` for `agis gateway` to run.
 - `telegram.token` / `discord.token`: Platform bot API authentication tokens.
 - `telegram.allowlist` / `discord.allowlist`: Static user ID lists. Messages from unlisted IDs are rejected and logged before any session allocation or LLM invocation.
+- `slack.bot_token` / `slack.signing_secret`: Slack Web API bot token (`xoxb-...`) and signing secret for HMAC-SHA256 request verification (`X-Slack-Signature`) with timestamp freshness checking.
+- `slack.allowed_users` / `slack.listen_addr`: Slack user allowlist and webhook HTTP listener port (default `:3002`).
+- `whatsapp.api_token` / `whatsapp.phone_number_id` / `whatsapp.verify_token` / `whatsapp.app_secret`: Meta WhatsApp Cloud API credentials and verification tokens for GET challenge handshakes and POST HMAC-SHA256 (`X-Hub-Signature-256`) payload verification.
+- `whatsapp.allowed_users` / `whatsapp.listen_addr`: WhatsApp phone number allowlist and webhook HTTP listener port (default `:3003`).
+
+### 1.1 Dynamic Tool Search (`tools.tool_search`)
+The `tools.tool_search` block configures lazy schema loading to eliminate prompt context bloat:
+- `tools.tool_search.enabled`: When `true`, prunes initial LLM tool advertisements if total tool count exceeds `threshold`.
+- `tools.tool_search.threshold`: Maximum registered tool count before pruning activates (default: `8`). The model discovers and expands tools dynamically via `tool_search` and `load_tool`.
 
 ### 2. Cron (`cron`)
 The `cron` block configures scheduled background automations:

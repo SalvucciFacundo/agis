@@ -78,3 +78,59 @@ gateway:
 		t.Fatal("gateway daemon did not shut down within timeout")
 	}
 }
+
+func TestGatewayCLI_SlackAndWhatsApp(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("AGIS_HOME", home)
+	configPath := filepath.Join(home, "config.yaml")
+	_ = os.WriteFile(configPath, []byte(`
+db:
+  path: ":memory:"
+gateway:
+  enabled: true
+  slack:
+    enabled: true
+    bot_token: "xoxb-mock"
+    signing_secret: "mock-secret"
+    listen_addr: "127.0.0.1:0"
+    allowed_users: ["U123"]
+  whatsapp:
+    enabled: true
+    api_token: "meta-mock"
+    phone_number_id: "phone123"
+    verify_token: "ver-mock"
+    app_secret: "app-mock"
+    listen_addr: "127.0.0.1:0"
+    allowed_users: ["+15551234567"]
+tools:
+  enabled: true
+  tool_search:
+    enabled: true
+    threshold: 8
+`), 0o600)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	var stdout, stderr safeBuffer
+	done := make(chan int, 1)
+	go func() {
+		done <- runGatewayWithContext(ctx, []string{"run", "--config", configPath}, &stdout, &stderr)
+	}()
+
+	for i := 0; i < 100; i++ {
+		if strings.Contains(stdout.String(), "running") {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Errorf("runGatewayWithContext exit code = %d, want 0 on graceful shutdown", code)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("gateway daemon did not shut down within timeout")
+	}
+}

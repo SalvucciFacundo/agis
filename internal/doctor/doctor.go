@@ -151,8 +151,11 @@ func (d *Doctor) Run(ctx context.Context) *Report {
 		d.checkMCP,
 		d.checkTools,
 		d.checkWebTools,
+		d.checkToolSearch,
 		d.checkSubagents,
 		d.checkServer,
+		d.checkSlackGateway,
+		d.checkWhatsAppGateway,
 	}
 
 	for _, check := range checks {

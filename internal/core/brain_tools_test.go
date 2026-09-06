@@ -612,4 +612,169 @@ func TestBrainLoop_SubagentTool_LongTaskTruncationInGuard(t *testing.T) {
 	}
 }
 
+func TestBrainLoop_ToolSearchPruning_AboveThreshold(t *testing.T) {
+	// Build 10 runners (exceeding threshold 8)
+	runners := []ToolRunner{
+		&fakeRunner{name: "shell-local", backend: "local"},
+		&fakeRunner{name: "web_search", backend: "web"},
+		&fakeRunner{name: "web_fetch", backend: "web"},
+		&fakeRunner{name: "delegate_task", backend: "subagent"},
+		&fakeRunner{name: "tool_search", backend: "internal"},
+		&fakeRunner{name: "load_tool", backend: "internal"},
+		&fakeRunner{name: "mcp_github_create_issue", backend: "mcp"},
+		&fakeRunner{name: "mcp_slack_post", backend: "mcp"},
+		&fakeRunner{name: "mcp_jira_create_ticket", backend: "mcp"},
+		&fakeRunner{name: "custom_plugin_tool", backend: "plugin"},
+	}
+
+	provider := &scriptedToolProvider{rounds: [][]StreamEvent{
+		{{Text: "initial response without calling tools"}},
+	}}
+	repo := newFakeRepo()
+	guard := &capturingGuard{verdict: DecisionAllow}
+
+	brain := NewBrain(repo, provider,
+		WithSink(func(string) {}),
+		WithTools(runners, guard, nil),
+		WithToolSearch(true, 8),
+	)
+
+	if err := brain.Step(context.Background(), "hello"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	if len(provider.requests) != 1 {
+		t.Fatalf("provider received %d requests, want 1", len(provider.requests))
+	}
+
+	toolsInReq := provider.requests[0].Tools
+	// Should only contain 6 core tools: shell-local, web_search, web_fetch, delegate_task, tool_search, load_tool
+	if len(toolsInReq) != 6 {
+		t.Fatalf("advertised tools count = %d, want 6 (got: %+v)", len(toolsInReq), toolsInReq)
+	}
+
+	toolNames := make(map[string]bool)
+	for _, td := range toolsInReq {
+		toolNames[td.Name] = true
+	}
+
+	for _, expected := range []string{"shell-local", "web_search", "web_fetch", "delegate_task", "tool_search", "load_tool"} {
+		if !toolNames[expected] {
+			t.Errorf("expected core tool %q not found in advertised tools", expected)
+		}
+	}
+
+	for _, hidden := range []string{"mcp_github_create_issue", "mcp_slack_post", "mcp_jira_create_ticket", "custom_plugin_tool"} {
+		if toolNames[hidden] {
+			t.Errorf("non-core tool %q should be pruned from initial request", hidden)
+		}
+	}
+}
+
+func TestBrainLoop_ToolSearchPruning_DynamicLoading(t *testing.T) {
+	jiraRunner := &fakeRunner{name: "mcp_jira_create_ticket", backend: "mcp"}
+	loadToolRunner := &fakeRunner{
+		name:    "load_tool",
+		backend: "internal",
+	}
+
+	runners := []ToolRunner{
+		&fakeRunner{name: "shell-local", backend: "local"},
+		&fakeRunner{name: "web_search", backend: "web"},
+		&fakeRunner{name: "web_fetch", backend: "web"},
+		&fakeRunner{name: "delegate_task", backend: "subagent"},
+		&fakeRunner{name: "tool_search", backend: "internal"},
+		loadToolRunner,
+		&fakeRunner{name: "mcp_github_create_issue", backend: "mcp"},
+		&fakeRunner{name: "mcp_slack_post", backend: "mcp"},
+		jiraRunner,
+		&fakeRunner{name: "custom_plugin_tool", backend: "plugin"},
+	}
+
+	// Round 1: Model calls load_tool with mcp_jira_create_ticket
+	// Round 2: Model calls mcp_jira_create_ticket (now loaded!)
+	// Round 3: Model finishes with final answer
+	provider := &scriptedToolProvider{rounds: [][]StreamEvent{
+		{
+			{ToolCall: &ToolCall{ID: "call_load", Name: "load_tool", Arguments: `{"name":"mcp_jira_create_ticket"}`}},
+		},
+		{
+			{ToolCall: &ToolCall{ID: "call_jira", Name: "mcp_jira_create_ticket", Arguments: `{"summary":"Fix bug"}`}},
+		},
+		{
+			{Text: "ticket created successfully"},
+		},
+	}}
+	repo := newFakeRepo()
+	guard := &capturingGuard{verdict: DecisionAllow}
+
+	brain := NewBrain(repo, provider,
+		WithSink(func(string) {}),
+		WithTools(runners, guard, nil),
+		WithToolSearch(true, 8),
+	)
+
+	if err := brain.Step(context.Background(), "create a jira ticket"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	if len(provider.requests) < 2 {
+		t.Fatalf("provider requests count = %d, want >= 2", len(provider.requests))
+	}
+
+	// Round 1 request: jira should not be advertised
+	r1Tools := make(map[string]bool)
+	for _, td := range provider.requests[0].Tools {
+		r1Tools[td.Name] = true
+	}
+	if r1Tools["mcp_jira_create_ticket"] {
+		t.Errorf("round 1 should not advertise mcp_jira_create_ticket")
+	}
+
+	// Round 2 request: jira should now be advertised!
+	r2Tools := make(map[string]bool)
+	for _, td := range provider.requests[1].Tools {
+		r2Tools[td.Name] = true
+	}
+	if !r2Tools["mcp_jira_create_ticket"] {
+		t.Errorf("round 2 should advertise dynamically loaded mcp_jira_create_ticket")
+	}
+}
+
+func TestBrainLoop_ToolSearchPruning_Disabled(t *testing.T) {
+	runners := []ToolRunner{
+		&fakeRunner{name: "shell-local", backend: "local"},
+		&fakeRunner{name: "web_search", backend: "web"},
+		&fakeRunner{name: "web_fetch", backend: "web"},
+		&fakeRunner{name: "delegate_task", backend: "subagent"},
+		&fakeRunner{name: "tool_search", backend: "internal"},
+		&fakeRunner{name: "load_tool", backend: "internal"},
+		&fakeRunner{name: "mcp_github_create_issue", backend: "mcp"},
+		&fakeRunner{name: "mcp_slack_post", backend: "mcp"},
+		&fakeRunner{name: "mcp_jira_create_ticket", backend: "mcp"},
+		&fakeRunner{name: "custom_plugin_tool", backend: "plugin"},
+	}
+
+	provider := &scriptedToolProvider{rounds: [][]StreamEvent{
+		{{Text: "all tools available"}},
+	}}
+	repo := newFakeRepo()
+	guard := &capturingGuard{verdict: DecisionAllow}
+
+	// ToolSearch disabled
+	brain := NewBrain(repo, provider,
+		WithSink(func(string) {}),
+		WithTools(runners, guard, nil),
+		WithToolSearch(false, 8),
+	)
+
+	if err := brain.Step(context.Background(), "hello"); err != nil {
+		t.Fatalf("Step() error = %v", err)
+	}
+
+	if len(provider.requests[0].Tools) != 10 {
+		t.Errorf("advertised tools count = %d, want 10 when tool search disabled", len(provider.requests[0].Tools))
+	}
+}
+
 

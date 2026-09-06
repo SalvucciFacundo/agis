@@ -1324,6 +1324,181 @@ func TestLoad_ServerDefaultsAndExplicit(t *testing.T) {
 	}
 }
 
+func TestLoad_GatewaySlackAndWhatsAppDefaultsAndExplicit(t *testing.T) {
+	tests := []struct {
+		name                 string
+		yaml                 string
+		wantSlackEnabled     bool
+		wantSlackBotToken    string
+		wantSlackSecret      string
+		wantSlackListenAddr  string
+		wantSlackAllowlist   []string
+		wantWAEnabled        bool
+		wantWAAPIToken       string
+		wantWAPhoneNumberID  string
+		wantWAVerifyToken    string
+		wantWAAppSecret      string
+		wantWAListenAddr     string
+		wantWAAllowlist      []string
+	}{
+		{
+			name:                "empty config has slack and whatsapp disabled with defaults",
+			yaml:                "",
+			wantSlackEnabled:    false,
+			wantSlackBotToken:   "",
+			wantSlackSecret:     "",
+			wantSlackListenAddr: ":3002",
+			wantSlackAllowlist:  nil,
+			wantWAEnabled:       false,
+			wantWAAPIToken:      "",
+			wantWAPhoneNumberID: "",
+			wantWAVerifyToken:   "",
+			wantWAAppSecret:     "",
+			wantWAListenAddr:    ":3003",
+			wantWAAllowlist:     nil,
+		},
+		{
+			name: "explicit slack and whatsapp configuration",
+			yaml: `gateway:
+  enabled: true
+  slack:
+    enabled: true
+    bot_token: "xoxb-test-token"
+    signing_secret: "slack-secret-123"
+    allowed_users: ["U12345", "U67890"]
+    listen_addr: ":4002"
+  whatsapp:
+    enabled: true
+    api_token: "wa-api-token-abc"
+    phone_number_id: "10987654321"
+    verify_token: "wa-verify-token-xyz"
+    app_secret: "wa-app-secret-456"
+    allowed_users: ["+15551234567"]
+    listen_addr: ":4003"
+`,
+			wantSlackEnabled:    true,
+			wantSlackBotToken:   "xoxb-test-token",
+			wantSlackSecret:     "slack-secret-123",
+			wantSlackListenAddr: ":4002",
+			wantSlackAllowlist:  []string{"U12345", "U67890"},
+			wantWAEnabled:       true,
+			wantWAAPIToken:      "wa-api-token-abc",
+			wantWAPhoneNumberID: "10987654321",
+			wantWAVerifyToken:   "wa-verify-token-xyz",
+			wantWAAppSecret:     "wa-app-secret-456",
+			wantWAListenAddr:    ":4003",
+			wantWAAllowlist:     []string{"+15551234567"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+
+			path := writeConfig(t, home, tt.yaml, 0o600)
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			if cfg.Gateway.Slack.Enabled != tt.wantSlackEnabled {
+				t.Errorf("Gateway.Slack.Enabled = %v, want %v", cfg.Gateway.Slack.Enabled, tt.wantSlackEnabled)
+			}
+			if cfg.Gateway.Slack.BotToken != tt.wantSlackBotToken {
+				t.Errorf("Gateway.Slack.BotToken = %q, want %q", cfg.Gateway.Slack.BotToken, tt.wantSlackBotToken)
+			}
+			if cfg.Gateway.Slack.SigningSecret != tt.wantSlackSecret {
+				t.Errorf("Gateway.Slack.SigningSecret = %q, want %q", cfg.Gateway.Slack.SigningSecret, tt.wantSlackSecret)
+			}
+			if cfg.Gateway.Slack.ListenAddr != tt.wantSlackListenAddr {
+				t.Errorf("Gateway.Slack.ListenAddr = %q, want %q", cfg.Gateway.Slack.ListenAddr, tt.wantSlackListenAddr)
+			}
+			if len(cfg.Gateway.Slack.AllowedUsers) != len(tt.wantSlackAllowlist) {
+				t.Errorf("len(Gateway.Slack.AllowedUsers) = %d, want %d", len(cfg.Gateway.Slack.AllowedUsers), len(tt.wantSlackAllowlist))
+			}
+
+			if cfg.Gateway.WhatsApp.Enabled != tt.wantWAEnabled {
+				t.Errorf("Gateway.WhatsApp.Enabled = %v, want %v", cfg.Gateway.WhatsApp.Enabled, tt.wantWAEnabled)
+			}
+			if cfg.Gateway.WhatsApp.APIToken != tt.wantWAAPIToken {
+				t.Errorf("Gateway.WhatsApp.APIToken = %q, want %q", cfg.Gateway.WhatsApp.APIToken, tt.wantWAAPIToken)
+			}
+			if cfg.Gateway.WhatsApp.PhoneNumberID != tt.wantWAPhoneNumberID {
+				t.Errorf("Gateway.WhatsApp.PhoneNumberID = %q, want %q", cfg.Gateway.WhatsApp.PhoneNumberID, tt.wantWAPhoneNumberID)
+			}
+			if cfg.Gateway.WhatsApp.VerifyToken != tt.wantWAVerifyToken {
+				t.Errorf("Gateway.WhatsApp.VerifyToken = %q, want %q", cfg.Gateway.WhatsApp.VerifyToken, tt.wantWAVerifyToken)
+			}
+			if cfg.Gateway.WhatsApp.AppSecret != tt.wantWAAppSecret {
+				t.Errorf("Gateway.WhatsApp.AppSecret = %q, want %q", cfg.Gateway.WhatsApp.AppSecret, tt.wantWAAppSecret)
+			}
+			if cfg.Gateway.WhatsApp.ListenAddr != tt.wantWAListenAddr {
+				t.Errorf("Gateway.WhatsApp.ListenAddr = %q, want %q", cfg.Gateway.WhatsApp.ListenAddr, tt.wantWAListenAddr)
+			}
+			if len(cfg.Gateway.WhatsApp.AllowedUsers) != len(tt.wantWAAllowlist) {
+				t.Errorf("len(Gateway.WhatsApp.AllowedUsers) = %d, want %d", len(cfg.Gateway.WhatsApp.AllowedUsers), len(tt.wantWAAllowlist))
+			}
+		})
+	}
+}
+
+func TestLoad_ToolSearchDefaultsAndExplicit(t *testing.T) {
+	tests := []struct {
+		name          string
+		yaml          string
+		wantEnabled   bool
+		wantThreshold int
+	}{
+		{
+			name:          "empty config has tool search disabled with threshold 8",
+			yaml:          "",
+			wantEnabled:   false,
+			wantThreshold: 8,
+		},
+		{
+			name: "explicit tool search configuration",
+			yaml: `tools:
+  tool_search:
+    enabled: true
+    threshold: 12
+`,
+			wantEnabled:   true,
+			wantThreshold: 12,
+		},
+		{
+			name: "explicit tool search with zero or negative threshold defaults to 8",
+			yaml: `tools:
+  tool_search:
+    enabled: true
+    threshold: 0
+`,
+			wantEnabled:   true,
+			wantThreshold: 8,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+
+			path := writeConfig(t, home, tt.yaml, 0o600)
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			if cfg.Tools.ToolSearch.Enabled != tt.wantEnabled {
+				t.Errorf("Tools.ToolSearch.Enabled = %v, want %v", cfg.Tools.ToolSearch.Enabled, tt.wantEnabled)
+			}
+			if cfg.Tools.ToolSearch.Threshold != tt.wantThreshold {
+				t.Errorf("Tools.ToolSearch.Threshold = %d, want %d", cfg.Tools.ToolSearch.Threshold, tt.wantThreshold)
+			}
+		})
+	}
+}
+
 
 
 

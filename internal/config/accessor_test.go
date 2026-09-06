@@ -60,6 +60,20 @@ func TestGet(t *testing.T) {
 	cfg.Tools.Web.MaxFetchBytes = 4194304
 	cfg.Tools.Web.Providers.Brave.APIKey = "bsa-key-accessor"
 	cfg.Tools.Web.Providers.TavilyAPIKey = "tvly-key-accessor"
+	cfg.Gateway.Slack.Enabled = true
+	cfg.Gateway.Slack.BotToken = "xoxb-accessor-token"
+	cfg.Gateway.Slack.SigningSecret = "slack-secret-accessor"
+	cfg.Gateway.Slack.ListenAddr = ":3002"
+	cfg.Gateway.Slack.AllowedUsers = []string{"U123"}
+	cfg.Gateway.WhatsApp.Enabled = true
+	cfg.Gateway.WhatsApp.APIToken = "wa-token-accessor"
+	cfg.Gateway.WhatsApp.PhoneNumberID = "998877"
+	cfg.Gateway.WhatsApp.VerifyToken = "wa-verify-accessor"
+	cfg.Gateway.WhatsApp.AppSecret = "wa-secret-accessor"
+	cfg.Gateway.WhatsApp.ListenAddr = ":3003"
+	cfg.Gateway.WhatsApp.AllowedUsers = []string{"+1555000"}
+	cfg.Tools.ToolSearch.Enabled = true
+	cfg.Tools.ToolSearch.Threshold = 10
 
 	tests := []struct {
 		name      string
@@ -142,6 +156,21 @@ func TestGet(t *testing.T) {
 			name:    "get subagents default timeout",
 			key:     "subagents.default_timeout",
 			wantVal: 60 * time.Second,
+		},
+		{
+			name:    "get gateway slack bot_token",
+			key:     "gateway.slack.bot_token",
+			wantVal: "xoxb-accessor-token",
+		},
+		{
+			name:    "get gateway whatsapp phone_number_id",
+			key:     "gateway.whatsapp.phone_number_id",
+			wantVal: "998877",
+		},
+		{
+			name:    "get tools tool_search threshold",
+			key:     "tools.tool_search.threshold",
+			wantVal: 10,
 		},
 		{
 			name:      "get unknown key returns error",
@@ -270,6 +299,29 @@ func TestSet(t *testing.T) {
 		}
 		if cfg.Subagents.DefaultTimeout != 120*time.Second {
 			t.Errorf("Subagents.DefaultTimeout = %v, want 120s", cfg.Subagents.DefaultTimeout)
+		}
+
+		// Gateway Slack and WhatsApp Set operations
+		if err := config.Set(cfg, "gateway.slack.bot_token", "xoxb-new-token"); err != nil {
+			t.Fatalf("Set(gateway.slack.bot_token) error: %v", err)
+		}
+		if cfg.Gateway.Slack.BotToken != "xoxb-new-token" {
+			t.Errorf("Gateway.Slack.BotToken = %q, want 'xoxb-new-token'", cfg.Gateway.Slack.BotToken)
+		}
+
+		if err := config.Set(cfg, "gateway.whatsapp.phone_number_id", "445566"); err != nil {
+			t.Fatalf("Set(gateway.whatsapp.phone_number_id) error: %v", err)
+		}
+		if cfg.Gateway.WhatsApp.PhoneNumberID != "445566" {
+			t.Errorf("Gateway.WhatsApp.PhoneNumberID = %q, want '445566'", cfg.Gateway.WhatsApp.PhoneNumberID)
+		}
+
+		// ToolSearch Set operations
+		if err := config.Set(cfg, "tools.tool_search.threshold", "15"); err != nil {
+			t.Fatalf("Set(tools.tool_search.threshold) error: %v", err)
+		}
+		if cfg.Tools.ToolSearch.Threshold != 15 {
+			t.Errorf("Tools.ToolSearch.Threshold = %d, want 15", cfg.Tools.ToolSearch.Threshold)
 		}
 	})
 

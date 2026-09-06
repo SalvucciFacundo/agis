@@ -58,6 +58,21 @@ func maskFields(cfg *Config) {
 	if cfg.Gateway.Discord.Token != "" {
 		cfg.Gateway.Discord.Token = maskValue
 	}
+	if cfg.Gateway.Slack.BotToken != "" {
+		cfg.Gateway.Slack.BotToken = maskValue
+	}
+	if cfg.Gateway.Slack.SigningSecret != "" {
+		cfg.Gateway.Slack.SigningSecret = maskValue
+	}
+	if cfg.Gateway.WhatsApp.APIToken != "" {
+		cfg.Gateway.WhatsApp.APIToken = maskValue
+	}
+	if cfg.Gateway.WhatsApp.VerifyToken != "" {
+		cfg.Gateway.WhatsApp.VerifyToken = maskValue
+	}
+	if cfg.Gateway.WhatsApp.AppSecret != "" {
+		cfg.Gateway.WhatsApp.AppSecret = maskValue
+	}
 	if cfg.Webhook.Secret != "" {
 		cfg.Webhook.Secret = maskValue
 	}
