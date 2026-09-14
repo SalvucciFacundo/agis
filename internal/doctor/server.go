@@ -19,7 +19,7 @@ func (d *Doctor) checkServer(ctx context.Context) CheckResult {
 		host = "127.0.0.1"
 	}
 	port := d.cfg.Server.Port
-	if port <= 0 {
+	if port < 0 {
 		port = 8080
 	}
 
