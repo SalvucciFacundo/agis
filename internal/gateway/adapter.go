@@ -34,6 +34,16 @@ type MessageEvent struct {
 	Timestamp   time.Time
 }
 
+// HasAudio reports whether the message event carries any audio media attachments.
+func (e MessageEvent) HasAudio() bool {
+	for _, a := range e.Attachments {
+		if a.Type == "audio" || strings.HasPrefix(a.MimeType, "audio/") {
+			return true
+		}
+	}
+	return false
+}
+
 // Handler handles normalized inbound message events.
 type Handler func(ctx context.Context, event MessageEvent) error
 
@@ -50,6 +60,12 @@ type Adapter interface {
 
 	// Send transmits an outbound message to a target channel or chat ID.
 	Send(ctx context.Context, target string, msg string) error
+}
+
+// VoiceSender defines the optional contract for adapters that support transmitting voice/audio notes.
+type VoiceSender interface {
+	// SendVoice transmits synthesized audio bytes as a voice note to the target recipient or chat.
+	SendVoice(ctx context.Context, target string, audio []byte, mimeType string, caption string) error
 }
 
 // IsAllowed reports whether userID is present in the configured allowlist.

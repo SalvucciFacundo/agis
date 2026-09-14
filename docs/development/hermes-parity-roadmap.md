@@ -50,6 +50,7 @@ Hermes Agent es un framework autónomo de propósito general con un loop de apre
 | **Aprendizaje de Subagentes** | Contexto volátil efímero. | Destilación pasiva (`ExtractKeyLearnings`) directa a SQLite/RRF. | ✅ **Fase 8 Shipped** |
 | **Lazy MCP Spawning (Standby)** | Conexiones persistentes en reposo. | Standby por defecto, caché en disco (`SchemaCache`), auto-shutdown 5m. | ✅ **Fase 9 Shipped** |
 | **Portabilidad de Perfiles** | Archivos dispersos sin checksums. | `agis backup` / `agis restore` con validación SHA-256 de manifest y snapshot SQLite. | ✅ **Fase 10 Shipped** |
+| **Text-to-Speech (TTS) Saliente** | Respuestas solo en texto plano. | Adaptador `internal/adapters/audio` (OpenAI, ElevenLabs, Kokoro) y notas de voz en Telegram/WhatsApp. | ✅ **Fase 11 Shipped** |
 
 ---
 
@@ -66,14 +67,11 @@ Hermes Agent es un framework autónomo de propósito general con un loop de apre
 - [x] **Fase 8: Aprendizaje de Subagentes hacia la Memoria Persistente (`internal/subagents`, `internal/memory`)** — Destilación pasiva de aprendizajes (`ExtractKeyLearnings`) e indexación automática en FTS5 y Vector Hybrid Search (RRF).
 - [x] **Fase 9: Lazy MCP Spawning / Standby (`internal/mcp`)** — Servidores MCP en modo Standby con persistencia de esquemas en disco (`$AGIS_HOME/cache/mcp/<server>.json`), arranque bajo demanda en `CallTool` y apagado automático tras inactividad (`idle_timeout: 5m`, 0% RAM ociosa).
 - [x] **Fase 10: Portabilidad de Perfiles (`internal/backup`, `cmd/agis backup/restore`)** — Respaldo en un comando (`agis backup [profile] [-o out.tar.gz]`) con manifest SHA-256, snapshot seguro de SQLite (WAL/SHM), protección anti-traversal, restauración atómica (`agis restore <tarball> [-profile <name>] [-force]`) y aliases en `agis profile backup/restore`.
+- [x] **Fase 11: Text-to-Speech (TTS) Saliente (`internal/adapters/audio`, `internal/gateway`)** — Puerto `Synthesizer`, adaptadores OpenAI TTS, ElevenLabs y Kokoro local, configuración `tts:`/`multimodal.tts:`, y respuestas automáticas por nota de voz en Telegram y WhatsApp con fallback fluido a texto.
 
 ---
 
 ### Próximas Fases Planificadas (Backlog de Arquitectura)
-
-#### Fase 11: Text-to-Speech (TTS) Saliente (`internal/adapters/audio`)
-- **Sintetizador de Voz**: Adaptador de salida para Text-to-Speech (ej. OpenAI TTS, ElevenLabs, Kokoro local).
-- **Respuestas en Audio**: Permite que los gateways de Telegram y WhatsApp respondan con notas de voz sintetizadas cuando el usuario se comunica por audio.
 
 #### Fase 12: Browser Automation Headless con Playwright/Chromium (`internal/tools/browser`)
 - **Automatización Web Avanzada**: Complemento opcional para sitios 100% Single Page Applications (SPAs) donde se requiere renderizado completo de JavaScript, navegación, clicks y capturas de pantalla.

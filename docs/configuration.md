@@ -146,6 +146,13 @@ multimodal:
     provider: "openai"            # transcription provider ("openai" / Whisper)
     model: "whisper-1"            # transcription model
     max_audio_size_mb: 25         # maximum audio size limit in MB (default: 25)
+  tts:
+    enabled: false                # outbound speech synthesis (Text-to-Speech)
+    provider: "openai"            # tts provider ("openai", "elevenlabs", "kokoro")
+    model: "tts-1"                # speech synthesis model ("tts-1", "eleven_multilingual_v2")
+    voice: "alloy"                # voice identifier ("alloy", "echo", "nova", or elevenlabs voice ID)
+    format: "mp3"                 # output audio format ("mp3", "opus", "aac")
+    speed: 1.0                    # playback speed factor (0.25 - 4.0)
 
 subagents:
   enabled: true                   # master switch for native subagent delegation (delegate_task)

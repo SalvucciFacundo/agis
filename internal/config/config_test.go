@@ -887,6 +887,98 @@ func TestLoad_MultimodalDefaultsAndExplicit(t *testing.T) {
 	}
 }
 
+func TestLoad_TTSDefaultsAndExplicit(t *testing.T) {
+	home := t.TempDir()
+
+	t.Run("default config values", func(t *testing.T) {
+		path := writeConfig(t, home, "", 0o600)
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		if cfg.TTS.Enabled {
+			t.Errorf("TTS.Enabled default = %v, want false", cfg.TTS.Enabled)
+		}
+		if cfg.TTS.Provider != "openai" {
+			t.Errorf("TTS.Provider = %q, want 'openai'", cfg.TTS.Provider)
+		}
+		if cfg.TTS.Model != "tts-1" {
+			t.Errorf("TTS.Model = %q, want 'tts-1'", cfg.TTS.Model)
+		}
+		if cfg.TTS.Voice != "alloy" {
+			t.Errorf("TTS.Voice = %q, want 'alloy'", cfg.TTS.Voice)
+		}
+		if cfg.TTS.Format != "mp3" {
+			t.Errorf("TTS.Format = %q, want 'mp3'", cfg.TTS.Format)
+		}
+		if cfg.TTS.Speed != 1.0 {
+			t.Errorf("TTS.Speed = %v, want 1.0", cfg.TTS.Speed)
+		}
+	})
+
+	t.Run("explicit root tts config", func(t *testing.T) {
+		content := `
+tts:
+  enabled: true
+  provider: elevenlabs
+  model: eleven_multilingual_v2
+  voice: rachel
+  speed: 1.2
+  api_key: xi-custom-key
+`
+		path := writeConfig(t, home, content, 0o600)
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		if !cfg.TTS.Enabled {
+			t.Errorf("TTS.Enabled = false, want true")
+		}
+		if cfg.TTS.Provider != "elevenlabs" {
+			t.Errorf("TTS.Provider = %q, want 'elevenlabs'", cfg.TTS.Provider)
+		}
+		if cfg.TTS.Voice != "rachel" {
+			t.Errorf("TTS.Voice = %q, want 'rachel'", cfg.TTS.Voice)
+		}
+		if cfg.TTS.Speed != 1.2 {
+			t.Errorf("TTS.Speed = %v, want 1.2", cfg.TTS.Speed)
+		}
+		if cfg.TTS.APIKey != "xi-custom-key" {
+			t.Errorf("TTS.APIKey = %q, want 'xi-custom-key'", cfg.TTS.APIKey)
+		}
+	})
+
+	t.Run("explicit multimodal tts config", func(t *testing.T) {
+		content := `
+multimodal:
+  enabled: true
+  tts:
+    enabled: true
+    provider: kokoro
+    base_url: http://localhost:8880/v1
+    voice: bella
+`
+		path := writeConfig(t, home, content, 0o600)
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+
+		if !cfg.Multimodal.TTS.Enabled || !cfg.TTS.Enabled {
+			t.Errorf("expected TTS to be enabled")
+		}
+		if cfg.TTS.Provider != "kokoro" {
+			t.Errorf("TTS.Provider = %q, want 'kokoro'", cfg.TTS.Provider)
+		}
+		if cfg.TTS.BaseURL != "http://localhost:8880/v1" {
+			t.Errorf("TTS.BaseURL = %q, want 'http://localhost:8880/v1'", cfg.TTS.BaseURL)
+		}
+	})
+}
+
+
 func TestLoad_MCPDefaultsAndExplicit(t *testing.T) {
 	tests := []struct {
 		name        string

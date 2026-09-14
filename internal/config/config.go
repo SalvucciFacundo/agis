@@ -56,6 +56,7 @@ type Config struct {
 	Embeddings EmbeddingsConfig `yaml:"embeddings"`
 	MCP        MCPConfig        `yaml:"mcp"`
 	Multimodal MultimodalConfig `yaml:"multimodal"`
+	TTS        TTSConfig        `yaml:"tts"`
 	Subagents  SubagentsConfig  `yaml:"subagents"`
 	Server     ServerConfig     `yaml:"server"`
 }
@@ -87,6 +88,7 @@ type MultimodalConfig struct {
 	Enabled bool         `yaml:"enabled"`
 	Vision  VisionConfig `yaml:"vision"`
 	Audio   AudioConfig  `yaml:"audio"`
+	TTS     TTSConfig    `yaml:"tts"`
 }
 
 // VisionConfig tunes the multimodal vision processing capabilities.
@@ -103,6 +105,18 @@ type AudioConfig struct {
 	Provider       string `yaml:"provider"`
 	Model          string `yaml:"model"`
 	MaxAudioSizeMB int    `yaml:"max_audio_size_mb"`
+}
+
+// TTSConfig tunes the outbound text-to-speech voice synthesis capabilities.
+type TTSConfig struct {
+	Enabled  bool    `yaml:"enabled"`
+	Provider string  `yaml:"provider"`
+	Model    string  `yaml:"model"`
+	Voice    string  `yaml:"voice"`
+	Format   string  `yaml:"format"`
+	Speed    float64 `yaml:"speed"`
+	BaseURL  string  `yaml:"base_url,omitempty"`
+	APIKey   string  `yaml:"api_key,omitempty"`
 }
 
 // MCPConfig gates and configures the M8 Model Context Protocol client subsystem.
@@ -503,6 +517,22 @@ func defaults() *Config {
 				Model:          "whisper-1",
 				MaxAudioSizeMB: 25,
 			},
+			TTS: TTSConfig{
+				Enabled:  false,
+				Provider: "openai",
+				Model:    "tts-1",
+				Voice:    "alloy",
+				Format:   "mp3",
+				Speed:    1.0,
+			},
+		},
+		TTS: TTSConfig{
+			Enabled:  false,
+			Provider: "openai",
+			Model:    "tts-1",
+			Voice:    "alloy",
+			Format:   "mp3",
+			Speed:    1.0,
 		},
 		Subagents: SubagentsConfig{
 			Enabled:         true,
@@ -600,6 +630,41 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Multimodal.Audio.MaxAudioSizeMB <= 0 {
 		cfg.Multimodal.Audio.MaxAudioSizeMB = 25
+	}
+	if cfg.TTS.Enabled && !cfg.Multimodal.TTS.Enabled {
+		cfg.Multimodal.TTS = cfg.TTS
+	} else if cfg.Multimodal.TTS.Enabled && !cfg.TTS.Enabled {
+		cfg.TTS = cfg.Multimodal.TTS
+	}
+	if cfg.TTS.Provider == "" {
+		cfg.TTS.Provider = "openai"
+	}
+	if cfg.TTS.Model == "" {
+		cfg.TTS.Model = "tts-1"
+	}
+	if cfg.TTS.Voice == "" {
+		cfg.TTS.Voice = "alloy"
+	}
+	if cfg.TTS.Format == "" {
+		cfg.TTS.Format = "mp3"
+	}
+	if cfg.TTS.Speed <= 0 {
+		cfg.TTS.Speed = 1.0
+	}
+	if cfg.Multimodal.TTS.Provider == "" {
+		cfg.Multimodal.TTS.Provider = cfg.TTS.Provider
+	}
+	if cfg.Multimodal.TTS.Model == "" {
+		cfg.Multimodal.TTS.Model = cfg.TTS.Model
+	}
+	if cfg.Multimodal.TTS.Voice == "" {
+		cfg.Multimodal.TTS.Voice = cfg.TTS.Voice
+	}
+	if cfg.Multimodal.TTS.Format == "" {
+		cfg.Multimodal.TTS.Format = cfg.TTS.Format
+	}
+	if cfg.Multimodal.TTS.Speed <= 0 {
+		cfg.Multimodal.TTS.Speed = cfg.TTS.Speed
 	}
 	if cfg.Tools.Web.DefaultProvider == "" {
 		cfg.Tools.Web.DefaultProvider = defaultWebSearchProvider

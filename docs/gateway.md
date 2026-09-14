@@ -192,4 +192,25 @@ When `multimodal.enabled: true`:
   - Audio size limit: 25MB (configurable via `multimodal.audio.max_audio_size_mb`).
   - MIME sniffing with `http.DetectContentType` to fail-closed on spoofed or executable files.
 
-See [docs/multimodal.md](multimodal.md) for full configuration details.
+---
+
+## Outbound Voice Synthesis (TTS)
+
+When `tts.enabled: true` (or `multimodal.tts.enabled: true`), AGIS synthesizes responses into spoken audio notes:
+
+- **Automatic Voice Replies**: When a user sends an audio note or voice message on Telegram or WhatsApp, the Multiplexer automatically synthesizes the assistant's reply and sends a native voice note back via `sendVoice` (Telegram) or media upload (WhatsApp).
+- **Graceful Text Fallback**: If speech synthesis fails (e.g. rate limit, network timeout) or the destination platform does not support voice sending, AGIS transparently delivers the plain text response without dropping the turn.
+- **Provider Support**: Supports OpenAI TTS (`tts-1`, `tts-1-hd`), ElevenLabs multilingual voices, and local OpenAI-compatible endpoints (Kokoro FastAPI, LocalAI).
+
+```yaml
+tts:
+  enabled: true
+  provider: "openai"       # openai, elevenlabs, kokoro
+  model: "tts-1"
+  voice: "alloy"           # alloy, echo, fable, onyx, nova, shimmer (or elevenlabs voice ID)
+  format: "mp3"            # mp3, opus, aac
+  speed: 1.0               # 0.25 to 4.0
+  # base_url: "http://localhost:8880/v1" # optional: for local Kokoro TTS
+```
+
+See [docs/multimodal.md](multimodal.md) and [docs/configuration.md](configuration.md) for full configuration details.

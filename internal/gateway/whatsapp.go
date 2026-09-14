@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"strconv"
@@ -254,6 +255,144 @@ func (w *WhatsAppAdapter) sendSingle(ctx context.Context, target, text string) e
 		return fmt.Errorf("whatsapp adapter: send failed with status %d: %s", resp.StatusCode, string(respBody))
 	}
 
+	return nil
+}
+
+var _ VoiceSender = (*WhatsAppAdapter)(nil)
+
+// SendVoice transmits synthesized audio bytes as a voice/audio message via WhatsApp Cloud API.
+func (w *WhatsAppAdapter) SendVoice(ctx context.Context, target string, audio []byte, mimeType string, caption string) error {
+	w.mu.Lock()
+	if w.closed {
+		w.mu.Unlock()
+		return ErrAdapterClosed
+	}
+	w.mu.Unlock()
+
+	if len(audio) == 0 {
+		return errors.New("whatsapp adapter: empty audio payload")
+	}
+	if target == "" {
+		return errors.New("whatsapp adapter: target recipient is empty")
+	}
+
+	if mimeType == "" {
+		mimeType = "audio/ogg"
+	}
+
+	mediaID, err := w.uploadMedia(ctx, audio, mimeType)
+	if err != nil {
+		return fmt.Errorf("whatsapp adapter: uploading audio media: %w", err)
+	}
+
+	return w.sendAudioMessage(ctx, target, mediaID)
+}
+
+func (w *WhatsAppAdapter) uploadMedia(ctx context.Context, data []byte, mimeType string) (string, error) {
+	uploadURL := fmt.Sprintf("%s/%s/media", w.baseURL, w.cfg.PhoneNumberID)
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+
+	if err := mw.WriteField("messaging_product", "whatsapp"); err != nil {
+		return "", err
+	}
+	if err := mw.WriteField("type", mimeType); err != nil {
+		return "", err
+	}
+
+	filename := "audio.ogg"
+	if strings.Contains(mimeType, "mp3") || strings.Contains(mimeType, "mpeg") {
+		filename = "audio.mp3"
+	}
+
+	part, err := mw.CreateFormFile("file", filename)
+	if err != nil {
+		return "", err
+	}
+	if _, err := part.Write(data); err != nil {
+		return "", err
+	}
+	if err := mw.Close(); err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, &buf)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+w.cfg.APIToken)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+
+	resp, err := w.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return "", fmt.Errorf("status %d: %s", resp.StatusCode, string(b))
+	}
+
+	var res struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", fmt.Errorf("decoding media upload response: %w", err)
+	}
+	if res.ID == "" {
+		return "", errors.New("empty media id returned from meta upload")
+	}
+	return res.ID, nil
+}
+
+type metaSendAudioRequest struct {
+	MessagingProduct string         `json:"messaging_product"`
+	RecipientType    string         `json:"recipient_type"`
+	To               string         `json:"to"`
+	Type             string         `json:"type"`
+	Audio            metaMediaIDRef `json:"audio"`
+}
+
+type metaMediaIDRef struct {
+	ID string `json:"id"`
+}
+
+func (w *WhatsAppAdapter) sendAudioMessage(ctx context.Context, target, mediaID string) error {
+	apiURL := fmt.Sprintf("%s/%s/messages", w.baseURL, w.cfg.PhoneNumberID)
+
+	reqPayload := metaSendAudioRequest{
+		MessagingProduct: "whatsapp",
+		RecipientType:    "individual",
+		To:               target,
+		Type:             "audio",
+		Audio:            metaMediaIDRef{ID: mediaID},
+	}
+
+	jsonBytes, err := json.Marshal(reqPayload)
+	if err != nil {
+		return fmt.Errorf("marshal audio message payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(jsonBytes))
+	if err != nil {
+		return fmt.Errorf("create send audio request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+w.cfg.APIToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := w.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("execute send audio request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("send audio failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
 	return nil
 }
 

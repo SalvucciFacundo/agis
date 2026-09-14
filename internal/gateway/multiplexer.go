@@ -24,6 +24,7 @@ type Multiplexer struct {
 	brain          BrainRunner
 	repo           core.Repository
 	sessionManager *session.Manager
+	synthesizer    core.Synthesizer
 	logger         *slog.Logger
 
 	// sessions maps sessionKey ("gateway:<adapter>:<chatID>") -> conversationID
@@ -37,6 +38,13 @@ type Multiplexer struct {
 
 // MultiplexerOption configures a Multiplexer.
 type MultiplexerOption func(*Multiplexer)
+
+// WithMultiplexerSynthesizer wires the outbound Speech Synthesizer for voice notes.
+func WithMultiplexerSynthesizer(s core.Synthesizer) MultiplexerOption {
+	return func(m *Multiplexer) {
+		m.synthesizer = s
+	}
+}
 
 // WithMultiplexerBrain wires the Brain runner into the Multiplexer.
 func WithMultiplexerBrain(b BrainRunner) MultiplexerOption {
@@ -236,9 +244,36 @@ func (m *Multiplexer) HandleEvent(ctx context.Context, ev MessageEvent) error {
 		msgs, err := m.repo.Messages(ctx, convID, 1)
 		if err == nil && len(msgs) > 0 && msgs[0].Role == core.RoleAssistant {
 			replyText := msgs[0].Content
-			if err := m.Send(ctx, ev.Adapter, ev.ChatID, replyText); err != nil {
-				m.logger.Error("gateway multiplexer: sending reply failed", "adapter", ev.Adapter, "target", ev.ChatID, "error", err)
-				return fmt.Errorf("sending reply: %w", err)
+
+			// If the incoming message carried an audio note and a speech synthesizer
+			// is wired, synthesize a voice note and dispatch via VoiceSender.
+			sentVoice := false
+			if ev.HasAudio() && m.synthesizer != nil {
+				m.mu.RLock()
+				ad, exists := m.adapters[ev.Adapter]
+				m.mu.RUnlock()
+
+				if exists {
+					if vs, ok := ad.(VoiceSender); ok {
+						audioBytes, mimeType, sErr := m.synthesizer.Synthesize(ctx, replyText)
+						if sErr != nil {
+							m.logger.Warn("gateway multiplexer: voice synthesis failed, falling back to text", "error", sErr)
+						} else {
+							if vErr := vs.SendVoice(ctx, ev.ChatID, audioBytes, mimeType, ""); vErr != nil {
+								m.logger.Warn("gateway multiplexer: send voice failed, falling back to text", "error", vErr)
+							} else {
+								sentVoice = true
+							}
+						}
+					}
+				}
+			}
+
+			if !sentVoice {
+				if err := m.Send(ctx, ev.Adapter, ev.ChatID, replyText); err != nil {
+					m.logger.Error("gateway multiplexer: sending reply failed", "adapter", ev.Adapter, "target", ev.ChatID, "error", err)
+					return fmt.Errorf("sending reply: %w", err)
+				}
 			}
 		}
 	}

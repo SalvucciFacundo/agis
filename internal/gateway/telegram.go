@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
@@ -222,6 +224,66 @@ func (a *TelegramAdapter) sendMessage(ctx context.Context, chatID string, text s
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("telegram sendMessage status %d: %s", resp.StatusCode, string(b))
+	}
+	return nil
+}
+
+var _ VoiceSender = (*TelegramAdapter)(nil)
+
+// SendVoice transmits a voice note (audio bytes) to the specified Telegram chat.
+func (a *TelegramAdapter) SendVoice(ctx context.Context, target string, audio []byte, mimeType string, caption string) error {
+	if len(audio) == 0 {
+		return errors.New("telegram adapter: empty audio payload")
+	}
+	if strings.TrimSpace(target) == "" {
+		return errors.New("telegram adapter: empty target chat_id")
+	}
+
+	url := fmt.Sprintf("%s/bot%s/sendVoice", a.baseURL, a.cfg.Token)
+
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+
+	if err := w.WriteField("chat_id", target); err != nil {
+		return fmt.Errorf("writing chat_id field: %w", err)
+	}
+	if caption != "" {
+		if err := w.WriteField("caption", caption); err != nil {
+			return fmt.Errorf("writing caption field: %w", err)
+		}
+	}
+
+	fileName := "voice.ogg"
+	if strings.Contains(mimeType, "mp3") || strings.Contains(mimeType, "mpeg") {
+		fileName = "voice.mp3"
+	}
+	part, err := w.CreateFormFile("voice", fileName)
+	if err != nil {
+		return fmt.Errorf("creating voice form file: %w", err)
+	}
+	if _, err := part.Write(audio); err != nil {
+		return fmt.Errorf("writing voice payload: %w", err)
+	}
+
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("closing multipart writer: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &buf)
+	if err != nil {
+		return fmt.Errorf("creating telegram sendVoice request: %w", err)
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("executing telegram sendVoice request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("telegram sendVoice status %d: %s", resp.StatusCode, string(b))
 	}
 	return nil
 }

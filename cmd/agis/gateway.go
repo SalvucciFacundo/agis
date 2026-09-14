@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/SalvucciFacundo/agis/internal/adapters/audio"
 	"github.com/SalvucciFacundo/agis/internal/adapters/llm"
 	"github.com/SalvucciFacundo/agis/internal/config"
 	"github.com/SalvucciFacundo/agis/internal/core"
@@ -210,12 +211,29 @@ func runGatewayWithContext(ctx context.Context, args []string, stdout, stderr io
 		}
 	}
 
-	mux := gateway.NewMultiplexer(
+	var synthesizer core.Synthesizer
+	ttsCfg := cfg.TTS
+	if !ttsCfg.Enabled && cfg.Multimodal.TTS.Enabled {
+		ttsCfg = cfg.Multimodal.TTS
+	}
+	if ttsCfg.Enabled {
+		synthesizer = audio.NewSynthesizer(ttsCfg, cfg.LLM.APIKey)
+		if synthesizer != nil {
+			logger.Info("multimodal: outbound speech synthesizer initialized", "provider", ttsCfg.Provider, "model", ttsCfg.Model)
+		}
+	}
+
+	muxOpts := []gateway.MultiplexerOption{
 		gateway.WithMultiplexerBrain(brain),
 		gateway.WithMultiplexerRepository(repo),
 		gateway.WithMultiplexerSessionManager(sessionManager),
 		gateway.WithMultiplexerLogger(logger),
-	)
+	}
+	if synthesizer != nil {
+		muxOpts = append(muxOpts, gateway.WithMultiplexerSynthesizer(synthesizer))
+	}
+
+	mux := gateway.NewMultiplexer(muxOpts...)
 
 	if cfg.Gateway.Telegram.Enabled {
 		var tgOpts []gateway.TelegramOption
