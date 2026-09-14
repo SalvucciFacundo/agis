@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbletea"
 
+	"github.com/SalvucciFacundo/agis/internal/config"
 	"github.com/SalvucciFacundo/agis/internal/core"
 	"github.com/SalvucciFacundo/agis/internal/persona"
 )
@@ -159,5 +160,98 @@ func TestSlash_CommandsNeverPersistMessages(t *testing.T) {
 		if strings.HasPrefix(line, userPrefix) && strings.Contains(line, "/persona") {
 			t.Fatalf("slash command persisted as a user message: %q", line)
 		}
+	}
+}
+
+func TestSlash_Help(t *testing.T) {
+	m, _, _ := newCommandModel(t)
+
+	m = sendCommand(m, "/help")
+	if !strings.Contains(m.history.String(), "Commands") || !strings.Contains(m.history.String(), "/profile") {
+		t.Errorf("history does not contain /help overview: %s", m.history.String())
+	}
+
+	m = sendCommand(m, "/?")
+	if !strings.Contains(m.history.String(), "/skills") {
+		t.Errorf("history does not contain /? overview: %s", m.history.String())
+	}
+}
+
+func TestSlash_Profile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("AGIS_HOME", home)
+	if err := config.CreateProfile("work", ""); err != nil {
+		t.Fatalf("CreateProfile failed: %v", err)
+	}
+
+	m, _, _ := newCommandModel(t)
+
+	// Default profile display
+	m = sendCommand(m, "/profile")
+	if !strings.Contains(m.history.String(), "active profile:") {
+		t.Errorf("expected active profile feedback, got: %s", m.history.String())
+	}
+
+	// Profile list
+	m = sendCommand(m, "/profile list")
+	if !strings.Contains(m.history.String(), "profiles:") {
+		t.Errorf("expected profiles list feedback, got: %s", m.history.String())
+	}
+
+	// Profile switch
+	m = sendCommand(m, "/profile use work")
+	if !strings.Contains(m.history.String(), "switched to profile: work") {
+		t.Errorf("expected switch feedback, got: %s", m.history.String())
+	}
+	if m.activeProfile != "work" {
+		t.Errorf("m.activeProfile = %q, want 'work'", m.activeProfile)
+	}
+	if !strings.Contains(m.input.Prompt, "work") {
+		t.Errorf("m.input.Prompt = %q, want to contain 'work'", m.input.Prompt)
+	}
+}
+
+func TestSlash_Skills(t *testing.T) {
+	m, _, _ := newCommandModel(t)
+
+	m = sendCommand(m, "/skills")
+	if !strings.Contains(m.history.String(), "skills:") {
+		t.Errorf("expected skills feedback, got: %s", m.history.String())
+	}
+}
+
+func TestSlash_Tools(t *testing.T) {
+	m, _, _ := newCommandModel(t)
+
+	m = sendCommand(m, "/tools")
+	if !strings.Contains(m.history.String(), "tools:") {
+		t.Errorf("expected tools feedback, got: %s", m.history.String())
+	}
+}
+
+func TestSlash_MCP(t *testing.T) {
+	m, _, _ := newCommandModel(t)
+
+	m = sendCommand(m, "/mcp")
+	if !strings.Contains(m.history.String(), "mcp:") {
+		t.Errorf("expected mcp feedback, got: %s", m.history.String())
+	}
+}
+
+func TestSlash_Doctor(t *testing.T) {
+	m, _, _ := newCommandModel(t)
+
+	m = sendCommand(m, "/doctor")
+	if !strings.Contains(m.history.String(), "doctor diagnostics:") {
+		t.Errorf("expected doctor feedback, got: %s", m.history.String())
+	}
+}
+
+func TestSlash_Browser(t *testing.T) {
+	m, _, _ := newCommandModel(t)
+
+	m = sendCommand(m, "/browser")
+	if !strings.Contains(m.history.String(), "browser:") {
+		t.Errorf("expected browser feedback, got: %s", m.history.String())
 	}
 }

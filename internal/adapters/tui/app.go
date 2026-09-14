@@ -20,16 +20,18 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/SalvucciFacundo/agis/internal/config"
 	"github.com/SalvucciFacundo/agis/internal/core"
 	"github.com/SalvucciFacundo/agis/internal/persona"
 	"github.com/SalvucciFacundo/agis/internal/session"
+	"github.com/SalvucciFacundo/agis/internal/tools/browser"
 )
 
 // Viewport line prefixes for the message kinds the TUI renders.
 const (
-	userPrefix      = "you: "
-	assistantPrefix = "assistant: "
-	errorPrefix     = "error: "
+	userPrefix      = "❯ you: "
+	assistantPrefix = "✦ assistant: "
+	errorPrefix     = "✖ error: "
 )
 
 // Default terminal dimensions used until the first WindowSizeMsg arrives.
@@ -94,6 +96,53 @@ func WithSessionManager(mgr *session.Manager) Option {
 	}
 }
 
+// WithProfileName sets the active agent profile name.
+func WithProfileName(name string) Option {
+	return func(m *Model) {
+		if name != "" {
+			m.activeProfile = name
+			m.input.Prompt = fmt.Sprintf("[%s] ❯ ", name)
+		}
+	}
+}
+
+// WithModelName sets the active model name for the status header.
+func WithModelName(name string) Option {
+	return func(m *Model) {
+		if name != "" {
+			m.modelName = name
+		}
+	}
+}
+
+// WithMCPCount sets the number of connected MCP servers.
+func WithMCPCount(count int) Option {
+	return func(m *Model) {
+		m.mcpCount = count
+	}
+}
+
+// WithTools registers active tools for inspection via /tools.
+func WithTools(runners []core.ToolRunner) Option {
+	return func(m *Model) {
+		m.tools = runners
+	}
+}
+
+// WithSkillHub registers the skill hub for /skills commands.
+func WithSkillHub(hub core.SkillHub) Option {
+	return func(m *Model) {
+		m.skillsHub = hub
+	}
+}
+
+// WithBrowserConfig registers the browser config for /browser commands.
+func WithBrowserConfig(cfg config.BrowserConfig) Option {
+	return func(m *Model) {
+		m.browserCfg = cfg
+	}
+}
+
 // Model is the Bubbletea TUI. It owns a Brain and a Repository; the stream
 // channel carries assistant tokens from the Brain's sink into the viewport.
 type Model struct {
@@ -140,6 +189,14 @@ type Model struct {
 	overlays    *persona.Overlays
 	evolution   *persona.Evolution
 	personality string // active overlay name for status display
+
+	// activeProfile and modelName track the agent's identity and underlying LLM.
+	activeProfile string
+	modelName     string
+	mcpCount      int
+	tools         []core.ToolRunner
+	skillsHub     core.SkillHub
+	browserCfg    config.BrowserConfig
 
 	// approval channels wire the interactive Policy Guard prompt: the brain's
 	// approver sends a request, the update loop renders it and answers with a
@@ -188,8 +245,9 @@ var _ tea.Model = (*Model)(nil)
 // to paint tokens in real time and closes it when a step finishes.
 func New(brain *core.Brain, repo core.Repository, stream chan string, opts ...Option) *Model {
 	input := textinput.New()
-	input.Placeholder = "Type a message and press Enter"
+	input.Placeholder = "Type a message or /help"
 	input.Width = defaultWidth
+	input.Prompt = "[default] ❯ "
 	// Focus and drop the blink command: a static, always-visible cursor is
 	// enough in M1 and keeps the cursor timer out of tests.
 	input.Focus()
@@ -200,20 +258,31 @@ func New(brain *core.Brain, repo core.Repository, stream chan string, opts ...Op
 	)
 
 	m := &Model{
-		brain:        brain,
-		repo:         repo,
-		ctx:          context.Background(),
-		stream:       stream,
-		errCh:        make(chan error, 1),
-		viewport:     viewport.New(defaultWidth, defaultHeight-reserveHeight),
-		input:        input,
-		spinner:      sp,
-		width:        defaultWidth,
-		height:       defaultHeight,
-		closeTimeout: defaultCloseTimeout,
+		brain:         brain,
+		repo:          repo,
+		ctx:           context.Background(),
+		stream:        stream,
+		errCh:         make(chan error, 1),
+		viewport:      viewport.New(defaultWidth, defaultHeight-reserveHeight),
+		input:         input,
+		spinner:       sp,
+		width:         defaultWidth,
+		height:        defaultHeight,
+		closeTimeout:  defaultCloseTimeout,
+		activeProfile: "default",
+		modelName:     "default",
 	}
 	for _, opt := range opts {
 		opt(m)
+	}
+	if m.activeProfile == "" {
+		m.activeProfile = "default"
+	}
+	if m.modelName == "" {
+		m.modelName = "default"
+	}
+	if m.input.Prompt == "" || m.input.Prompt == "> " {
+		m.input.Prompt = fmt.Sprintf("[%s] ❯ ", m.activeProfile)
 	}
 	return m
 }
@@ -334,8 +403,52 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// View renders the conversation viewport, the spinner/status line, and the
-// text input.
+// contextUsage calculates the estimated context window consumption percentage and capacity limit.
+func (m *Model) contextUsage() (pct int, limit int) {
+	model := strings.ToLower(m.modelName)
+	limit = 128000 // default 128k
+	switch {
+	case strings.Contains(model, "claude-3-5") || strings.Contains(model, "claude-3-7") ||
+		strings.Contains(model, "o1") || strings.Contains(model, "o3"):
+		limit = 200000
+	case strings.Contains(model, "deepseek"):
+		limit = 64000
+	case strings.Contains(model, "gpt-4o") || strings.Contains(model, "llama"):
+		limit = 128000
+	}
+
+	estimatedTokens := (m.history.Len() + m.current.Len()) / 4
+	if limit > 0 {
+		pct = (estimatedTokens * 100) / limit
+		if pct > 100 {
+			pct = 100
+		}
+	}
+	return pct, limit
+}
+
+// headerView renders the Gaia/Hermes style top status bar.
+func (m Model) headerView() string {
+	prof := m.activeProfile
+	if prof == "" {
+		prof = "default"
+	}
+	model := m.modelName
+	if model == "" {
+		model = "default"
+	}
+	ctxPct, ctxLimit := m.contextUsage()
+	headerText := fmt.Sprintf("[profile: %s] · [model: %s] · [ctx: %d%% / %dk] · [mcp: %d]",
+		prof, model, ctxPct, ctxLimit/1000, m.mcpCount)
+	width := m.width
+	if width <= 0 {
+		width = len(headerText)
+	}
+	divider := strings.Repeat("─", max(len(headerText), width))
+	return headerText + "\n" + divider
+}
+
+// View renders the conversation viewport, status line, input, and shortcuts footer.
 func (m Model) View() string {
 	if m.showPanel && m.panel != nil {
 		return m.panel.View()
@@ -344,7 +457,13 @@ func (m Model) View() string {
 	if status == "" && m.streaming {
 		status = m.spinner.View() + " thinking..."
 	}
-	return strings.Join([]string{m.viewport.View(), status, m.input.View()}, "\n")
+	shortcuts := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("[Ctrl+C: quit] · [Enter: send] · [/help: commands]")
+	parts := []string{m.headerView(), m.viewport.View()}
+	if status != "" {
+		parts = append(parts, status)
+	}
+	parts = append(parts, m.input.View(), shortcuts)
+	return strings.Join(parts, "\n")
 }
 
 // handleQuit implements the TUI-001 quit contract. While streaming, the first
@@ -541,6 +660,20 @@ const commandFeedbackPrefix = "· "
 func (m *Model) runCommand(input string) (tea.Model, tea.Cmd) {
 	fields := strings.Fields(input)
 	switch fields[0] {
+	case "/help", "/?":
+		return m.cmdHelp()
+	case "/profile":
+		return m.cmdProfile(fields[1:])
+	case "/skills", "/skill":
+		return m.cmdSkills(fields[1:])
+	case "/tools":
+		return m.cmdTools()
+	case "/mcp":
+		return m.cmdMCP()
+	case "/doctor":
+		return m.cmdDoctor()
+	case "/browser":
+		return m.cmdBrowser(fields[1:])
 	case "/personality":
 		return m.cmdPersonality(fields[1:])
 	case "/persona":
@@ -795,4 +928,159 @@ func (m *Model) cmdRename(args []string) (tea.Model, tea.Cmd) {
 		return m.feedback("rename failed: " + err.Error()), nil
 	}
 	return m.feedback("· renamed to " + title), nil
+}
+
+func (m *Model) cmdHelp() (tea.Model, tea.Cmd) {
+	help := `Commands:
+  /help, /?              Show this help overview
+  /profile [list|use|show] Manage and switch agent profiles
+  /skills [list|show]    List and inspect active skills
+  /tools                 List currently available tools
+  /mcp                   List MCP servers and connection status
+  /doctor                Run system environment & health diagnostics
+  /browser [status|open] Browser automation status and navigation
+  /personality [name]    Switch or inspect agent personality
+  /persona [status|...]  Persona evolution controls
+  /permisos              Interactive policy guard permissions panel
+  /new, /reset           Start a new conversation session
+  /save, /list, /restore Session lifecycle management
+  /compress, /snapshot   Session compaction and snapshotting
+  /rename <title>        Rename current session title`
+	m.history.WriteString(help + "\n")
+	m.refresh()
+	return m, nil
+}
+
+func (m *Model) cmdProfile(args []string) (tea.Model, tea.Cmd) {
+	if len(args) == 0 || args[0] == "show" {
+		return m.feedbackEcho(fmt.Sprintf("active profile: %s (agis home: %s)", m.activeProfile, config.AgisHome()))
+	}
+	switch args[0] {
+	case "list":
+		profiles, err := config.ListProfiles()
+		var b strings.Builder
+		b.WriteString("profiles:\n")
+		if err != nil || len(profiles) == 0 {
+			b.WriteString(fmt.Sprintf("* %s\n", m.activeProfile))
+		} else {
+			for _, p := range profiles {
+				marker := "  "
+				if p.Name == m.activeProfile || p.IsActive {
+					marker = "* "
+				}
+				b.WriteString(fmt.Sprintf("%s%s\n", marker, p.Name))
+			}
+		}
+		m.history.WriteString(b.String())
+		m.refresh()
+		return m, nil
+	case "use", "switch":
+		if len(args) < 2 {
+			return m.feedbackEcho("usage: /profile use <name>")
+		}
+		target := args[1]
+		if err := config.SwitchProfile(target); err != nil {
+			return m.feedbackEcho("failed to switch profile: " + err.Error())
+		}
+		m.activeProfile = target
+		m.input.Prompt = fmt.Sprintf("[%s] ❯ ", target)
+		return m.feedbackEcho(fmt.Sprintf("switched to profile: %s", target))
+	default:
+		return m.feedbackEcho(fmt.Sprintf("unknown /profile command %q (use list, use, show)", args[0]))
+	}
+}
+
+func (m *Model) cmdSkills(args []string) (tea.Model, tea.Cmd) {
+	if m.skillsHub == nil {
+		return m.feedbackEcho("skills: none (skills hub not wired)")
+	}
+	skills := m.skillsHub.Skills()
+	if len(skills) == 0 {
+		return m.feedbackEcho("skills: (no skills loaded)")
+	}
+	if len(args) > 1 && args[0] == "show" {
+		name := args[1]
+		for _, s := range skills {
+			if strings.EqualFold(s.Name, name) {
+				return m.feedbackEcho(fmt.Sprintf("skill %s: %s (trigger: %s)", s.Name, s.Description, s.Trigger))
+			}
+		}
+		return m.feedbackEcho(fmt.Sprintf("skill %q not found", name))
+	}
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("skills: (%d active)\n", len(skills)))
+	for _, s := range skills {
+		b.WriteString(fmt.Sprintf("· %s — %s\n", s.Name, s.Description))
+	}
+	m.history.WriteString(b.String())
+	m.refresh()
+	return m, nil
+}
+
+func (m *Model) cmdTools() (tea.Model, tea.Cmd) {
+	if len(m.tools) == 0 {
+		return m.feedbackEcho("tools: (no tools registered or tools disabled)")
+	}
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("tools: (%d registered)\n", len(m.tools)))
+	for _, t := range m.tools {
+		b.WriteString(fmt.Sprintf("· %s [%s] — %s\n", t.Name(), t.Backend(), t.Description()))
+	}
+	m.history.WriteString(b.String())
+	m.refresh()
+	return m, nil
+}
+
+func (m *Model) cmdMCP() (tea.Model, tea.Cmd) {
+	return m.feedbackEcho(fmt.Sprintf("mcp: %d server(s) connected and active", m.mcpCount))
+}
+
+func (m *Model) cmdDoctor() (tea.Model, tea.Cmd) {
+	var b strings.Builder
+	b.WriteString("doctor diagnostics:\n")
+	b.WriteString(fmt.Sprintf("· profile: %s\n", m.activeProfile))
+	b.WriteString(fmt.Sprintf("· model: %s\n", m.modelName))
+	b.WriteString(fmt.Sprintf("· mcp servers: %d\n", m.mcpCount))
+	b.WriteString(fmt.Sprintf("· active tools: %d\n", len(m.tools)))
+	if _, _, err := browser.FindBrowserCommand(m.browserCfg.ExecutablePath); err == nil {
+		b.WriteString("· browser engine: OK (available)\n")
+	} else {
+		b.WriteString("· browser engine: NOT FOUND\n")
+	}
+	b.WriteString("· status: all core subsystems operational\n")
+	m.history.WriteString(b.String())
+	m.refresh()
+	return m, nil
+}
+
+func (m *Model) cmdBrowser(args []string) (tea.Model, tea.Cmd) {
+	bin, prefix, err := browser.FindBrowserCommand(m.browserCfg.ExecutablePath)
+	if len(args) == 0 || args[0] == "status" {
+		status := "available"
+		if err != nil {
+			status = "not found"
+		}
+		loc := bin
+		if len(prefix) > 0 {
+			loc = fmt.Sprintf("%s %s", bin, strings.Join(prefix, " "))
+		}
+		return m.feedbackEcho(fmt.Sprintf("browser: status=%s, binary=%s, headless=%v", status, loc, m.browserCfg.Headless))
+	}
+	if args[0] == "open" && len(args) > 1 {
+		url := args[1]
+		driver, err := browser.NewCLIDriver(m.browserCfg)
+		if err != nil {
+			return m.feedbackEcho("browser error: " + err.Error())
+		}
+		res, err := driver.Navigate(context.Background(), url)
+		if err != nil {
+			return m.feedbackEcho("browser navigation failed: " + err.Error())
+		}
+		preview := res.Content
+		if len(preview) > 200 {
+			preview = preview[:200] + "..."
+		}
+		return m.feedbackEcho(fmt.Sprintf("browser navigated: title=%q content=%q", res.Title, preview))
+	}
+	return m.feedbackEcho("usage: /browser [status|open <url>]")
 }

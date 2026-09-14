@@ -51,12 +51,13 @@ Hermes Agent es un framework autónomo de propósito general con un loop de apre
 | **Lazy MCP Spawning (Standby)** | Conexiones persistentes en reposo. | Standby por defecto, caché en disco (`SchemaCache`), auto-shutdown 5m. | ✅ **Fase 9 Shipped** |
 | **Portabilidad de Perfiles** | Archivos dispersos sin checksums. | `agis backup` / `agis restore` con validación SHA-256 de manifest y snapshot SQLite. | ✅ **Fase 10 Shipped** |
 | **Text-to-Speech (TTS) Saliente** | Respuestas solo en texto plano. | Adaptador `internal/adapters/audio` (OpenAI, ElevenLabs, Kokoro) y notas de voz en Telegram/WhatsApp. | ✅ **Fase 11 Shipped** |
+| **Browser Automation & TUI Gaia** | Playwright Python / UI básica. | `internal/tools/browser` headless auto-detecting Chromium/Brave/Edge + TUI Gaia/Hermes (`[profile]·[model]·[ctx]·[mcp]`). | ✅ **Fase 12 Shipped (100% Paridad Lograda)** |
 
 ---
 
 ## 3. Hoja de Ruta de Fases en AGIS
 
-### Fases Completadas (Shipped to Main)
+### Fases Completadas (Shipped to Main — 100% Paridad Lograda)
 - [x] **Fase 1: Herramientas Nativas de Búsqueda y Web (`internal/tools/web`)** — `web_search` multi-motor + `web_fetch` seguro con extractor AST HTML-a-Markdown en Go puro.
 - [x] **Fase 2: Delegación de Subagentes (`internal/subagents`, `delegate_task`)** — Repositorio efímero en memoria, semáforo de concurrencia, límites de recursión (profundidad 2) y síntesis de resultados.
 - [x] **Fase 3: Resiliencia del Proveedor LLM y Fallback Providers (`internal/adapters/llm`)** — `FallbackProvider` compuesto, `CredentialPool` con rotación 429 anti-estampida, pre-token stream switching y overrides para tareas auxiliares.
@@ -68,13 +69,7 @@ Hermes Agent es un framework autónomo de propósito general con un loop de apre
 - [x] **Fase 9: Lazy MCP Spawning / Standby (`internal/mcp`)** — Servidores MCP en modo Standby con persistencia de esquemas en disco (`$AGIS_HOME/cache/mcp/<server>.json`), arranque bajo demanda en `CallTool` y apagado automático tras inactividad (`idle_timeout: 5m`, 0% RAM ociosa).
 - [x] **Fase 10: Portabilidad de Perfiles (`internal/backup`, `cmd/agis backup/restore`)** — Respaldo en un comando (`agis backup [profile] [-o out.tar.gz]`) con manifest SHA-256, snapshot seguro de SQLite (WAL/SHM), protección anti-traversal, restauración atómica (`agis restore <tarball> [-profile <name>] [-force]`) y aliases en `agis profile backup/restore`.
 - [x] **Fase 11: Text-to-Speech (TTS) Saliente (`internal/adapters/audio`, `internal/gateway`)** — Puerto `Synthesizer`, adaptadores OpenAI TTS, ElevenLabs y Kokoro local, configuración `tts:`/`multimodal.tts:`, y respuestas automáticas por nota de voz en Telegram y WhatsApp con fallback fluido a texto.
-
----
-
-### Próximas Fases Planificadas (Backlog de Arquitectura)
-
-#### Fase 12: Browser Automation Headless con Playwright/Chromium (`internal/tools/browser`)
-- **Automatización Web Avanzada**: Complemento opcional para sitios 100% Single Page Applications (SPAs) donde se requiere renderizado completo de JavaScript, navegación, clicks y capturas de pantalla.
+- [x] **Fase 12: Browser Automation Headless & Rediseño TUI Gaia/Hermes (`internal/tools/browser`, `internal/adapters/tui`)** — Herramientas `browser_navigate`, `browser_action`, `browser_screenshot`, `browser_close` con detección de Chromium/Brave/Edge y Flatpak, extracción AST HTML-a-Markdown, header métrico en tiempo real (`[profile: <name>] · [model: <name>] · [ctx: <pct>% / <limit>k] · [mcp: <count>]`), badges de roles y slash commands (`/help`, `/profile`, `/skills`, `/tools`, `/mcp`, `/doctor`, `/browser`).
 
 ---
 

@@ -39,6 +39,11 @@ const (
 	defaultWebMaxFetchBytes  = 2097152 // 2MB
 	defaultWebUserAgent      = "AGIS/1.0 (+https://github.com/SalvucciFacundo/agis)"
 	defaultWebSearchProvider = "duckduckgo"
+
+	// Browser automation defaults.
+	defaultBrowserTimeout        = 30 * time.Second
+	defaultBrowserViewportWidth  = 1280
+	defaultBrowserViewportHeight = 720
 )
 
 // Config is the root AGIS configuration.
@@ -274,7 +279,19 @@ type ToolsConfig struct {
 	Docker     DockerConfig     `yaml:"docker"`
 	SSH        SSHConfig        `yaml:"ssh"`
 	Web        WebConfig        `yaml:"web"`
+	Browser    BrowserConfig    `yaml:"browser"`
 	ToolSearch ToolSearchConfig `yaml:"tool_search"`
+}
+
+// BrowserConfig gates and configures headless browser automation tools.
+type BrowserConfig struct {
+	Enabled        bool          `yaml:"enabled"`
+	Headless       bool          `yaml:"headless"`
+	ExecutablePath string        `yaml:"executable_path"`
+	Timeout        time.Duration `yaml:"timeout"`
+	ViewportWidth  int           `yaml:"viewport_width"`
+	ViewportHeight int           `yaml:"viewport_height"`
+	UserDataDir    string        `yaml:"user_data_dir"`
 }
 
 // ToolSearchConfig tunes the dynamic tool search and lazy schema loading subsystem.
@@ -472,6 +489,13 @@ func defaults() *Config {
 				FetchTimeout:    defaultWebFetchTimeout,
 				MaxFetchBytes:   defaultWebMaxFetchBytes,
 				UserAgent:       defaultWebUserAgent,
+			},
+			Browser: BrowserConfig{
+				Enabled:        false,
+				Headless:       true,
+				Timeout:        defaultBrowserTimeout,
+				ViewportWidth:  defaultBrowserViewportWidth,
+				ViewportHeight: defaultBrowserViewportHeight,
 			},
 			ToolSearch: ToolSearchConfig{
 				Enabled:   false,
@@ -677,6 +701,15 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Tools.Web.UserAgent == "" {
 		cfg.Tools.Web.UserAgent = defaultWebUserAgent
+	}
+	if cfg.Tools.Browser.Timeout <= 0 {
+		cfg.Tools.Browser.Timeout = defaultBrowserTimeout
+	}
+	if cfg.Tools.Browser.ViewportWidth <= 0 {
+		cfg.Tools.Browser.ViewportWidth = defaultBrowserViewportWidth
+	}
+	if cfg.Tools.Browser.ViewportHeight <= 0 {
+		cfg.Tools.Browser.ViewportHeight = defaultBrowserViewportHeight
 	}
 	if cfg.Tools.ToolSearch.Threshold <= 0 {
 		cfg.Tools.ToolSearch.Threshold = 8

@@ -230,12 +230,13 @@ func main() {
 		}
 	}
 
+	var runners []core.ToolRunner
 	if cfg.Tools.Enabled {
 		if approvalReq == nil {
 			approvalReq = make(chan core.GuardRequest)
 			approvalResp = make(chan core.Scope)
 		}
-		runners := tools.Select(cfg.Tools, slog.Default())
+		runners = tools.Select(cfg.Tools, slog.Default())
 		if mcpMgr != nil {
 			runners = append(runners, tools.FromMCPManager(mcpMgr)...)
 		}
@@ -282,11 +283,24 @@ func main() {
 		brain.SetActiveConversation(conv.ID)
 	}
 
+	mcpCount := 0
+	if mcpMgr != nil {
+		mcpCount = len(mcpMgr.Servers())
+	} else if cfg.MCP.Enabled {
+		mcpCount = len(cfg.MCP.Servers)
+	}
+
 	tuiOpts := []tui.Option{
 		tui.WithCloseTimeout(cfg.Memory.CloseTimeout),
 		tui.WithOverlays(persona.NewOverlays(cfg.Agent.Personalities)),
 		tui.WithPolicy(pstore, pstore),
 		tui.WithSessionManager(sessionManager),
+		tui.WithProfileName(config.ActiveProfile()),
+		tui.WithModelName(cfg.LLM.Model),
+		tui.WithMCPCount(mcpCount),
+		tui.WithTools(runners),
+		tui.WithSkillHub(hub),
+		tui.WithBrowserConfig(cfg.Tools.Browser),
 	}
 	if evolution != nil {
 		tuiOpts = append(tuiOpts, tui.WithEvolution(evolution))

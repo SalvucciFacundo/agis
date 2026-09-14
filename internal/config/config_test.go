@@ -1691,3 +1691,83 @@ func TestLoad_ToolSearchDefaultsAndExplicit(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_BrowserConfig(t *testing.T) {
+	tests := []struct {
+		name           string
+		yaml           string
+		wantEnabled    bool
+		wantHeadless   bool
+		wantExecPath   string
+		wantTimeout    time.Duration
+		wantWidth      int
+		wantHeight     int
+		wantUserData   string
+	}{
+		{
+			name:         "empty defaults",
+			yaml:         "",
+			wantEnabled:  false,
+			wantHeadless: true,
+			wantTimeout:  30 * time.Second,
+			wantWidth:    1280,
+			wantHeight:   720,
+		},
+		{
+			name: "explicit browser config",
+			yaml: `tools:
+  browser:
+    enabled: true
+    headless: false
+    executable_path: /usr/bin/google-chrome
+    timeout: 45s
+    viewport_width: 1920
+    viewport_height: 1080
+    user_data_dir: /tmp/browser-profile
+`,
+			wantEnabled:  true,
+			wantHeadless: false,
+			wantExecPath: "/usr/bin/google-chrome",
+			wantTimeout:  45 * time.Second,
+			wantWidth:    1920,
+			wantHeight:   1080,
+			wantUserData: "/tmp/browser-profile",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("AGIS_HOME", home)
+
+			path := writeConfig(t, home, tt.yaml, 0o600)
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+
+			b := cfg.Tools.Browser
+			if b.Enabled != tt.wantEnabled {
+				t.Errorf("Browser.Enabled = %v, want %v", b.Enabled, tt.wantEnabled)
+			}
+			if b.Headless != tt.wantHeadless {
+				t.Errorf("Browser.Headless = %v, want %v", b.Headless, tt.wantHeadless)
+			}
+			if b.ExecutablePath != tt.wantExecPath {
+				t.Errorf("Browser.ExecutablePath = %q, want %q", b.ExecutablePath, tt.wantExecPath)
+			}
+			if b.Timeout != tt.wantTimeout {
+				t.Errorf("Browser.Timeout = %v, want %v", b.Timeout, tt.wantTimeout)
+			}
+			if b.ViewportWidth != tt.wantWidth {
+				t.Errorf("Browser.ViewportWidth = %d, want %d", b.ViewportWidth, tt.wantWidth)
+			}
+			if b.ViewportHeight != tt.wantHeight {
+				t.Errorf("Browser.ViewportHeight = %d, want %d", b.ViewportHeight, tt.wantHeight)
+			}
+			if b.UserDataDir != tt.wantUserData {
+				t.Errorf("Browser.UserDataDir = %q, want %q", b.UserDataDir, tt.wantUserData)
+			}
+		})
+	}
+}

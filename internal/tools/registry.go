@@ -5,6 +5,7 @@ import (
 
 	"github.com/SalvucciFacundo/agis/internal/config"
 	"github.com/SalvucciFacundo/agis/internal/core"
+	"github.com/SalvucciFacundo/agis/internal/tools/browser"
 	"github.com/SalvucciFacundo/agis/internal/tools/web/fetch"
 	"github.com/SalvucciFacundo/agis/internal/tools/web/search"
 )
@@ -49,7 +50,19 @@ func Select(cfg config.ToolsConfig, logger *slog.Logger) []core.ToolRunner {
 		out = append(out, FromWebConfig(cfg.Web)...)
 	}
 
+	if cfg.Browser.Enabled {
+		out = append(out, FromBrowserConfig(cfg.Browser)...)
+	}
+
 	return out
+}
+
+// FromBrowserConfig instantiates the browser automation runners from BrowserConfig.
+func FromBrowserConfig(cfg config.BrowserConfig) []core.ToolRunner {
+	if !cfg.Enabled {
+		return nil
+	}
+	return browser.NewBrowserRunners(cfg, nil)
 }
 
 // FromWebConfig instantiates the web_search and web_fetch tool runners from WebConfig.

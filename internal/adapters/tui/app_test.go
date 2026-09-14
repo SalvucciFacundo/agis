@@ -482,3 +482,56 @@ func TestQuit_ClosingBlocksSubmit(t *testing.T) {
 		t.Error("streaming = true, want no new turn during the quit sequence")
 	}
 }
+
+func TestGaiaHermes_HeaderAndBadges(t *testing.T) {
+	repo := &fakeRepo{conv: &core.Conversation{ID: "conv-1"}}
+	stream := make(chan string, 8)
+	brain := core.NewBrain(repo, &fakeProvider{})
+	m := New(brain, repo, stream,
+		WithProfileName("coder"),
+		WithModelName("claude-3-7-sonnet"),
+		WithMCPCount(3),
+	)
+
+	view := m.View()
+
+	// Verify Header metrics
+	if !strings.Contains(view, "[profile: coder]") {
+		t.Errorf("expected view to contain active profile, got:\n%s", view)
+	}
+	if !strings.Contains(view, "[model: claude-3-7-sonnet]") {
+		t.Errorf("expected view to contain model name, got:\n%s", view)
+	}
+	if !strings.Contains(view, "[ctx: 0% / 200k]") {
+		t.Errorf("expected view to contain context usage percentage and limit, got:\n%s", view)
+	}
+	if !strings.Contains(view, "[mcp: 3]") {
+		t.Errorf("expected view to contain MCP server count, got:\n%s", view)
+	}
+
+	// Verify prompt indicator
+	if !strings.Contains(m.input.Prompt, "[coder]") {
+		t.Errorf("expected prompt to contain '[coder]', got: %q", m.input.Prompt)
+	}
+}
+
+func TestGaiaHermes_ContextCalculation(t *testing.T) {
+	repo := &fakeRepo{conv: &core.Conversation{ID: "conv-1"}}
+	stream := make(chan string, 8)
+	brain := core.NewBrain(repo, &fakeProvider{})
+	m := New(brain, repo, stream,
+		WithModelName("deepseek-chat"), // 64k limit
+	)
+
+	// Add synthetic history of ~8000 tokens (approx 32000 chars)
+	m.history.WriteString(strings.Repeat("a", 32000))
+
+	pct, limit := m.contextUsage()
+	if limit != 64000 {
+		t.Errorf("limit = %d, want 64000", limit)
+	}
+	// 32000 / 4 = 8000 tokens -> (8000 / 64000) * 100 = 12%
+	if pct != 12 {
+		t.Errorf("pct = %d, want 12", pct)
+	}
+}

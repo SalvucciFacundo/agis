@@ -4,6 +4,45 @@ This document provides a comprehensive reference for all interactive slash comma
 
 ---
 
+## 🖥️ Gaia / Hermes Interface & Status Header
+
+AGIS features a real-time status header at the top of the terminal:
+
+```text
+[profile: default] · [model: claude-3-7-sonnet] · [ctx: 14% / 200k] · [mcp: 2]
+──────────────────────────────────────────────────────────────────────────────
+```
+
+- **`profile`**: Displays the active agent profile identity. The prompt input matches: `[<profile>] ❯ `.
+- **`model`**: Displays the active primary LLM model.
+- **`ctx`**: Displays the real-time context window usage percentage based on conversation history tokens versus model limit.
+- **`mcp`**: Displays the count of active connected Model Context Protocol servers.
+
+### Role Badges
+- **User**: `❯ you: <message>`
+- **Assistant**: `✦ assistant: <reply>`
+- **Error**: `✖ error: <message>`
+
+---
+
+## 🛠️ Subsystem Slash Commands
+
+| Command | Description | Example |
+|---|---|---|
+| `/help` or `/?` | Displays the complete categorized manual of all available commands. | `/help` |
+| `/profile` or `/profile show` | Displays active profile name and configuration directories. | `/profile show` |
+| `/profile list` | Lists all discovered agent profiles with an active indicator `*`. | `/profile list` |
+| `/profile use <name>` | Switches active profile and updates prompt indicator immediately. | `/profile use coder` |
+| `/skills` or `/skills list` | Lists all loaded skills and their descriptions. | `/skills` |
+| `/skills show <name>` | Displays details, description, and triggers for a specific skill. | `/skills show go-testing` |
+| `/tools` | Lists all active registered tools (local, browser, web, mcp, docker, ssh). | `/tools` |
+| `/mcp` | Displays connected MCP server count and operational status. | `/mcp` |
+| `/doctor` | Runs system diagnostics (profile, model, tools, browser engine, DB). | `/doctor` |
+| `/browser` or `/browser status` | Displays detected browser binary, headless mode, and viewport settings. | `/browser status` |
+| `/browser open <url>` | Executes test headless navigation and displays page title and content snippet. | `/browser open https://example.com` |
+
+---
+
 ## 💬 Session Management Slash Commands
 
 Commands are entered directly into the TUI input box starting with a forward slash (`/`). Slash commands execute immediately and do not consume LLM tokens.
