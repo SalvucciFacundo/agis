@@ -95,6 +95,10 @@ func main() {
 			os.Exit(RunSessionCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "skill", "skills":
 			os.Exit(RunSkillCLI(remainingArgs[1:], os.Stdout, os.Stderr))
+		case "backup":
+			os.Exit(RunBackupCLI(remainingArgs[1:], os.Stdout, os.Stderr))
+		case "restore":
+			os.Exit(RunRestoreCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		case "update":
 			os.Exit(RunUpdateCLI(remainingArgs[1:], os.Stdout, os.Stderr))
 		}

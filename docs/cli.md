@@ -9,7 +9,9 @@ This document provides a comprehensive reference for all command-line interface 
 ```bash
 agis [flags]                               # Launch interactive TUI (default)
 agis setup [flags]                         # Setup wizard for interactive LLM provider onboarding (alias: agis init)
-agis profile [list|create|show|use|delete] # Isolated profile management subsystem
+agis profile [list|create|show|use|delete|backup|restore] # Isolated profile management subsystem
+agis backup [profile] [-o out.tar.gz]      # Create a portable compressed archive of an agent profile
+agis restore <archive.tar.gz> [flags]      # Restore an agent profile from a backup archive
 agis doctor [flags]                        # System diagnostics & environment health probe
 agis gateway [run] [flags]                 # Chat Gateway Multiplexer daemon (Telegram, Discord, Slack, WhatsApp)
 agis cron [run|list] [flags]               # Autonomous Cron Scheduler daemon & job inspector
@@ -448,6 +450,12 @@ agis profile switch default
 # Delete a profile (with active profile guard)
 agis profile delete old-profile
 agis profile delete work -force
+
+# Backup a profile (alias for `agis backup`)
+agis profile backup work -o /backups/work.tar.gz
+
+# Restore a profile from archive (alias for `agis restore`)
+agis profile restore /backups/work.tar.gz -profile work-new
 ```
 
 ### Subcommands & Flags:
@@ -456,10 +464,53 @@ agis profile delete work -force
 - `agis profile show [name] [-json]`: Print resolved filesystem paths for profile components.
 - `agis profile use <name>` / `agis profile switch <name>`: Update `$AGIS_HOME/.active_profile` (`0600`).
 - `agis profile delete <name> [-force]`: Remove profile directory. Requires `-force` if profile is active.
+- `agis profile backup [name] [-o <path>]`: Create a compressed backup archive of a profile.
+- `agis profile restore <tarball> [-profile <name>] [-force]`: Restore a profile from a backup archive.
 
 ---
 
-## 13. OpenAI-Compatible REST API Server (`agis serve` / `agis api`)
+## 14. Profile Portability & Backups (`agis backup` / `agis restore`)
+
+Create portable, compressed `.tar.gz` snapshots of agent profiles for disaster recovery, versioning, or migration across machines, servers, or cloud environments.
+
+### Integrity & Safety Features:
+- **SQLite WAL Consistency**: Automatically detects and packages `agis.db`, `agis.db-wal`, and `agis.db-shm` together to prevent database corruption.
+- **SHA-256 Manifest Verification**: Generates a tamper-proof `manifest.json` embedded in the archive. Upon restoration, every file's cryptographic hash is verified before committing.
+- **Atomic Two-Phase Restore**: Extracts into an isolated temporary directory (`.restore-tmp-*`) for integrity checks before moving to the target profile directory.
+- **Path Traversal Protection**: Rejects archives containing directory traversal attempts (`..`) or absolute target paths.
+- **POSIX Permission Hardening**: Enforces `0600` for sensitive profile files (`config.yaml`, `agis.db`, `SOUL.md`) and `0700` for directories (`skills/`, `plugins/`).
+- **Overwrite Guards**: Existing profiles are never silently overwritten; requires explicit `-force` / `-f`.
+
+```bash
+# Backup the currently active profile
+agis backup
+
+# Backup a specific named profile to a custom destination
+agis backup work -o /backups/work-20260913.tar.gz
+
+# Restore a profile (restores using original profile name from archive manifest)
+agis restore /backups/work-20260913.tar.gz
+
+# Restore into a different profile name
+agis restore /backups/work-20260913.tar.gz -profile work-staging
+
+# Overwrite an existing profile on restore
+agis restore /backups/work-20260913.tar.gz -profile work-staging -force
+```
+
+### Flags:
+#### `agis backup [profile] [flags]`
+- `-o <path>`: Destination path for `.tar.gz` archive (default: `agis-<profile>-<timestamp>.tar.gz`).
+- `-config <path>`: Custom YAML configuration file path.
+
+#### `agis restore <archive.tar.gz> [flags]`
+- `-profile <name>`: Target profile name (default: original profile name from archive manifest).
+- `-force`, `-f`: Overwrite target profile if it already exists.
+- `-config <path>`: Custom YAML configuration file path.
+
+---
+
+## 15. OpenAI-Compatible REST API Server (`agis serve` / `agis api`)
 
 Starts the high-performance HTTP REST API server exposing OpenAI-compatible endpoints (`/v1/chat/completions`, `/v1/models`, `/v1/health`, and `/healthz`). It allows third-party tools, OpenAI SDKs, web frontends, and custom integrations to converse with AGIS over standard HTTP/SSE streaming.
 
@@ -490,7 +541,7 @@ agis serve -cors "http://localhost:3000,http://localhost:5173"
 
 ---
 
-## 14. Skill Management Subsystem (`agis skill`)
+## 16. Skill Management Subsystem (`agis skill`)
 
 Manages procedural knowledge, skills discovery, and `agentskills.io` standard conformance for local skills in `$AGIS_HOME/skills/`.
 

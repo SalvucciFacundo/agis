@@ -49,6 +49,7 @@ Hermes Agent es un framework autónomo de propósito general con un loop de apre
 | **Índice de Skills & Creator** | Catálogo plano y creación externa. | Skill index por triggers, `read_skill`, `create_skill` y CLI suite. | ✅ **Fase 7 Shipped** |
 | **Aprendizaje de Subagentes** | Contexto volátil efímero. | Destilación pasiva (`ExtractKeyLearnings`) directa a SQLite/RRF. | ✅ **Fase 8 Shipped** |
 | **Lazy MCP Spawning (Standby)** | Conexiones persistentes en reposo. | Standby por defecto, caché en disco (`SchemaCache`), auto-shutdown 5m. | ✅ **Fase 9 Shipped** |
+| **Portabilidad de Perfiles** | Archivos dispersos sin checksums. | `agis backup` / `agis restore` con validación SHA-256 de manifest y snapshot SQLite. | ✅ **Fase 10 Shipped** |
 
 ---
 
@@ -64,14 +65,11 @@ Hermes Agent es un framework autónomo de propósito general con un loop de apre
 - [x] **Fase 7: Skill Index por Triggers & Skill Creator (`internal/skills`, `cmd/agis`)** — Índice ligero en system prompt, `read_skill`, generador `create_skill` y suite `agis skill`.
 - [x] **Fase 8: Aprendizaje de Subagentes hacia la Memoria Persistente (`internal/subagents`, `internal/memory`)** — Destilación pasiva de aprendizajes (`ExtractKeyLearnings`) e indexación automática en FTS5 y Vector Hybrid Search (RRF).
 - [x] **Fase 9: Lazy MCP Spawning / Standby (`internal/mcp`)** — Servidores MCP en modo Standby con persistencia de esquemas en disco (`$AGIS_HOME/cache/mcp/<server>.json`), arranque bajo demanda en `CallTool` y apagado automático tras inactividad (`idle_timeout: 5m`, 0% RAM ociosa).
+- [x] **Fase 10: Portabilidad de Perfiles (`internal/backup`, `cmd/agis backup/restore`)** — Respaldo en un comando (`agis backup [profile] [-o out.tar.gz]`) con manifest SHA-256, snapshot seguro de SQLite (WAL/SHM), protección anti-traversal, restauración atómica (`agis restore <tarball> [-profile <name>] [-force]`) y aliases en `agis profile backup/restore`.
 
 ---
 
 ### Próximas Fases Planificadas (Backlog de Arquitectura)
-
-#### Fase 10: Portabilidad de Perfiles (`agis backup` / `agis restore`)
-- **Exportación en un Comando**: `agis backup [perfil]` genera un archivo empaquetado `.tar.gz` comprimido con toda la configuración, base SQLite `agis.db`, `SOUL.md`, `skills/` y `policy.yaml`.
-- **Importación y Migración**: `agis restore <tarball> [--profile <nombre>]` descomprime y valida la integridad de un perfil para migrarlo entre máquinas o servidores en segundos.
 
 #### Fase 11: Text-to-Speech (TTS) Saliente (`internal/adapters/audio`)
 - **Sintetizador de Voz**: Adaptador de salida para Text-to-Speech (ej. OpenAI TTS, ElevenLabs, Kokoro local).

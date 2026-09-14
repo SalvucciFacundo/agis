@@ -43,6 +43,10 @@ func RunProfileCLI(args []string, stdout, stderr io.Writer) int {
 		return runProfileSwitch(subArgs, stdout, stderr)
 	case "delete":
 		return runProfileDelete(subArgs, stdout, stderr)
+	case "backup":
+		return RunBackupCLI(subArgs, stdout, stderr)
+	case "restore":
+		return RunRestoreCLI(subArgs, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "agis profile: unknown subcommand '%s'\n\n", subcmd)
 		printProfileUsage(stderr)
@@ -58,7 +62,9 @@ func printProfileUsage(w io.Writer) {
 	fmt.Fprintf(w, "  create <name>            Create a new profile (optional: -clone <source>)\n")
 	fmt.Fprintf(w, "  show [name]              Display profile paths and metadata\n")
 	fmt.Fprintf(w, "  use <name>               Switch active profile (alias: switch)\n")
-	fmt.Fprintf(w, "  delete <name>            Delete a profile (optional: -force)\n\n")
+	fmt.Fprintf(w, "  delete <name>            Delete a profile (optional: -force)\n")
+	fmt.Fprintf(w, "  backup [name]            Create a compressed backup archive of a profile\n")
+	fmt.Fprintf(w, "  restore <tarball>        Restore a profile from a backup archive\n\n")
 	fmt.Fprintf(w, "Flags:\n")
 	fmt.Fprintf(w, "  -json                    Output in JSON format (list, show)\n")
 	fmt.Fprintf(w, "  -clone <source>          Source profile to clone from (create)\n")
