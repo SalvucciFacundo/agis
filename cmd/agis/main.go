@@ -19,6 +19,7 @@ import (
 	"github.com/SalvucciFacundo/agis/internal/adapters/tui"
 	"github.com/SalvucciFacundo/agis/internal/config"
 	"github.com/SalvucciFacundo/agis/internal/core"
+	"github.com/SalvucciFacundo/agis/internal/mcp"
 	"github.com/SalvucciFacundo/agis/internal/memory"
 	"github.com/SalvucciFacundo/agis/internal/persona"
 	"github.com/SalvucciFacundo/agis/internal/policy"
@@ -215,12 +216,25 @@ func main() {
 		}
 	}
 
+	var mcpMgr mcp.Manager
+	if cfg.MCP.Enabled {
+		mcpMgr = mcp.NewManager(cfg.MCP)
+		if err := mcpMgr.Start(ctx); err != nil {
+			slog.Warn("mcp: starting manager", "error", err)
+		} else {
+			defer func() { _ = mcpMgr.Stop() }()
+		}
+	}
+
 	if cfg.Tools.Enabled {
 		if approvalReq == nil {
 			approvalReq = make(chan core.GuardRequest)
 			approvalResp = make(chan core.Scope)
 		}
 		runners := tools.Select(cfg.Tools, slog.Default())
+		if mcpMgr != nil {
+			runners = append(runners, tools.FromMCPManager(mcpMgr)...)
+		}
 		if cfg.Skills.Enabled && hub != nil {
 			skillsDir := cfg.Skills.Dir
 			if skillsDir == "" {

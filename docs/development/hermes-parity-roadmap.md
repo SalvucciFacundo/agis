@@ -46,6 +46,9 @@ Hermes Agent es un framework autónomo de propósito general con un loop de apre
 | **Servidor API Compatible** | `/v1/chat/completions` para WebUIs. | `internal/server` (`agis serve`) + 11 presets de proveedores LLM. | ✅ **Fase 5 Shipped** |
 | **Gateways de Mensajería** | 20+ plataformas (Telegram, Discord, etc.). | Telegram, Discord, Slack y WhatsApp nativos con audio Whisper. | ✅ **Fase 6 Shipped** |
 | **Tool Search Dinámico** | Carga perezosa de herramientas. | `tool_search` + `load_tool` con poda de esquemas en `Brain.Step`. | ✅ **Fase 6 Shipped** |
+| **Índice de Skills & Creator** | Catálogo plano y creación externa. | Skill index por triggers, `read_skill`, `create_skill` y CLI suite. | ✅ **Fase 7 Shipped** |
+| **Aprendizaje de Subagentes** | Contexto volátil efímero. | Destilación pasiva (`ExtractKeyLearnings`) directa a SQLite/RRF. | ✅ **Fase 8 Shipped** |
+| **Lazy MCP Spawning (Standby)** | Conexiones persistentes en reposo. | Standby por defecto, caché en disco (`SchemaCache`), auto-shutdown 5m. | ✅ **Fase 9 Shipped** |
 
 ---
 
@@ -58,23 +61,13 @@ Hermes Agent es un framework autónomo de propósito general con un loop de apre
 - [x] **Fase 4: Experiencia de Onboarding y Multi-Perfiles (`cmd/agis/setup.go`, `cmd/agis/profile.go`)** — `agis setup / init` con probe de 5s y permisos 0600, y espacios multi-perfil bajo `$AGIS_HOME/profiles/<name>/` con flag global `--profile`.
 - [x] **Fase 5: Servidor API Compatible con OpenAI y 11 Proveedores LLM (`internal/server`, `agis serve`)** — `POST /v1/chat/completions` (SSE streaming & sync), `/v1/models`, `/healthz`, Bearer auth, CORS y 11 presets (incluyendo cliente nativo Claude Anthropic `/v1/messages`).
 - [x] **Fase 6: Gateways Adicionales (Slack y WhatsApp) y Tool Search Dinámico (`internal/gateway`, `internal/tools`)** — Adaptadores Slack Events API y WhatsApp Cloud API con validación HMAC en tiempo constante, audio Whisper, y herramientas `tool_search`/`load_tool` con poda de esquemas en el Brain.
+- [x] **Fase 7: Skill Index por Triggers & Skill Creator (`internal/skills`, `cmd/agis`)** — Índice ligero en system prompt, `read_skill`, generador `create_skill` y suite `agis skill`.
+- [x] **Fase 8: Aprendizaje de Subagentes hacia la Memoria Persistente (`internal/subagents`, `internal/memory`)** — Destilación pasiva de aprendizajes (`ExtractKeyLearnings`) e indexación automática en FTS5 y Vector Hybrid Search (RRF).
+- [x] **Fase 9: Lazy MCP Spawning / Standby (`internal/mcp`)** — Servidores MCP en modo Standby con persistencia de esquemas en disco (`$AGIS_HOME/cache/mcp/<server>.json`), arranque bajo demanda en `CallTool` y apagado automático tras inactividad (`idle_timeout: 5m`, 0% RAM ociosa).
 
 ---
 
 ### Próximas Fases Planificadas (Backlog de Arquitectura)
-
-#### Fase 7: Skill Index por Triggers & Skill Creator (`internal/skills`, `cmd/agis`)
-- **Índice Ligero en Prompt**: Inyectar únicamente la tabla de triggers de skills (`Name`, `Description`, `Trigger`) en el system prompt en lugar del contenido completo `SKILL.md`, reduciendo drásticamente el consumo de tokens.
-- **Carga Perezosa (`read_skill`)**: Herramienta nativa que permite al LLM cargar el cuerpo completo de instrucciones de una skill solo cuando la tarea coincide con el trigger.
-- **Skill Creator Nativo (`agis skill create <name>` / `create_skill` tool)**: Asistente y generador de skills con frontmatter YAML compatible con `agentskills.io` y Gentle AI (*When to Use*, *Critical Rules*, *Steps*, *Examples*).
-
-#### Fase 8: Aprendizaje de Subagentes hacia la Memoria Persistente (`internal/subagents`, `internal/memory`)
-- **Hook de Destilación de Conocimiento**: Antes de que el subagente efímero sea destruido en `subagents.Engine.Spawn`, un hook de extracción captura descubrimientos y decisiones clave (`type: discovery`, `decision`, `pattern`).
-- **Persistencia en la Memoria del Padre**: Guarda las observaciones duraderas directamente en `agis.db` (`observations` con `topic_key`), permitiendo que el cerebro principal recuerde para siempre lo que investigaron sus subagentes.
-
-#### Fase 9: Lazy MCP Spawning / Standby (`internal/mcp`)
-- **Arranque Bajo Demanda**: Los servidores MCP configurados permanecen en estado `Standby`. AGIS conoce sus metadatos y esquemas de herramientas, pero **no inicia los subprocesos `stdio` ni abre conexiones SSE** hasta el instante exacto en que el LLM invoca una herramienta `mcp:<server>:<tool>`.
-- **Auto-Shutdown por Inactividad**: Apagado automático de procesos MCP tras X minutos de inactividad, logrando 0% de uso de RAM en reposo.
 
 #### Fase 10: Portabilidad de Perfiles (`agis backup` / `agis restore`)
 - **Exportación en un Comando**: `agis backup [perfil]` genera un archivo empaquetado `.tar.gz` comprimido con toda la configuración, base SQLite `agis.db`, `SOUL.md`, `skills/` y `policy.yaml`.

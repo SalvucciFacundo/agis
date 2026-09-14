@@ -18,6 +18,7 @@ import (
 	"github.com/SalvucciFacundo/agis/internal/config"
 	"github.com/SalvucciFacundo/agis/internal/core"
 	"github.com/SalvucciFacundo/agis/internal/gateway"
+	"github.com/SalvucciFacundo/agis/internal/mcp"
 	"github.com/SalvucciFacundo/agis/internal/memory"
 	"github.com/SalvucciFacundo/agis/internal/persona"
 	"github.com/SalvucciFacundo/agis/internal/policy"
@@ -178,8 +179,21 @@ func runServeWithContext(ctx context.Context, args []string, stdout, stderr io.W
 	// Non-interactive auto-deny approver for HTTP API background execution
 	autoApprover := gateway.NewAutoDenyApprover(logger)
 
+	var mcpMgr mcp.Manager
+	if cfg.MCP.Enabled {
+		mcpMgr = mcp.NewManager(cfg.MCP)
+		if err := mcpMgr.Start(ctx); err != nil {
+			logger.Warn("mcp: starting manager", "error", err)
+		} else {
+			defer func() { _ = mcpMgr.Stop() }()
+		}
+	}
+
 	if cfg.Tools.Enabled {
 		runners := tools.Select(cfg.Tools, logger)
+		if mcpMgr != nil {
+			runners = append(runners, tools.FromMCPManager(mcpMgr)...)
+		}
 		if cfg.Skills.Enabled && hub != nil {
 			skillsDir := cfg.Skills.Dir
 			if skillsDir == "" {

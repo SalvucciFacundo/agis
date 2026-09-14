@@ -46,7 +46,9 @@ MCP servers are configured in the optional `mcp` root block of `$AGIS_HOME/confi
 
 ```yaml
 mcp:
-  enabled: true # Opt-in switch (default: false)
+  enabled: true       # Opt-in switch (default: false)
+  standby: true       # Lazy spawning & standby mode (default: true)
+  idle_timeout: "5m"  # Auto-shutdown after inactivity (default: 5m)
   servers:
     filesystem:
       command: "npx"
@@ -72,12 +74,28 @@ mcp:
 | Field | Type | Description |
 |---|---|---|
 | `mcp.enabled` | `bool` | Master toggle for MCP tool client initialization. Defaults to `false`. |
+| `mcp.standby` | `bool` | Enables Lazy Spawning & Standby mode. Defaults to `true`. |
+| `mcp.idle_timeout` | `string` | Inactivity duration before idle running servers are closed to 0% RAM. Defaults to `"5m"`. |
+| `mcp.cache_dir` | `string` | Directory for persisted schema caches. Defaults to `$AGIS_HOME/cache/mcp`. |
 | `mcp.servers` | `map[string]MCPServerConfig` | Keyed dictionary of MCP server configurations. |
 | `servers.<name>.command` | `string` | Binary path or command for `stdio` transport. |
 | `servers.<name>.args` | `[]string` | Arguments passed to `command`. |
 | `servers.<name>.env` | `map[string]string` | Environment variables passed to the subprocess. |
 | `servers.<name>.url` | `string` | HTTP endpoint URL for `sse` transport. |
 | `servers.<name>.disabled` | `bool` | When `true`, the server is skipped during initialization. Defaults to `false`. |
+| `servers.<name>.standby` | `*bool` | Optional per-server override for Standby mode. |
+| `servers.<name>.idle_timeout` | `*string` | Optional per-server override for inactivity timeout. |
+
+---
+
+## 3. Lazy Spawning & Standby Mode (0% Idle RAM)
+
+AGIS uses a **Standby-first** lifecycle model for all configured MCP servers:
+
+1. **Schema Caching (`$AGIS_HOME/cache/mcp/<server>.json`)**: When AGIS boots, tool schemas are loaded from local disk cache without launching any external process or opening network sockets. Boot time remains under 5 milliseconds.
+2. **On-Demand Activation**: The external subprocess or SSE transport is instantiated only when the LLM invokes an MCP tool (`CallTool`).
+3. **Inactivity Watchdog**: After a configurable period of inactivity (`idle_timeout: 5m`), the child process is gracefully closed (`client.Close()`) and memory returns to 0 MB.
+4. **Dynamic Tool Search**: Integrates with AGIS's `tool_search` and `load_tool` mechanisms, so large tool suites (e.g. 50+ GitHub tools) do not clutter system prompt token budgets.
 
 ---
 

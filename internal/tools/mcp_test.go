@@ -70,6 +70,12 @@ func (m *mockMCPManager) CallTool(_ context.Context, serverName, toolName string
 	}
 	return "manager result for " + toolName, nil
 }
+func (m *mockMCPManager) ServerStatus(serverName string) (mcp.ServerStatus, bool) {
+	return mcp.ServerStatus{Name: serverName, State: mcp.StateRunning}, true
+}
+func (m *mockMCPManager) RefreshTools(_ context.Context, serverName string) ([]mcp.Tool, error) {
+	return m.tools[serverName], nil
+}
 
 func TestMCPRunner_Interface(t *testing.T) {
 	client := &mockMCPClient{callResult: "hello output"}

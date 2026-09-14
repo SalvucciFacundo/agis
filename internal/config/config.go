@@ -107,17 +107,54 @@ type AudioConfig struct {
 
 // MCPConfig gates and configures the M8 Model Context Protocol client subsystem.
 type MCPConfig struct {
-	Enabled bool                       `yaml:"enabled"`
-	Servers map[string]MCPServerConfig `yaml:"servers"`
+	Enabled     bool                       `yaml:"enabled"`
+	Standby     bool                       `yaml:"standby"`
+	IdleTimeout string                     `yaml:"idle_timeout,omitempty"`
+	CacheDir    string                     `yaml:"cache_dir,omitempty"`
+	Servers     map[string]MCPServerConfig `yaml:"servers"`
+}
+
+// ParsedIdleTimeout returns the idle duration after which an idle MCP server connection is closed.
+// Defaults to 5 minutes if not specified or invalid.
+func (c MCPConfig) ParsedIdleTimeout() time.Duration {
+	if c.IdleTimeout == "" {
+		return 5 * time.Minute
+	}
+	d, err := time.ParseDuration(c.IdleTimeout)
+	if err != nil || d <= 0 {
+		return 5 * time.Minute
+	}
+	return d
 }
 
 // MCPServerConfig defines an MCP server endpoint (either local stdio process or remote SSE).
 type MCPServerConfig struct {
-	Command  string            `yaml:"command,omitempty"`
-	Args     []string          `yaml:"args,omitempty"`
-	Env      map[string]string `yaml:"env,omitempty"`
-	URL      string            `yaml:"url,omitempty"`
-	Disabled bool              `yaml:"disabled,omitempty"`
+	Command     string            `yaml:"command,omitempty"`
+	Args        []string          `yaml:"args,omitempty"`
+	Env         map[string]string `yaml:"env,omitempty"`
+	URL         string            `yaml:"url,omitempty"`
+	Disabled    bool              `yaml:"disabled,omitempty"`
+	Standby     *bool             `yaml:"standby,omitempty"`
+	IdleTimeout *string           `yaml:"idle_timeout,omitempty"`
+}
+
+// IsStandby reports whether standby mode is enabled for this server, falling back to defaultStandby.
+func (s MCPServerConfig) IsStandby(defaultStandby bool) bool {
+	if s.Standby != nil {
+		return *s.Standby
+	}
+	return defaultStandby
+}
+
+// ParsedIdleTimeout parses the per-server idle timeout, using fallback if not set or invalid.
+func (s MCPServerConfig) ParsedIdleTimeout(defaultTimeout time.Duration) time.Duration {
+	if s.IdleTimeout != nil && *s.IdleTimeout != "" {
+		d, err := time.ParseDuration(*s.IdleTimeout)
+		if err == nil && d > 0 {
+			return d
+		}
+	}
+	return defaultTimeout
 }
 
 // EmbeddingsConfig tunes the M7 hybrid search embeddings subsystem.
@@ -448,8 +485,10 @@ func defaults() *Config {
 			Enabled: false,
 		},
 		MCP: MCPConfig{
-			Enabled: false,
-			Servers: map[string]MCPServerConfig{},
+			Enabled:     false,
+			Standby:     true,
+			IdleTimeout: "5m",
+			Servers:     map[string]MCPServerConfig{},
 		},
 		Multimodal: MultimodalConfig{
 			Enabled: false,
@@ -622,6 +661,12 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.WriteTimeout <= 0 {
 		cfg.Server.WriteTimeout = 120 * time.Second
+	}
+	if cfg.MCP.IdleTimeout == "" {
+		cfg.MCP.IdleTimeout = "5m"
+	}
+	if cfg.MCP.Servers == nil {
+		cfg.MCP.Servers = map[string]MCPServerConfig{}
 	}
 }
 

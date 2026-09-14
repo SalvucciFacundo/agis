@@ -896,10 +896,61 @@ func TestLoad_MCPDefaultsAndExplicit(t *testing.T) {
 		check       func(t *testing.T, cfg *Config)
 	}{
 		{
-			name:        "empty config has mcp disabled by default",
+			name:        "empty config has mcp disabled by default with standby true and 5m timeout",
 			yaml:        "",
 			wantEnabled: false,
 			wantServers: 0,
+			check: func(t *testing.T, cfg *Config) {
+				if !cfg.MCP.Standby {
+					t.Errorf("cfg.MCP.Standby = false, want true")
+				}
+				if cfg.MCP.IdleTimeout != "5m" {
+					t.Errorf("cfg.MCP.IdleTimeout = %q, want 5m", cfg.MCP.IdleTimeout)
+				}
+				if got := cfg.MCP.ParsedIdleTimeout(); got != 5*time.Minute {
+					t.Errorf("ParsedIdleTimeout() = %v, want 5m", got)
+				}
+			},
+		},
+		{
+			name: "explicit mcp standby and custom idle timeout",
+			yaml: `mcp:
+  enabled: true
+  standby: false
+  idle_timeout: "10m"
+  cache_dir: "/tmp/custom-mcp-cache"
+  servers:
+    srv1:
+      command: "echo"
+      standby: true
+      idle_timeout: "2m"
+`,
+			wantEnabled: true,
+			wantServers: 1,
+			check: func(t *testing.T, cfg *Config) {
+				if cfg.MCP.Standby {
+					t.Errorf("cfg.MCP.Standby = true, want false")
+				}
+				if cfg.MCP.IdleTimeout != "10m" {
+					t.Errorf("cfg.MCP.IdleTimeout = %q, want 10m", cfg.MCP.IdleTimeout)
+				}
+				if cfg.MCP.CacheDir != "/tmp/custom-mcp-cache" {
+					t.Errorf("cfg.MCP.CacheDir = %q, want /tmp/custom-mcp-cache", cfg.MCP.CacheDir)
+				}
+				if got := cfg.MCP.ParsedIdleTimeout(); got != 10*time.Minute {
+					t.Errorf("ParsedIdleTimeout() = %v, want 10m", got)
+				}
+				s, ok := cfg.MCP.Servers["srv1"]
+				if !ok {
+					t.Fatalf("missing srv1")
+				}
+				if !s.IsStandby(cfg.MCP.Standby) {
+					t.Errorf("srv1.IsStandby() = false, want true")
+				}
+				if got := s.ParsedIdleTimeout(cfg.MCP.ParsedIdleTimeout()); got != 2*time.Minute {
+					t.Errorf("srv1.ParsedIdleTimeout() = %v, want 2m", got)
+				}
+			},
 		},
 		{
 			name: "explicit mcp stdio and sse server config",

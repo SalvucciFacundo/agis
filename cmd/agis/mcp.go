@@ -53,6 +53,8 @@ func RunMCPCLI(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("mcp "+subcommand, flag.ContinueOnError)
 	fs.SetOutput(stdout)
 	configPath := fs.String("config", "", "path to config file (default: $AGIS_HOME/config.yaml or ~/.agis/config.yaml)")
+	refresh := fs.Bool("refresh", false, "force refreshing tool schemas from server and update cache")
+	fs.BoolVar(refresh, "r", false, "alias for -refresh")
 
 	fs.Usage = func() {
 		printMCPUsage(stdout)
@@ -74,7 +76,9 @@ func RunMCPCLI(args []string, stdout, stderr io.Writer) int {
 
 	switch subcommand {
 	case "list":
-		return runMCPList(cfg.MCP, stdout, stderr)
+		return runMCPList(cfg.MCP, stdout, stderr, *refresh)
+	case "sync":
+		return runMCPList(cfg.MCP, stdout, stderr, true)
 	case "test":
 		if len(positional) < 2 {
 			fmt.Fprintf(stderr, "agis mcp test: server and tool arguments are required (e.g. agis mcp test <server> <tool> [args])\n")
@@ -94,16 +98,19 @@ func RunMCPCLI(args []string, stdout, stderr io.Writer) int {
 }
 
 func printMCPUsage(w io.Writer) {
-	fmt.Fprintf(w, "Usage: agis mcp [list|test] [args] [flags]\n\n")
+	fmt.Fprintf(w, "Usage: agis mcp [list|test|sync] [args] [flags]\n\n")
 	fmt.Fprintf(w, "Subcommands:\n")
 	fmt.Fprintf(w, "  list                                  List all configured MCP servers and their tools (default)\n")
+	fmt.Fprintf(w, "  sync                                  Force refresh and cache schemas for all MCP servers\n")
 	fmt.Fprintf(w, "  test <server> <tool> [json_args]      Directly invoke an MCP tool without LLM orchestration\n\n")
 	fmt.Fprintf(w, "Flags:\n")
 	fmt.Fprintf(w, "  -config string\n")
 	fmt.Fprintf(w, "        path to config file (default: $AGIS_HOME/config.yaml or ~/.agis/config.yaml)\n")
+	fmt.Fprintf(w, "  -refresh, -r\n")
+	fmt.Fprintf(w, "        force refreshing schemas from servers instead of using disk cache (for list)\n")
 }
 
-func runMCPList(cfg config.MCPConfig, stdout, stderr io.Writer) int {
+func runMCPList(cfg config.MCPConfig, stdout, stderr io.Writer, refresh bool) int {
 	if len(cfg.Servers) == 0 {
 		fmt.Fprintf(stdout, "No MCP servers configured in config.yaml\n")
 		return 0
@@ -121,6 +128,8 @@ func runMCPList(cfg config.MCPConfig, stdout, stderr io.Writer) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	cache := mcp.NewDiskSchemaCache(cfg.CacheDir)
+
 	for _, name := range serverNames {
 		sCfg := cfg.Servers[name]
 		transportType := "stdio"
@@ -131,6 +140,20 @@ func runMCPList(cfg config.MCPConfig, stdout, stderr io.Writer) int {
 		if sCfg.Disabled {
 			fmt.Fprintf(stdout, "  • %-20s [%s] [disabled]\n", name, transportType)
 			continue
+		}
+
+		if !refresh {
+			if cachedTools, ok, err := cache.Load(name); err == nil && ok {
+				fmt.Fprintf(stdout, "  • %-20s [%s] [online (standby)] - %d tool(s) discovered:\n", name, transportType, len(cachedTools))
+				for _, t := range cachedTools {
+					desc := t.Description
+					if desc != "" {
+						desc = " - " + desc
+					}
+					fmt.Fprintf(stdout, "      - %-20s%s\n", t.Name, desc)
+				}
+				continue
+			}
 		}
 
 		client, err := buildClientForServer(name, sCfg)
@@ -154,6 +177,8 @@ func runMCPList(cfg config.MCPConfig, stdout, stderr io.Writer) int {
 			hasError = true
 			continue
 		}
+
+		_ = cache.Save(name, tools)
 
 		fmt.Fprintf(stdout, "  • %-20s [%s] [online] - %d tool(s) discovered:\n", name, transportType, len(tools))
 		for _, t := range tools {

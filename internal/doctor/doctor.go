@@ -703,6 +703,12 @@ func (d *Doctor) checkMCP(ctx context.Context) CheckResult {
 			continue
 		}
 		activeCount++
+		standbyStr := "standby"
+		if !srv.IsStandby(d.cfg.MCP.Standby) {
+			standbyStr = "eager"
+		}
+		idleTimeout := srv.ParsedIdleTimeout(d.cfg.MCP.ParsedIdleTimeout())
+
 		if srv.Command != "" {
 			// Stdio transport: verify binary existence in PATH
 			path, err := exec.LookPath(srv.Command)
@@ -710,22 +716,28 @@ func (d *Doctor) checkMCP(ctx context.Context) CheckResult {
 				failures = append(failures, fmt.Sprintf("Server %q binary %q not found in PATH", name, srv.Command))
 				res.Details = append(res.Details, fmt.Sprintf("Server %q: stdio binary %q NOT FOUND", name, srv.Command))
 			} else {
-				res.Details = append(res.Details, fmt.Sprintf("Server %q: stdio (%s)", name, path))
+				res.Details = append(res.Details, fmt.Sprintf("Server %q: stdio (%s) [%s, idle_timeout: %v]", name, path, standbyStr, idleTimeout))
 			}
 		} else if srv.URL != "" {
 			// SSE transport: verify endpoint URL syntax
-			res.Details = append(res.Details, fmt.Sprintf("Server %q: SSE endpoint (%s)", name, srv.URL))
+			res.Details = append(res.Details, fmt.Sprintf("Server %q: SSE endpoint (%s) [%s, idle_timeout: %v]", name, srv.URL, standbyStr, idleTimeout))
 		} else {
 			failures = append(failures, fmt.Sprintf("Server %q has neither command nor URL configured", name))
 		}
 	}
+
+	cacheDir := d.cfg.MCP.CacheDir
+	if cacheDir == "" {
+		cacheDir = filepath.Join(config.AgisHome(), "cache", "mcp")
+	}
+	res.Details = append(res.Details, fmt.Sprintf("Schema cache dir: %s", cacheDir))
 
 	if len(failures) > 0 {
 		res.Status = StatusFail
 		res.Message = fmt.Sprintf("%d MCP server configuration issues detected", len(failures))
 	} else {
 		res.Status = StatusPass
-		res.Message = fmt.Sprintf("%d active MCP servers configured and valid", activeCount)
+		res.Message = fmt.Sprintf("%d active MCP servers configured (standby: %v)", activeCount, d.cfg.MCP.Standby)
 	}
 
 	res.Duration = time.Since(start)
